@@ -47,7 +47,7 @@ const register = async (req, res) => {
       { expiresIn: "5m" }
     );
 
-    const verifyLink = `https://auth.mspkapps.in/api/developer/verify?token=${token}`;
+    const verifyLink = `http://localhost:5000/api/developer/verify?token=${token}`;
 
     // Send verification email
      const emailHTML = `

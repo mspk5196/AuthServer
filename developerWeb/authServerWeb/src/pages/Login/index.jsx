@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { authService } from '../../services/authService';
 import { validateEmail, validatePassword } from '../../utils/validators';
 import './Login.scss';
 
@@ -13,13 +13,11 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
 
-  const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    // Clear error for this field
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
@@ -50,7 +48,7 @@ const Login = () => {
 
     setLoading(true);
     try {
-      await login(formData);
+      await authService.login(formData);
       navigate('/dashboard');
     } catch (error) {
       setMessage({

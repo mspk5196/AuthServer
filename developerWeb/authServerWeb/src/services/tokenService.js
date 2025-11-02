@@ -4,8 +4,8 @@
  * Also manages refresh token logic
  */
 
-const TOKEN_KEY = 'auth_token';
-const REFRESH_TOKEN_KEY = 'refresh_token';
+const TOKEN_KEY = import.meta.env.VITE_JWT_SECRET;
+const REFRESH_TOKEN_KEY = import.meta.env.VITE_JWT_REFRESH_SECRET;
 
 export const tokenService = {
   // Get access token

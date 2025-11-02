@@ -8,8 +8,12 @@ import { tokenService } from './tokenService';
 
 export const authService = {
   // Register new developer
-  register: async (userData) => {
-    const response = await api.post('/developer/register', userData);
+  register: async (formData) => {
+    const { confirmPassword, ...registerData } = formData;
+    
+    console.log('Sending registration data:', registerData);
+    const response = await api.post('/developer/register', registerData);
+    
     return response;
   },
 

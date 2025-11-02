@@ -6,8 +6,8 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
-import Apps from './pages/Apps';
-import Users from './pages/Users';
+// import Apps from './pages/Apps';
+// import Users from './pages/Users';
 import './styles/global.scss';
 
 function App() {
@@ -29,7 +29,7 @@ function App() {
                   </PrivateRoute>
                 }
               />
-              <Route
+              {/* <Route
                 path="/apps"
                 element={
                   <PrivateRoute>
@@ -44,15 +44,15 @@ function App() {
                     <Users />
                   </PrivateRoute>
                 }
-              />
-              <Route
+              /> */}
+              {/* <Route
                 path="/users/:appId"
                 element={
                   <PrivateRoute>
                     <Users />
                   </PrivateRoute>
                 }
-              />
+              /> */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </main>

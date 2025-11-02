@@ -67,6 +67,12 @@ export const api = {
   },
 
   post: async (endpoint, body, options = {}) => {
+    console.log('API POST Request:', {
+      url: `${API_BASE_URL}${endpoint}`,
+      body: body,
+      headers: getHeaders(options.headers)
+    });
+    
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'POST',
       credentials: 'include',

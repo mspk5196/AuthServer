@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { authService } from '../../services/authService';
 import {
   validateEmail,
   validatePassword,
@@ -21,7 +21,6 @@ const Register = () => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
 
-  const { register } = useAuth();
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -76,12 +75,9 @@ const Register = () => {
 
     setLoading(true);
     try {
-      await register({
-        name: formData.name,
-        username: formData.username,
-        email: formData.email,
-        password: formData.password,
-      });
+      console.log('Submitting registration with data:', formData);
+      const response = await authService.register(formData);
+      console.log('Registration response:', response);
       
       setMessage({
         type: 'success',
@@ -90,8 +86,9 @@ const Register = () => {
       
       setTimeout(() => {
         navigate('/login');
-      }, 3000);
+      }, 2000);
     } catch (error) {
+      console.error('Registration error:', error);
       setMessage({
         type: 'error',
         text: error.message || 'Registration failed. Please try again.',

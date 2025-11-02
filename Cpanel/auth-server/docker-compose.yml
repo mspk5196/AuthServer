@@ -1,0 +1,19 @@
+version: "3.8"
+
+services:
+  auth-server:
+    build: .
+    container_name: auth-server
+    restart: unless-stopped
+    expose:
+      - "5000"
+    networks:
+      - auth_server
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      DATABASE_URL: "postgres://postgres:Mskp%403922@host.docker.internal:5432/authdb"
+
+networks:
+  auth_server:
+    external: true

@@ -1,0 +1,67 @@
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import './Navbar.scss';
+
+const Navbar = () => {
+  const { isAuthenticated, developer, logout } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
+
+  const isActive = (path) => location.pathname === path;
+
+  return (
+    <nav className="navbar">
+      <div className="container navbar-content">
+        <Link to="/" className="navbar-brand">
+          <span className="logo">🔐</span>
+          <span className="brand-name">Auth Platform</span>
+        </Link>
+
+        {isAuthenticated ? (
+          <div className="navbar-menu">
+            <Link 
+              to="/dashboard" 
+              className={`nav-link ${isActive('/dashboard') ? 'active' : ''}`}
+            >
+              Dashboard
+            </Link>
+            <Link 
+              to="/apps" 
+              className={`nav-link ${isActive('/apps') ? 'active' : ''}`}
+            >
+              Apps
+            </Link>
+            <Link 
+              to="/users" 
+              className={`nav-link ${isActive('/users') ? 'active' : ''}`}
+            >
+              Users
+            </Link>
+            <div className="navbar-user">
+              <span className="user-name">{developer?.name}</span>
+              <button onClick={handleLogout} className="btn btn-sm btn-outline">
+                Logout
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="navbar-menu">
+            <Link to="/login" className="nav-link">
+              Login
+            </Link>
+            <Link to="/register" className="btn btn-sm btn-primary">
+              Sign Up
+            </Link>
+          </div>
+        )}
+      </div>
+    </nav>
+  );
+};
+
+export default Navbar;

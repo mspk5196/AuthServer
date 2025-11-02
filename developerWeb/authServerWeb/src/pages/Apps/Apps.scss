@@ -1,0 +1,36 @@
+@use '../../styles/variables' as *;
+
+.apps-page {
+  min-height: calc(100vh - 60px);
+  padding: 2rem 0;
+
+  @include mobile {
+    padding: 1.5rem 0;
+  }
+
+  .page-header {
+    @include flex-between;
+    margin-bottom: 2rem;
+
+    @include mobile {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1rem;
+
+      button {
+        width: 100%;
+      }
+    }
+  }
+
+  .apps-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
+    gap: 1.5rem;
+
+    @include mobile {
+      grid-template-columns: 1fr;
+      gap: 1.25rem;
+    }
+  }
+}

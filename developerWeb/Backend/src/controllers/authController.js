@@ -1,11 +1,11 @@
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const { generateTokens, verifyToken } = require('../middleware/auth');
-const connection = require('../config/db');
+const pool = require('../config/db');
 const { promisify } = require('util');
 require('dotenv').config();
-
-// Promisify database query
-const query = promisify(connection.query).bind(connection);
+const { passwordEncryptAES } = require('../utils/decryptAES')
+const { sendMail } = require("../utils/mailer.js");
 
 /**
  * User registration (Admin only)
@@ -13,68 +13,85 @@ const query = promisify(connection.query).bind(connection);
 const register = async (req, res) => {
   try {
     const { name, username, email, password } = req.body;
-    
-    console.log('Registration request body:', req.body);
-    console.log('Extracted fields:', { name, username, email, password: password ? '***' : undefined });
 
-    // Validate required fields
     if (!name || !username || !email || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields',
-        error: 'VALIDATION_ERROR',
-        required: ['name', 'username', 'email', 'password']
+        message: "Missing required fields",
       });
     }
 
-    // Check if user already exists
-    const existingUsers = await query(
-      'SELECT id FROM users WHERE email = ? OR username = ?',
-      [email, username]
+    const existingUserName = await pool.query("SELECT id FROM developers WHERE username = $1", [username]);
+    const existingUsers = await pool.query("SELECT id FROM developers WHERE email = $1", [email]);
+
+    if (existingUserName.rows.length > 0)
+      return res.status(409).json({ success: false, message: "Username already taken" });
+
+    if (existingUsers.rows.length > 0)
+      return res.status(409).json({ success: false, message: "Email already registered" });
+
+    const encryptAES = passwordEncryptAES(password);
+    const finalHashedPassword = await bcrypt.hash(encryptAES, 12);
+
+    const result = await pool.query(
+      `INSERT INTO developers (name, username, email, password_hash, is_active, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, NOW(), NOW()) RETURNING id`,
+      [name, username, email, finalHashedPassword, false]
     );
 
-    if (existingUsers.length > 0) {
-      return res.status(409).json({
+    const userId = result.rows[0].id;
+
+    const token = jwt.sign(
+      { id: userId, email },
+      process.env.VERIFY_EMAIL_SECRET,
+      { expiresIn: "5m" }
+    );
+
+    const verifyLink = `https://auth.mspkapps.in/api/developer/verify?token=${token}`;
+
+    // Send verification email
+     const emailHTML = `
+      <h2>Verify your Developer Account</h2>
+      <p>Hello ${name},</p>
+      <p>Click the link below to verify your account (valid for <b>5 minutes</b>):</p>
+      <a href="${verifyLink}" target="_blank" style="color:#1a73e8;">Verify My Account</a>
+      <br /><br />
+      <p>If you did not register, please ignore this email.</p>
+    `;
+
+    const mailResponse = await sendMail({
+      to: email,
+      subject: "Verify your Developer Account",
+      html: emailHTML,
+    });
+
+    if (!mailResponse.success) {
+      console.error("Verification mail sending failed:", mailResponse.error);
+      return res.status(500).json({
         success: false,
-        message: 'User with this email or username already exists',
-        error: 'USER_EXISTS'
+        message: "Registration successful but failed to send verification email",
       });
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Insert new user
-    const result = await query(
-      'INSERT INTO users (name, username, email, password, role, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())',
-      [name, username, email, hashedPassword, 'developer', true]
-    );
-
-    console.log('User created successfully:', { id: result.insertId, email, username });
+    console.log("Verification email sent:", email);
 
     res.status(201).json({
       success: true,
-      message: 'Registration successful',
-      data: {
-        user: {
-          id: result.insertId,
-          name,
-          username,
-          email,
-          role: 'developer'
-        }
-      }
+      message:
+        "Registration successful! Verification link sent to your email (valid for 5 minutes).",
+      data: { id: userId, name, username, email },
     });
-
   } catch (error) {
-    console.error('Registration error:', error);
+    console.error("Registration error:", error);
     res.status(500).json({
       success: false,
-      message: 'Internal server error during registration',
-      error: 'REGISTRATION_ERROR'
+      message: "Internal server error during registration",
+      error: error.message,
     });
   }
 };
+
+
 
 /**
  * User login
@@ -84,12 +101,12 @@ const login = async (req, res) => {
     const { email, password } = req.body;
 
     // Find user
-    const users = await query(
-      'SELECT id, email, password, name, role, is_active, failed_login_attempts, locked_until FROM users WHERE email = ?',
+    const users = await pool.query(
+      'SELECT id, email, password, name, role, is_active, failed_login_attempts, locked_until FROM users WHERE email = $1',
       [email]
     );
 
-    if (users.length === 0) {
+    if (users.rows.length === 0) {
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials',
@@ -97,7 +114,7 @@ const login = async (req, res) => {
       });
     }
 
-    const user = users[0];
+    const user = users.rows[0];
 
     // Check if account is locked
     if (user.locked_until && new Date() < new Date(user.locked_until)) {
@@ -123,11 +140,11 @@ const login = async (req, res) => {
     if (!isValidPassword) {
       // Increment failed login attempts
       const failedAttempts = (user.failed_login_attempts || 0) + 1;
-      const lockUntil = failedAttempts >= 5 ? 'DATE_ADD(NOW(), INTERVAL 30 MINUTE)' : 'NULL';
+      const lockUntil = failedAttempts >= 5 ? new Date(Date.now() + 30 * 60 * 1000) : null;
 
-      await query(
-        `UPDATE users SET failed_login_attempts = ?, locked_until = ${lockUntil}, updated_at = NOW() WHERE id = ?`,
-        [failedAttempts, user.id]
+      await pool.query(
+        `UPDATE users SET failed_login_attempts = $1, locked_until = $2, updated_at = NOW() WHERE id = $3`,
+        [failedAttempts, lockUntil, user.id]
       );
 
       return res.status(401).json({
@@ -139,8 +156,8 @@ const login = async (req, res) => {
     }
 
     // Reset failed login attempts on successful login
-    await query(
-      'UPDATE users SET failed_login_attempts = 0, locked_until = NULL, last_login = NOW(), updated_at = NOW() WHERE id = ?',
+    await pool.query(
+      'UPDATE users SET failed_login_attempts = 0, locked_until = NULL, last_login = NOW(), updated_at = NOW() WHERE id = $1',
       [user.id]
     );
 
@@ -156,8 +173,8 @@ const login = async (req, res) => {
     const { accessToken, refreshToken } = generateTokens(tokenPayload);
 
     // Store refresh token in database
-    await query(
-      'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 7 DAY))',
+    await pool.query(
+      'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, NOW() + INTERVAL \'7 days\')',
       [user.id, refreshToken]
     );
 

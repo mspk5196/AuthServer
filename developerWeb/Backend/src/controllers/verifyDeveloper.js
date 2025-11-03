@@ -9,8 +9,8 @@ const verifyDeveloper = async (req, res) => {
     const decoded = jwt.verify(token, process.env.VERIFY_EMAIL_SECRET || 'your_jwt_secret');
     const { id, email } = decoded;
 
-    // Activate developer
-    await pool.query('UPDATE developers SET is_active = $1, email_verified = $1, updated_at = NOW(), activated_at = NOW() WHERE id = $2 AND email = $3', [true, id, email]);
+    // Activate developer (email_verified is the correct column)
+    await pool.query('UPDATE developers SET email_verified = $1, updated_at = NOW(), activated_at = NOW() WHERE id = $2 AND email = $3', [true, id, email]);
 
     res.json({ success: true, message: 'Account verified successfully!' });
   } catch (error) {

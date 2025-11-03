@@ -7,7 +7,8 @@ const authController = require('../controllers/authController');
 
 // Public routes (no authentication required)
 router.post('/register', authController.register);
-router.post('/login', authController.login);
+router.post('/login', authController.developerLogin);
+router.post('/resend-verification', authController.resendVerificationEmail);
 router.get('/verify', verifyDeveloper);
 
 // Protected routes (authentication required)

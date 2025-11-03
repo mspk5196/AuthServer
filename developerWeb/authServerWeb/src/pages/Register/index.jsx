@@ -20,6 +20,8 @@ const Register = () => {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [registrationSuccess, setRegistrationSuccess] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState('');
 
   const navigate = useNavigate();
 
@@ -75,18 +77,20 @@ const Register = () => {
 
     setLoading(true);
     try {
-      console.log('Submitting registration with data:', formData);
+      // console.log('Submitting registration with data:', formData);
       const response = await authService.register(formData);
-      console.log('Registration response:', response);
+      // console.log('Registration response:', response);
       
+      setRegistrationSuccess(true);
+      setRegisteredEmail(formData.email);
       setMessage({
         type: 'success',
-        text: 'Account created successfully! Please check your email to verify your account.',
+        text: 'Registration successful! Verification email sent to your inbox (valid for 5 minutes).',
       });
       
-      setTimeout(() => {
-        navigate('/login');
-      }, 2000);
+      // setTimeout(() => {
+      //   navigate('/login');
+      // }, 2000);
     } catch (error) {
       console.error('Registration error:', error);
       setMessage({
@@ -102,18 +106,20 @@ const Register = () => {
     <div className="auth-page">
       <div className="auth-container">
         <div className="auth-card">
-          <div className="auth-header">
-            <h1>Create Account</h1>
-            <p>Start building secure authentication for your apps</p>
-          </div>
+          {!registrationSuccess ? (
+            <>
+              <div className="auth-header">
+                <h1>Create Account</h1>
+                <p>Start building secure authentication for your apps</p>
+              </div>
 
-          {message.text && (
-            <div className={`alert alert-${message.type}`}>
-              {message.text}
-            </div>
-          )}
+              {message.text && (
+                <div className={`alert alert-${message.type}`}>
+                  {message.text}
+                </div>
+              )}
 
-          <form onSubmit={handleSubmit} className="auth-form">
+              <form onSubmit={handleSubmit} className="auth-form">
             <div className="form-group">
               <label htmlFor="name">Full Name</label>
               <input
@@ -220,6 +226,40 @@ const Register = () => {
               <Link to="/login">Sign in</Link>
             </p>
           </div>
+            </>
+          ) : (
+            <>
+              <div className="auth-header">
+                <h1>✅ Check Your Email</h1>
+                <p>Verification email sent successfully!</p>
+              </div>
+
+              <div className="alert alert-success">
+                <p style={{ marginBottom: '1rem' }}>
+                  We've sent a verification link to <strong>{registeredEmail}</strong>
+                </p>
+                <p style={{ fontSize: '0.9rem', marginBottom: '0' }}>
+                  The link is valid for <strong>5 minutes</strong>. Please check your inbox and spam folder.
+                </p>
+              </div>
+
+              <div style={{ marginTop: '1.5rem' }}>
+                <button
+                  onClick={() => navigate('/login')}
+                  className="btn btn-primary btn-block btn-lg"
+                >
+                  Continue to Sign In
+                </button>
+              </div>
+
+              <div className="auth-footer">
+                <p>
+                  Didn't receive the email?{' '}
+                  <Link to="/login">Go to login</Link>
+                </p>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

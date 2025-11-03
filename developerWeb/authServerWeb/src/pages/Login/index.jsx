@@ -12,6 +12,8 @@ const Login = () => {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [unverifiedEmail, setUnverifiedEmail] = useState(null);
+  const [resendingEmail, setResendingEmail] = useState(false);
 
   const navigate = useNavigate();
 
@@ -43,6 +45,7 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage({ type: '', text: '' });
+    setUnverifiedEmail(null);
 
     if (!validate()) return;
 
@@ -51,12 +54,54 @@ const Login = () => {
       await authService.login(formData);
       navigate('/dashboard');
     } catch (error) {
-      setMessage({
-        type: 'error',
-        text: error.message || 'Login failed. Please check your credentials.',
-      });
+      // Handle specific error codes
+      if (error.error === 'EMAIL_NOT_VERIFIED') {
+        setUnverifiedEmail(formData.email);
+        setMessage({
+          type: 'warning',
+          text: 'Please verify your email first. Check your inbox for the verification link.',
+        });
+      } else if (error.error === 'ACCOUNT_BLOCKED') {
+        setMessage({
+          type: 'error',
+          text: 'This email is blocked. Please contact support.',
+        });
+      } else if (error.error === 'ACCOUNT_LOCKED') {
+        setMessage({
+          type: 'error',
+          text: error.message || 'Account is temporarily locked due to multiple failed login attempts.',
+        });
+      } else {
+        setMessage({
+          type: 'error',
+          text: error.message || 'Login failed. Please check your credentials.',
+        });
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!unverifiedEmail) return;
+
+    setResendingEmail(true);
+    setMessage({ type: '', text: '' });
+
+    try {
+      await authService.resendVerification(unverifiedEmail);
+      setMessage({
+        type: 'success',
+        text: 'Verification email sent! Please check your inbox (valid for 5 minutes).',
+      });
+      setUnverifiedEmail(null);
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: error.message || 'Failed to resend verification email. Please try again.',
+      });
+    } finally {
+      setResendingEmail(false);
     }
   };
 
@@ -72,6 +117,29 @@ const Login = () => {
           {message.text && (
             <div className={`alert alert-${message.type}`}>
               {message.text}
+            </div>
+          )}
+
+          {unverifiedEmail && (
+            <div className="alert alert-warning" style={{ marginTop: '1rem' }}>
+              <p style={{ marginBottom: '0.5rem' }}>
+                Your email is not verified yet.
+              </p>
+              <button
+                onClick={handleResendVerification}
+                disabled={resendingEmail}
+                className="btn btn-sm"
+                style={{ 
+                  marginTop: '0.5rem',
+                  padding: '0.5rem 1rem',
+                  fontSize: '0.9rem',
+                  backgroundColor: '#fff',
+                  color: '#856404',
+                  border: '1px solid #856404'
+                }}
+              >
+                {resendingEmail ? 'Sending...' : 'Resend Verification Email'}
+              </button>
             </div>
           )}
 

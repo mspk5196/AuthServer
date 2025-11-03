@@ -7,14 +7,14 @@ require('dotenv').config();
 const generateTokens = (payload) => {
   const accessToken = jwt.sign(payload, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE || '15m',
-    issuer: 'mspk-apps-admin',
-    audience: 'mspk-apps-users'
+    issuer: 'mspk-apps-auth',
+    audience: 'mspk-apps-auth-developers'
   });
 
   const refreshToken = jwt.sign(payload, process.env.JWT_REFRESH_SECRET, {
     expiresIn: process.env.JWT_REFRESH_EXPIRE || '7d',
-    issuer: 'mspk-apps-admin',
-    audience: 'mspk-apps-users'
+    issuer: 'mspk-apps-auth',
+    audience: 'mspk-apps-auth-developers'
   });
 
   return { accessToken, refreshToken };
@@ -26,8 +26,8 @@ const generateTokens = (payload) => {
 const verifyToken = (token, secret = process.env.JWT_SECRET) => {
   try {
     return jwt.verify(token, secret, {
-      issuer: 'mspk-apps-admin',
-      audience: 'mspk-apps-users'
+      issuer: 'mspk-apps-auth',
+      audience: 'mspk-apps-auth-developers'
     });
   } catch (error) {
     throw new Error('Invalid token');
@@ -64,38 +64,6 @@ const authenticateToken = (req, res, next) => {
 };
 
 /**
- * Admin Role Middleware
- */
-const requireAdmin = (req, res, next) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Authentication required',
-        error: 'NO_AUTH'
-      });
-    }
-
-    if (req.user.role !== 'Admin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Admin access required',
-        error: 'INSUFFICIENT_PRIVILEGES'
-      });
-    }
-
-    next();
-  } catch (error) {
-    console.error('Admin Authorization Error:', error.message);
-    return res.status(500).json({
-      success: false,
-      message: 'Authorization error',
-      error: 'AUTH_ERROR'
-    });
-  }
-};
-
-/**
  * Refresh Token Middleware
  */
 const verifyRefreshToken = (req, res, next) => {
@@ -127,6 +95,5 @@ module.exports = {
   generateTokens,
   verifyToken,
   authenticateToken,
-  requireAdmin,
   verifyRefreshToken
 };

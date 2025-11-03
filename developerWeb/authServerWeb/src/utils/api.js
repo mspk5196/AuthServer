@@ -11,6 +11,7 @@ class ApiError extends Error {
     super(message);
     this.status = status;
     this.data = data;
+    this.error = data?.error; // Extract error code for easier access
     this.name = 'ApiError';
   }
 }
@@ -22,7 +23,8 @@ const handleResponse = async (response) => {
 
   if (!response.ok) {
     // Handle unauthorized - clear tokens
-    if (response.status === 401) {
+    // But don't clear tokens for email not verified or account blocked errors
+    if (response.status === 401 && data.error !== 'EMAIL_NOT_VERIFIED') {
       tokenService.clearTokens();
       // Optionally redirect to login
       if (window.location.pathname !== '/login') {

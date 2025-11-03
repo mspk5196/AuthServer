@@ -54,6 +54,12 @@ export const authService = {
     return response;
   },
 
+  // Resend verification email
+  resendVerification: async (email) => {
+    const response = await api.post('/developer/resend-verification', { email });
+    return response;
+  },
+
   // Refresh access token
   refreshToken: async () => {
     const refreshToken = tokenService.getRefreshToken();

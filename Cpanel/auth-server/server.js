@@ -1,11 +1,12 @@
-import dotenv from 'dotenv';
+const dotenv = require('dotenv');
 dotenv.config();
 
-import http from 'http';
-import app from './src/app.js';
-import './src/config/db.js';
+const http = require('http');
+const app = require('./src/app.js');
+const db = require('./src/config/db.js');
 
-const PORT = process.env.PORT || 5050;
+// Default to 5001 to align with cPanel Web dev config; override with PORT env as needed
+const PORT = process.env.PORT || 5001;
 const server = http.createServer(app);
 
 app.set('trust proxy', 1);

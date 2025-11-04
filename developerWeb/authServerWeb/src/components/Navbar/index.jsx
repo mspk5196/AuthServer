@@ -31,20 +31,20 @@ const Navbar = () => {
             >
               Dashboard
             </Link>
-            <Link 
+            {/* <Link 
               to="/apps" 
               className={`nav-link ${isActive('/apps') ? 'active' : ''}`}
             >
               Apps
-            </Link>
-            <Link 
+            </Link> */}
+            {/* <Link 
               to="/users" 
               className={`nav-link ${isActive('/users') ? 'active' : ''}`}
             >
               Users
-            </Link>
+            </Link> */}
             <div className="navbar-user">
-              <span className="user-name">{developer?.name}</span>
+              <span className="user-name">Hello, {developer?.name}</span>
               <button onClick={handleLogout} className="btn btn-sm btn-outline">
                 Logout
               </button>

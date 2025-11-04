@@ -3,6 +3,10 @@ const cors = require('cors');
 const helmet = require('helmet');
 
 const authRoutes = require('./routes/authRoutes.js');
+const cPanelRoutes = require('./routes/cPanelRoutes.js');
+const { getRedis } = require('./config/redisClient.js');
+// Initialize Redis connection (no-op if fallback is used)
+getRedis().catch(console.error);
 
 const app = express();
 app.use(cors({
@@ -20,6 +24,7 @@ app.use((req, res, next) => {
 
 // routes
 app.use('/api/developer', authRoutes);
+app.use('/api/cpanel', cPanelRoutes);
 
 // error handler (simple)
 app.use((err, req, res, next) => {

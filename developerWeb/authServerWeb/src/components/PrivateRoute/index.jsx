@@ -26,8 +26,9 @@ const PrivateRoute = ({ children, requireVerification = false }) => {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Check email verification if required
-  if (requireVerification && !developer.is_verified) {
+  // Check email verification if required (support multiple field names)
+  const isVerified = developer?.email_verified ?? developer?.is_verified ?? developer?.isVerified;
+  if (requireVerification && !isVerified) {
     return (
       <div className="container" style={{ marginTop: '2rem' }}>
         <div className="alert alert-warning">

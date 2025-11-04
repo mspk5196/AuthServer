@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { authService } from '../../services/authService';
+import { useAuth } from '../../context/AuthContext';
 import { validateEmail, validatePassword } from '../../utils/validators';
 import './Login.scss';
 
@@ -16,6 +17,7 @@ const Login = () => {
   const [resendingEmail, setResendingEmail] = useState(false);
 
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -51,7 +53,7 @@ const Login = () => {
 
     setLoading(true);
     try {
-      await authService.login(formData);
+  await login(formData);
       navigate('/dashboard');
     } catch (error) {
       // Handle specific error codes

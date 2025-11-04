@@ -1,16 +1,36 @@
-import express from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
 
-import devRoutes from './routes/dev.routes.js';
-import appRoutes from './routes/app.routes.js';
-import tenantRoutes from './routes/tenant.routes.js';
-import authRoutes from './routes/auth.routes.js';
-import passwordRoutes from './routes/password.routes.js';
-import googleRoutes from './routes/google.routes.js';
+const authRoutes = require('./routes/authRoutes.js');
 
 const app = express();
-app.use(cors());
+
+// Robust CORS: allow localhost:5173 and :5174 and optional FRONTEND_URL (normalize trailing slashes)
+const normalizeOrigin = (o) => (o ? o.replace(/\/$/, '') : o);
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'http://localhost:5173',
+  'http://localhost:5174',
+].filter(Boolean).map(normalizeOrigin);
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true); // allow mobile apps / curl
+    const o = normalizeOrigin(origin);
+    if (allowedOrigins.includes(o)) {
+      return callback(null, true); // reflect request origin
+    }
+    return callback(null, false);
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-csrf-token'],
+  exposedHeaders: ['x-csrf-token'],
+  credentials: true,
+}));
+
+// Handle preflight for all routes (Express 5: avoid '*' path-to-regexp)
+app.options(/.*/, cors());
 app.use(express.json());
 app.use(helmet());
 
@@ -21,12 +41,7 @@ app.use((req, res, next) => {
 });
 
 // routes
-app.use('/api/dev', devRoutes);
-app.use('/api/apps', appRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/password', passwordRoutes);
-app.use('/api/google', googleRoutes);
-app.use('/api/tenant', tenantRoutes);
+app.use('/api/developer', authRoutes);
 
 // error handler (simple)
 app.use((err, req, res, next) => {
@@ -34,4 +49,4 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-export default app;
+module.exports = app;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 
 const API_BASE_URL = import.meta.env.VITE_CPANEL_API_BASE_URL || 'http://localhost:5001/api/developer';
@@ -45,14 +45,21 @@ function App() {
   const [developer, setDeveloper] = useState(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const consumedOnceRef = useRef(false);
 
   const ticket = useMemo(() => {
     const qsTicket = new URLSearchParams(window.location.search).get('ticket');
     if (qsTicket) return qsTicket;
-    // Support /sso/:ticket style
+    // Support /sso/:ticket anywhere in the path (e.g., /sso/:ticket or /api/developer/sso/:ticket)
     const path = window.location.pathname || '';
-    const match = path.startsWith('/sso/') ? path.substring('/sso/'.length) : '';
-    return match || null;
+    const marker = '/sso/';
+    const idx = path.indexOf(marker);
+    if (idx !== -1) {
+      const after = path.substring(idx + marker.length);
+      const nextSlash = after.indexOf('/');
+      return nextSlash === -1 ? after : after.substring(0, nextSlash);
+    }
+    return null;
   }, []);
 
   useEffect(() => {
@@ -60,6 +67,9 @@ function App() {
       try {
         // If a ticket is present, establish SSO
         if (ticket) {
+          // Guard against React StrictMode double-invocation consuming the ticket twice
+          if (consumedOnceRef.current) return;
+          consumedOnceRef.current = true;
           const resp = await apiPost('/sso/consume', { ticket });
           const token = resp?.data?.token || resp?.token;
           const dev = resp?.data?.developer || resp?.developer;
@@ -67,8 +77,22 @@ function App() {
           if (dev) setDeveloper(dev);
           // Remove ticket from URL
           const url = new URL(window.location.href);
+          const hadQueryTicket = url.searchParams.has('ticket');
           url.searchParams.delete('ticket');
-          window.history.replaceState({}, '', url.toString());
+          let newUrl = url.toString();
+          // Also strip /sso/:ticket from any path (e.g., /sso/abc or /api/developer/sso/abc)
+          const path = url.pathname || '';
+          const marker = '/sso/';
+          const idx = path.indexOf(marker);
+          if (idx !== -1) {
+            // Replace the entire path with root for simplicity after successful SSO
+            newUrl = `${url.origin}/`;
+          }
+          // If only query had the ticket, reflect removal
+          if (hadQueryTicket && idx === -1) {
+            newUrl = url.toString();
+          }
+          window.history.replaceState({}, '', newUrl);
         } else {
           // No ticket: only call /me if we already have a cPanel token
           const existing = tokenService.get();

@@ -5,6 +5,7 @@ import Home from '../../pages/Home';
 import Login from '../../pages/Login';
 import Register from '../../pages/Register';
 import Dashboard from '../../pages/Dashboard';
+import Settings from '../../pages/Settings';
 
 const AppLayout = () => {
   return (
@@ -20,6 +21,14 @@ const AppLayout = () => {
             element={
               <PrivateRoute>
                 <Dashboard />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <PrivateRoute>
+                <Settings />
               </PrivateRoute>
             }
           />

@@ -74,7 +74,12 @@ const register = async (req, res) => {
       });
     }
 
-    console.log("Verification email sent:", email);
+    // console.log("Verification email sent:", email);
+    await pool.query(
+      `INSERT INTO dev_email_verifications (dev_id, token, expires_at, used, created_at, verifiy_type)
+       VALUES ($1, $2, $3, $4, $5, NOW(), $6) RETURNING id`,
+      [userId, token, new Date(Date.now() + 5 * 60 * 1000), false, 'New Account']
+    );
 
     res.status(201).json({
       success: true,
@@ -178,6 +183,12 @@ const developerLogin = async (req, res) => {
     await pool.query(
       'UPDATE developers SET failed_login_attempts = 0, locked_until = NULL, updated_at = NOW() WHERE id = $1',
       [developer.id]
+    );
+
+    // Track login history
+    await pool.query(
+      'INSERT INTO dev_login_history (developer_id, login_at, login_ip) VALUES ($1, NOW(), $2)',
+      [developer.id, req.ip]
     );
 
     // Generate tokens
@@ -320,121 +331,9 @@ const resendVerificationEmail = async (req, res) => {
   }
 };
 
-/**
- * User login (Admin/Staff)
- */
-const login = async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    // Find user
-    const users = await pool.query(
-      'SELECT id, email, password, name, role, is_active, failed_login_attempts, locked_until FROM users WHERE email = $1',
-      [email]
-    );
-
-    if (users.rows.length === 0) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid credentials',
-        error: 'INVALID_CREDENTIALS'
-      });
-    }
-
-    const user = users.rows[0];
-
-    // Check if account is locked
-    if (user.locked_until && new Date() < new Date(user.locked_until)) {
-      return res.status(423).json({
-        success: false,
-        message: 'Account is temporarily locked due to multiple failed login attempts',
-        error: 'ACCOUNT_LOCKED'
-      });
-    }
-
-    // Check if account is active
-    if (!user.is_active) {
-      return res.status(401).json({
-        success: false,
-        message: 'Account is disabled',
-        error: 'ACCOUNT_DISABLED'
-      });
-    }
-
-    // Verify password
-    const isValidPassword = await bcrypt.compare(password, user.password);
-
-    if (!isValidPassword) {
-      // Increment failed login attempts
-      const failedAttempts = (user.failed_login_attempts || 0) + 1;
-      const lockUntil = failedAttempts >= 5 ? new Date(Date.now() + 30 * 60 * 1000) : null;
-
-      await pool.query(
-        `UPDATE users SET failed_login_attempts = $1, locked_until = $2, updated_at = NOW() WHERE id = $3`,
-        [failedAttempts, lockUntil, user.id]
-      );
-
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid credentials',
-        error: 'INVALID_CREDENTIALS',
-        attemptsRemaining: Math.max(0, 5 - failedAttempts)
-      });
-    }
-
-    // Reset failed login attempts on successful login
-    await pool.query(
-      'UPDATE users SET failed_login_attempts = 0, locked_until = NULL, last_login = NOW(), updated_at = NOW() WHERE id = $1',
-      [user.id]
-    );
-
-    // Generate tokens
-    const tokenPayload = {
-      userId: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      iat: Math.floor(Date.now() / 1000)
-    };
-
-    const { accessToken, refreshToken } = generateTokens(tokenPayload);
-
-    // Store refresh token in database
-    await pool.query(
-      'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, NOW() + INTERVAL \'7 days\')',
-      [user.id, refreshToken]
-    );
-
-    res.status(200).json({
-      success: true,
-      message: 'Login successful',
-      data: {
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role
-        },
-        tokens: {
-          accessToken,
-          refreshToken
-        }
-      }
-    });
-
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error during login',
-      error: 'LOGIN_ERROR'
-    });
-  }
-};
 
 module.exports = {
   register,
   developerLogin,
-  resendVerificationEmail,
-  login
+  resendVerificationEmail
 };

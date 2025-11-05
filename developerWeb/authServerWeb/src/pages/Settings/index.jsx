@@ -1,0 +1,344 @@
+import { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { api } from '../../utils/api';
+import './Settings.scss';
+
+const Settings = () => {
+  const { developer, updateDeveloper } = useAuth();
+  const [activeTab, setActiveTab] = useState('profile');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState({ type: '', text: '' });
+  const [currentPlan, setCurrentPlan] = useState(null);
+
+  // Profile form
+  const [profileForm, setProfileForm] = useState({
+    name: '',
+    username: '',
+    email: ''
+  });
+
+  // Password form
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+
+  useEffect(() => {
+    if (developer) {
+      setProfileForm({
+        name: developer.name || '',
+        username: developer.username || '',
+        email: developer.email || ''
+      });
+    }
+    fetchCurrentPlan();
+  }, [developer]);
+
+  const fetchCurrentPlan = async () => {
+    try {
+      const response = await api.get('/developer/my-plan');
+      if (response.data.hasPlan) {
+        setCurrentPlan(response.data.plan);
+      }
+    } catch (error) {
+      console.error('Failed to fetch plan:', error);
+    }
+  };
+
+  const handleProfileUpdate = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage({ type: '', text: '' });
+
+    try {
+      const response = await api.put('/developer/profile', profileForm);
+      
+      if (response.success) {
+        updateDeveloper(response.data.developer);
+        setMessage({ 
+          type: 'success', 
+          text: response.message 
+        });
+      }
+    } catch (error) {
+      setMessage({ 
+        type: 'error', 
+        text: error.response?.data?.message || 'Failed to update profile' 
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage({ type: '', text: '' });
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setMessage({ type: 'error', text: 'New passwords do not match' });
+      setLoading(false);
+      return;
+    }
+
+    if (passwordForm.newPassword.length < 8) {
+      setMessage({ type: 'error', text: 'Password must be at least 8 characters long' });
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await api.post('/developer/change-password', {
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword
+      });
+
+      if (response.success) {
+        setMessage({ type: 'success', text: response.message });
+        setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+        
+        // Logout after 3 seconds
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 3000);
+      }
+    } catch (error) {
+      setMessage({ 
+        type: 'error', 
+        text: error.response?.data?.message || 'Failed to change password' 
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpgradePlan = () => {
+    // TODO: Navigate to plan selection/upgrade page
+    alert('Plan upgrade feature coming soon!');
+  };
+
+  const formatDate = (date) => {
+    if (!date) return 'N/A';
+    return new Date(date).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  return (
+    <div className="settings-page">
+      <div className="settings-container">
+        <h1 className="settings-title">Account Settings</h1>
+
+        <div className="settings-tabs">
+          <button 
+            className={`tab ${activeTab === 'profile' ? 'active' : ''}`}
+            onClick={() => setActiveTab('profile')}
+          >
+            Profile
+          </button>
+          <button 
+            className={`tab ${activeTab === 'password' ? 'active' : ''}`}
+            onClick={() => setActiveTab('password')}
+          >
+            Password
+          </button>
+          <button 
+            className={`tab ${activeTab === 'plan' ? 'active' : ''}`}
+            onClick={() => setActiveTab('plan')}
+          >
+            Plan & Billing
+          </button>
+        </div>
+
+        {message.text && (
+          <div className={`alert alert-${message.type}`}>
+            {message.text}
+          </div>
+        )}
+
+        {activeTab === 'profile' && (
+          <div className="settings-content">
+            <h2>Profile Information</h2>
+            <form onSubmit={handleProfileUpdate}>
+              <div className="form-group">
+                <label htmlFor="name">Full Name</label>
+                <input
+                  type="text"
+                  id="name"
+                  value={profileForm.name}
+                  onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="username">Username</label>
+                <input
+                  type="text"
+                  id="username"
+                  value={profileForm.username}
+                  onChange={(e) => setProfileForm({ ...profileForm, username: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="email">Email Address</label>
+                <input
+                  type="email"
+                  id="email"
+                  value={profileForm.email}
+                  onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                  required
+                />
+                <small className="form-hint">
+                  Changing your email will require verification before it takes effect.
+                </small>
+              </div>
+
+              <div className="form-group">
+                <label>Email Verification Status</label>
+                <div className="verification-badge">
+                  {developer?.email_verified ? (
+                    <span className="badge badge-success">✓ Verified</span>
+                  ) : (
+                    <span className="badge badge-warning">⚠ Not Verified</span>
+                  )}
+                </div>
+              </div>
+
+              <button type="submit" className="btn btn-primary" disabled={loading}>
+                {loading ? 'Updating...' : 'Update Profile'}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {activeTab === 'password' && (
+          <div className="settings-content">
+            <h2>Change Password</h2>
+            <form onSubmit={handlePasswordChange}>
+              <div className="form-group">
+                <label htmlFor="currentPassword">Current Password</label>
+                <input
+                  type="password"
+                  id="currentPassword"
+                  value={passwordForm.currentPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="newPassword">New Password</label>
+                <input
+                  type="password"
+                  id="newPassword"
+                  value={passwordForm.newPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                  required
+                  minLength={8}
+                />
+                <small className="form-hint">
+                  Password must be at least 8 characters long
+                </small>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="confirmPassword">Confirm New Password</label>
+                <input
+                  type="password"
+                  id="confirmPassword"
+                  value={passwordForm.confirmPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                  required
+                />
+              </div>
+
+              <button type="submit" className="btn btn-primary" disabled={loading}>
+                {loading ? 'Changing...' : 'Change Password'}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {activeTab === 'plan' && (
+          <div className="settings-content">
+            <h2>Current Plan</h2>
+            
+            {currentPlan ? (
+              <div className="plan-info-card">
+                <div className="plan-info-header">
+                  <h3>{currentPlan.plan_name}</h3>
+                  <span className={`badge badge-${currentPlan.is_active ? 'success' : 'warning'}`}>
+                    {currentPlan.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+
+                <div className="plan-info-body">
+                  <div className="plan-detail">
+                    <span className="label">Price:</span>
+                    <span className="value">
+                      {currentPlan.price ? `$${parseFloat(currentPlan.price).toFixed(2)}` : 'Free'}
+                    </span>
+                  </div>
+
+                  <div className="plan-detail">
+                    <span className="label">Start Date:</span>
+                    <span className="value">{formatDate(currentPlan.start_date)}</span>
+                  </div>
+
+                  {currentPlan.end_date && (
+                    <div className="plan-detail">
+                      <span className="label">Expires On:</span>
+                      <span className="value">{formatDate(currentPlan.end_date)}</span>
+                    </div>
+                  )}
+
+                  {currentPlan.description && (
+                    <div className="plan-detail">
+                      <span className="label">Description:</span>
+                      <span className="value">{currentPlan.description}</span>
+                    </div>
+                  )}
+
+                  {currentPlan.features && (
+                    <div className="plan-features">
+                      <h4>Features:</h4>
+                      <ul>
+                        {(Array.isArray(currentPlan.features) 
+                          ? currentPlan.features 
+                          : Object.values(currentPlan.features)
+                        ).map((feature, index) => (
+                          <li key={index}>✓ {feature}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+
+                <div className="plan-info-footer">
+                  <button className="btn btn-primary" onClick={handleUpgradePlan}>
+                    Upgrade Plan
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="no-plan">
+                <p>You don't have an active plan.</p>
+                <button className="btn btn-primary" onClick={handleUpgradePlan}>
+                  Select a Plan
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default Settings;

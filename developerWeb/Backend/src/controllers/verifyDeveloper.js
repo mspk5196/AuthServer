@@ -11,7 +11,10 @@ const verifyDeveloper = async (req, res) => {
 
     // Activate developer (email_verified is the correct column)
     await pool.query('UPDATE developers SET email_verified = $1, updated_at = NOW(), activated_at = NOW() WHERE id = $2 AND email = $3', [true, id, email]);
-
+    await pool.query(
+      `UPDATE dev_email_verifications SET used = $1, updated_at = NOW() WHERE dev_id = $2 AND token = $3`,
+      [true, id, token]
+    );
     res.json({ success: true, message: 'Account verified successfully!' });
   } catch (error) {
     if (error.name === 'TokenExpiredError') {

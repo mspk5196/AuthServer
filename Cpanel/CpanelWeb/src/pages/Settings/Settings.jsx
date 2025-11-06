@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { api } from '../../services/api';
+import { tokenService } from '../../services/tokenService';
 import './Settings.css';
 
 const Settings = () => {
   const { developer } = useAuth();
   const [planInfo, setPlanInfo] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     fetchPlanInfo();
@@ -13,31 +16,17 @@ const Settings = () => {
 
   const fetchPlanInfo = async () => {
     try {
-      // TODO: Replace with actual API call
-      // const response = await api.get('/settings/plan', tokenService.get());
-      // setPlanInfo(response.data);
+      setLoading(true);
+      setError('');
+      const token = tokenService.get();
+      const response = await api.get('/settings/plan', token);
+      setPlanInfo(response);
+      // console.log(response);
       
-      // Mock data for demonstration
-      setPlanInfo({
-        plan_name: 'Free',
-        plan_type: 'free',
-        expiry_date: null, // Free plan doesn't expire
-        apps_limit: 3,
-        apps_used: 0,
-        api_calls_limit: 10000,
-        api_calls_used: 0,
-        storage_limit: 100, // MB
-        storage_used: 0,
-        features: [
-          'Up to 3 apps',
-          '10,000 API calls per month',
-          '100 MB storage',
-          'Community support',
-        ],
-      });
-      setLoading(false);
     } catch (error) {
       console.error('Error fetching plan info:', error);
+      setError(error.message || 'Failed to load plan information');
+    } finally {
       setLoading(false);
     }
   };
@@ -59,9 +48,30 @@ const Settings = () => {
     );
   }
 
-  const appsPercentage = planInfo ? (planInfo.apps_used / planInfo.apps_limit) * 100 : 0;
-  const apiCallsPercentage = planInfo ? (planInfo.api_calls_used / planInfo.api_calls_limit) * 100 : 0;
-  const storagePercentage = planInfo ? (planInfo.storage_used / planInfo.storage_limit) * 100 : 0;
+  if (error) {
+    return (
+      <div className="settings-page">
+        <div className="page-header">
+          <h1 className="page-title">Settings</h1>
+          <p className="page-subtitle">Manage your account and subscription</p>
+        </div>
+        <div className="alert alert-error">
+          {error}
+        </div>
+        <button className="btn btn-primary" onClick={fetchPlanInfo}>
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  const appsPercentage = planInfo ? (planInfo.apps_used / planInfo.max_apps) * 100 : 0;
+  const apiCallsPercentage = planInfo ? (planInfo.api_calls_used / planInfo.max_api_calls) * 100 : 0;
+
+  // Convert features object to array for display
+  const featuresArray = planInfo?.features 
+    ? Object.values(planInfo.features)
+    : [];
 
   return (
     <div className="settings-page">
@@ -133,7 +143,7 @@ const Settings = () => {
           <div className="usage-stat">
             <div className="usage-stat-label">Apps</div>
             <div className="usage-stat-value">{planInfo?.apps_used || 0}</div>
-            <div className="usage-stat-limit">of {planInfo?.apps_limit || 0} apps</div>
+            <div className="usage-stat-limit">of {planInfo?.max_apps || 0} apps</div>
             <div className="progress-bar">
               <div 
                 className={`progress-bar-fill ${getProgressColor(appsPercentage)}`}
@@ -143,25 +153,13 @@ const Settings = () => {
           </div>
 
           <div className="usage-stat">
-            <div className="usage-stat-label">API Calls</div>
+            <div className="usage-stat-label">API Calls (This Month)</div>
             <div className="usage-stat-value">{(planInfo?.api_calls_used || 0).toLocaleString()}</div>
-            <div className="usage-stat-limit">of {(planInfo?.api_calls_limit || 0).toLocaleString()} calls</div>
+            <div className="usage-stat-limit">of {(planInfo?.max_api_calls || 0).toLocaleString()} calls</div>
             <div className="progress-bar">
               <div 
                 className={`progress-bar-fill ${getProgressColor(apiCallsPercentage)}`}
                 style={{ width: `${Math.min(apiCallsPercentage, 100)}%` }}
-              />
-            </div>
-          </div>
-
-          <div className="usage-stat">
-            <div className="usage-stat-label">Storage</div>
-            <div className="usage-stat-value">{planInfo?.storage_used || 0} MB</div>
-            <div className="usage-stat-limit">of {planInfo?.storage_limit || 0} MB</div>
-            <div className="progress-bar">
-              <div 
-                className={`progress-bar-fill ${getProgressColor(storagePercentage)}`}
-                style={{ width: `${Math.min(storagePercentage, 100)}%` }}
               />
             </div>
           </div>
@@ -174,18 +172,26 @@ const Settings = () => {
           <p className="settings-section-subtitle">What's included in your current plan</p>
         </div>
 
-        {planInfo?.features?.map((feature, index) => (
-          <div key={index} className="settings-row">
-            <div className="settings-label">
-              <div className="settings-label-title">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline', marginRight: '0.5rem', color: 'var(--success-color)' }}>
-                  <polyline points="20 6 9 17 4 12"/>
-                </svg>
-                {feature}
+        {featuresArray.length > 0 ? (
+          featuresArray.map((feature, index) => (
+            <div key={index} className="settings-row">
+              <div className="settings-label">
+                <div className="settings-label-title">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline', marginRight: '0.5rem', color: 'var(--success-color)' }}>
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                  {feature}
+                </div>
               </div>
             </div>
+          ))
+        ) : (
+          <div className="settings-row">
+            <div className="settings-label">
+              <div className="settings-label-desc">No features available</div>
+            </div>
           </div>
-        ))}
+        )}
       </div>
 
       <div className="settings-section">

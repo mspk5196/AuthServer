@@ -218,6 +218,7 @@ const developerLogin = async (req, res) => {
           email: developer.email,
           name: developer.name,
           username: developer.username,
+          email_verified: developer.email_verified,
           role: 'developer'
         },
         tokens: {

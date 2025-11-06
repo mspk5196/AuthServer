@@ -308,9 +308,9 @@ const changePassword = async (req, res) => {
 
     await client.query('BEGIN');
 
-    // Get current password hash
+    // Get current password hash and developer details
     const developerResult = await client.query(
-      'SELECT id, password_hash FROM developers WHERE id = $1',
+      'SELECT id, name, email, password_hash FROM developers WHERE id = $1',
       [developerId]
     );
 
@@ -349,7 +349,7 @@ const changePassword = async (req, res) => {
     // Record password change in history
     await client.query(
       `INSERT INTO dev_password_change_history (change_type, old_hash, changed_at)
-       VALUES ('user_change', $1, NOW())`,
+       VALUES ('Request', $1, NOW())`,
       [developer.password_hash]
     );
 
@@ -360,6 +360,32 @@ const changePassword = async (req, res) => {
     );
 
     await client.query('COMMIT');
+
+    // Send password change notification email
+    try {
+      const emailHTML = `
+        <h2>Password Changed Successfully</h2>
+        <p>Hello ${developer.name},</p>
+        <p>Your password was recently changed for your developer account.</p>
+        <p><strong>If you made this change</strong>, you can ignore this email.</p>
+        <p><strong>If you did not make this change</strong>, please contact our support team immediately and reset your password.</p>
+        <br />
+        <p>Changed at: ${new Date().toLocaleString()}</p>
+        <br />
+        <p>Best regards,<br />MSPK Auth Platform Support</p>
+      `;
+
+      await sendMail({
+        to: developer.email,
+        subject: 'Password Changed - Auth Platform',
+        html: emailHTML
+      });
+
+      console.log('Password change notification sent to:', developer.email);
+    } catch (emailError) {
+      console.error('Failed to send password change notification:', emailError);
+      // Don't fail the password change, just log the error
+    }
 
     res.status(200).json({
       success: true,

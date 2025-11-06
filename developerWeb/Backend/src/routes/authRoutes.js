@@ -20,6 +20,9 @@ router.get('/plans', planController.getPlans);
 // Protected routes (authentication required)
 router.use(authenticateToken);
 
+// Get current developer info
+router.get('/me', profileController.getProfile);
+
 // Profile management
 router.get('/profile', profileController.getProfile);
 router.put('/profile', profileController.updateProfile);

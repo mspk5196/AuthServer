@@ -40,6 +40,8 @@ const Settings = () => {
       const response = await api.get('/developer/my-plan');
       if (response.data.hasPlan) {
         setCurrentPlan(response.data.plan);
+        console.log(response.data.plan);
+        
       }
     } catch (error) {
       console.error('Failed to fetch plan:', error);
@@ -309,11 +311,11 @@ const Settings = () => {
                     <div className="plan-features">
                       <h4>Features:</h4>
                       <ul>
-                        {(Array.isArray(currentPlan.features) 
-                          ? currentPlan.features 
-                          : Object.values(currentPlan.features)
+                        {(Array.isArray(currentPlan.features_desc) 
+                          ? currentPlan.features_desc
+                          : Object.values(currentPlan.features_desc)
                         ).map((feature, index) => (
-                          <li key={index}>✓ {feature}</li>
+                          <li key={index}> {feature}</li>
                         ))}
                       </ul>
                     </div>

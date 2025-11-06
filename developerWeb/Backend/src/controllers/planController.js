@@ -56,7 +56,8 @@ const getDeveloperPlan = async (req, res) => {
         dp.description,
         dp.price,
         dp.duration_days,
-        dp.features
+        dp.features,
+        dp.features_desc
        FROM developer_plan_registrations dpr
        JOIN dev_plans dp ON dpr.plan_id = dp.id
        WHERE dpr.developer_id = $1 AND dpr.is_active = true
@@ -104,6 +105,11 @@ const selectPlan = async (req, res) => {
     }
 
     await client.query('BEGIN');
+
+    const devRes = await client.query(
+      'SELECT id, email, name FROM developers WHERE id = $1',
+      [developerId]
+    );
 
     // Check if plan exists and is active
     const planResult = await client.query(
@@ -167,6 +173,31 @@ const selectPlan = async (req, res) => {
     );
 
     await client.query('COMMIT');
+
+    try {
+      const emailHTML = `
+        <h2>Plan Selected Successfully</h2>
+        <p>Hello ${devRes.rows[0].name},</p>
+        <p>Your plan has been successfully selected for your developer account.</p>
+        <p><strong>If you made this change</strong>, you can ignore this email.</p>
+        <p><strong>If you did not make this change</strong>, please contact our support team immediately.</p>
+        <br />
+        <p>Changed at: ${new Date().toLocaleString()}</p>
+        <br />
+        <p>Best regards,<br />MSPK Auth Platform Support</p>
+      `;
+
+      await sendMail({
+        to: devRes.rows[0].email,
+        subject: 'Plan Selected - Auth Platform',
+        html: emailHTML
+      });
+
+      console.log('Plan selection notification sent to:', devRes.rows[0].email);
+    } catch (emailError) {
+      console.error('Failed to send plan selection notification:', emailError);
+      // Don't fail the plan selection, just log the error
+    }
 
     res.status(201).json({
       success: true,

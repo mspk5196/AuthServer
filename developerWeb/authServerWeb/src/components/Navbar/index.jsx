@@ -31,6 +31,12 @@ const Navbar = () => {
             >
               Dashboard
             </Link>
+            <Link 
+              to="/settings" 
+              className={`nav-link ${isActive('/settings') ? 'active' : ''}`}
+            >
+              Settings
+            </Link>
             {/* <Link 
               to="/apps" 
               className={`nav-link ${isActive('/apps') ? 'active' : ''}`}

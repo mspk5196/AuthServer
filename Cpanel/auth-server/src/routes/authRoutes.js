@@ -12,9 +12,5 @@ router.post('/sso/consume', ssoController.consumeTicket);
 // Authenticated route to get current developer info from cpanel token
 router.get('/me', authenticateToken, ssoController.me);
 
-// Settings endpoints (all require authentication)
-router.get('/settings/plan', authenticateToken, settingsController.getPlanInfo);
-router.get('/settings/account', authenticateToken, settingsController.getAccountInfo);
-router.get('/settings/usage', authenticateToken, settingsController.getUsageStats);
 
 module.exports = router;

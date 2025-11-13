@@ -1,14 +1,22 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import './Apps.css';
 
 const Apps = () => {
-  const navigate = useNavigate();
-  const { tokenService } = useAuth();
+  const { developer } = useAuth();
   const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [error, setError] = useState('');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+  const [newAppCredentials, setNewAppCredentials] = useState(null);
+  const [formData, setFormData] = useState({
+    app_name: '',
+    base_url: '',
+    allow_google_signin: false,
+    allow_email_signin: true
+  });
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     fetchApps();
@@ -16,145 +24,349 @@ const Apps = () => {
 
   const fetchApps = async () => {
     try {
-      // TODO: Replace with actual API call
-      // const response = await api.get('/apps', tokenService.get());
-      // setApps(response.data.apps || []);
+      setLoading(true);
+      setError('');
       
-      // Mock data for demonstration
-      setApps([]);
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching apps:', error);
+      const token = localStorage.getItem('cpanel_jwt');
+      const response = await fetch('http://localhost:5001/api/developer/apps/getApps', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setApps(data.data);
+      } else {
+        setError(data.message || 'Failed to fetch apps');
+      }
+    } catch (err) {
+      console.error('Fetch apps error:', err);
+      setError('Failed to load apps. Please try again.');
+    } finally {
       setLoading(false);
     }
   };
 
-  const handleCreateApp = () => {
-    // Navigate to create app page (to be implemented)
-    navigate('/apps/create');
+  const handleCreateApp = async (e) => {
+    e.preventDefault();
+    
+    if (!formData.app_name.trim() || !formData.base_url.trim()) {
+      setError('App name and base URL are required');
+      return;
+    }
+
+    try {
+      setCreating(true);
+      setError('');
+
+      const token = localStorage.getItem('cpanel_jwt');
+      const response = await fetch('http://localhost:5001/api/developer/apps/createApp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(formData)
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Show credentials modal
+        setNewAppCredentials(data.data);
+        setShowCredentialsModal(true);
+        setShowCreateModal(false);
+        
+        // Reset form
+        setFormData({
+          app_name: '',
+          base_url: '',
+          allow_google_signin: false,
+          allow_email_signin: true
+        });
+
+        // Refresh apps list
+        fetchApps();
+      } else {
+        setError(data.message || 'Failed to create app');
+      }
+    } catch (err) {
+      console.error('Create app error:', err);
+      setError('Failed to create app. Please try again.');
+    } finally {
+      setCreating(false);
+    }
   };
 
-  const filteredApps = apps.filter(app =>
-    app.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (app.description && app.description.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const handleCopyToClipboard = (text, label) => {
+    navigator.clipboard.writeText(text);
+    // You can add a toast notification here
+    alert(`${label} copied to clipboard!`);
+  };
+
+  const handleCloseCredentialsModal = () => {
+    setShowCredentialsModal(false);
+    setNewAppCredentials(null);
+  };
 
   if (loading) {
     return (
-      <div className="apps-page">
-        <div className="page-header">
-          <h1 className="page-title">Apps</h1>
-          <p className="page-subtitle">Loading...</p>
+      <div className="apps-container">
+        <div className="loading">
+          <div className="spinner"></div>
+          <p>Loading your apps...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="apps-page">
+    <div className="apps-container">
       <div className="apps-header">
-        <div className="page-header">
-          <h1 className="page-title">Apps</h1>
-          <p className="page-subtitle">Manage and monitor your applications</p>
+        <div>
+          <h1>📱 My Applications</h1>
+          <p>Create and manage your applications</p>
         </div>
-        <div className="apps-actions">
-          <div className="search-box">
-            <svg className="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="11" cy="11" r="8"/>
-              <path d="m21 21-4.35-4.35"/>
-            </svg>
-            <input
-              type="text"
-              placeholder="Search apps..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-          <button className="btn btn-primary" onClick={handleCreateApp}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="12" y1="5" x2="12" y2="19"/>
-              <line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
-            Create App
-          </button>
-        </div>
+        <button 
+          className="btn-primary"
+          onClick={() => setShowCreateModal(true)}
+        >
+          + Create New App
+        </button>
       </div>
 
-      {filteredApps.length === 0 && apps.length === 0 ? (
-        <div className="apps-empty">
-          <svg className="apps-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <rect x="3" y="3" width="7" height="7"/>
-            <rect x="14" y="3" width="7" height="7"/>
-            <rect x="14" y="14" width="7" height="7"/>
-            <rect x="3" y="14" width="7" height="7"/>
-          </svg>
-          <h3>No apps yet</h3>
-          <p>Create your first application to get started with our platform. You'll be able to generate API keys, manage settings, and track usage.</p>
-          <button className="btn btn-primary btn-lg" onClick={handleCreateApp}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="12" y1="5" x2="12" y2="19"/>
-              <line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
+      {error && (
+        <div className="alert alert-error">
+          <span>⚠️</span>
+          <p>{error}</p>
+        </div>
+      )}
+
+      {apps.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-icon">📱</div>
+          <h2>No Apps Yet</h2>
+          <p>Create your first application to get started with authentication</p>
+          <button 
+            className="btn-primary btn-large"
+            onClick={() => setShowCreateModal(true)}
+          >
             Create Your First App
           </button>
         </div>
-      ) : filteredApps.length === 0 ? (
-        <div className="apps-empty">
-          <svg className="apps-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <circle cx="11" cy="11" r="8"/>
-            <path d="m21 21-4.35-4.35"/>
-          </svg>
-          <h3>No apps found</h3>
-          <p>No apps match your search query. Try a different search term.</p>
-        </div>
       ) : (
         <div className="apps-grid">
-          {filteredApps.map((app) => (
-            <div key={app.id} className="app-card" onClick={() => navigate(`/apps/${app.id}`)}>
+          {apps.map(app => (
+            <div key={app.id} className="app-card">
               <div className="app-card-header">
-                <div className="app-icon">{app.name[0].toUpperCase()}</div>
-                <button className="app-menu-btn" onClick={(e) => e.stopPropagation()}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="1"/>
-                    <circle cx="12" cy="5" r="1"/>
-                    <circle cx="12" cy="19" r="1"/>
-                  </svg>
-                </button>
+                <h3>{app.app_name}</h3>
+                <span className="app-status active">Active</span>
               </div>
-              <h3 className="app-name">{app.name}</h3>
-              <p className="app-description">{app.description || 'No description provided'}</p>
-              <div className="app-info">
-                <div className="app-info-item">
-                  <span className="app-info-label">Status</span>
-                  <span className={`badge badge-${app.status === 'active' ? 'success' : 'warning'}`}>
-                    {app.status}
+              
+              <div className="app-card-body">
+                <div className="app-info-row">
+                  <span className="label">Base URL:</span>
+                  <span className="value">{app.base_url}</span>
+                </div>
+                
+                <div className="app-info-row">
+                  <span className="label">API Key:</span>
+                  <div className="copy-group">
+                    <code className="api-key">{app.api_key.substring(0, 20)}...</code>
+                    <button 
+                      className="btn-icon"
+                      onClick={() => handleCopyToClipboard(app.api_key, 'API Key')}
+                      title="Copy API Key"
+                    >
+                      📋
+                    </button>
+                  </div>
+                </div>
+
+                <div className="app-features">
+                  <span className={`feature-badge ${app.allow_email_signin ? 'enabled' : 'disabled'}`}>
+                    📧 Email Login
+                  </span>
+                  <span className={`feature-badge ${app.allow_google_signin ? 'enabled' : 'disabled'}`}>
+                    🔐 Google OAuth
                   </span>
                 </div>
-                <div className="app-info-item">
-                  <span className="app-info-label">API Calls</span>
-                  <span className="app-info-value">{app.api_calls?.toLocaleString() || '0'}</span>
+
+                <div className="app-stats">
+                  <div className="stat-item">
+                    <div className="stat-value">{app.total_users || 0}</div>
+                    <div className="stat-label">Total Users</div>
+                  </div>
+                  <div className="stat-item">
+                    <div className="stat-value">{app.active_users || 0}</div>
+                    <div className="stat-label">Active (30d)</div>
+                  </div>
                 </div>
               </div>
-              <div className="app-footer">
-                <span>Created {new Date(app.created_at).toLocaleDateString()}</span>
-                <div className="app-actions">
-                  <button className="icon-btn" title="Settings" onClick={(e) => e.stopPropagation()}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="12" r="3"/>
-                      <path d="M12 1v6m0 6v6m9-9h-6m-6 0H3"/>
-                    </svg>
+
+              <div className="app-card-footer">
+                <button 
+                  className="btn-secondary btn-small"
+                  onClick={() => window.location.href = `/apps/${app.id}`}
+                >
+                  View Details
+                </button>
+                <button 
+                  className="btn-secondary btn-small"
+                  onClick={() => {/* Open settings modal */}}
+                >
+                  ⚙️ Settings
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Create App Modal */}
+      {showCreateModal && (
+        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Create New Application</h2>
+              <button 
+                className="modal-close"
+                onClick={() => setShowCreateModal(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateApp}>
+              <div className="form-group">
+                <label>App Name *</label>
+                <input
+                  type="text"
+                  placeholder="My Awesome App"
+                  value={formData.app_name}
+                  onChange={(e) => setFormData({...formData, app_name: e.target.value})}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Base URL *</label>
+                <input
+                  type="url"
+                  placeholder="https://myapp.com"
+                  value={formData.base_url}
+                  onChange={(e) => setFormData({...formData, base_url: e.target.value})}
+                  required
+                />
+                <small>Your application's URL (used for redirects)</small>
+              </div>
+
+              <div className="form-group-checkbox">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={formData.allow_email_signin}
+                    onChange={(e) => setFormData({...formData, allow_email_signin: e.target.checked})}
+                  />
+                  <span>Enable Email/Password Login</span>
+                </label>
+              </div>
+
+              <div className="form-group-checkbox">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={formData.allow_google_signin}
+                    onChange={(e) => setFormData({...formData, allow_google_signin: e.target.checked})}
+                  />
+                  <span>Enable Google OAuth Login</span>
+                </label>
+              </div>
+
+              <div className="modal-footer">
+                <button 
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowCreateModal(false)}
+                  disabled={creating}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="btn-primary"
+                  disabled={creating}
+                >
+                  {creating ? 'Creating...' : 'Create App'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Credentials Modal */}
+      {showCredentialsModal && newAppCredentials && (
+        <div className="modal-overlay">
+          <div className="modal-content credentials-modal">
+            <div className="modal-header">
+              <h2>🎉 App Created Successfully!</h2>
+            </div>
+
+            <div className="credentials-warning">
+              <span className="warning-icon">⚠️</span>
+              <p><strong>Important:</strong> Save these credentials securely. The API secret will not be shown again!</p>
+            </div>
+
+            <div className="credentials-display">
+              <div className="credential-item">
+                <label>API Key</label>
+                <div className="credential-value">
+                  <code>{newAppCredentials.api_key}</code>
+                  <button 
+                    className="btn-icon"
+                    onClick={() => handleCopyToClipboard(newAppCredentials.api_key, 'API Key')}
+                  >
+                    📋
                   </button>
-                  <button className="icon-btn" title="View Details" onClick={(e) => e.stopPropagation()}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                      <polyline points="15 3 21 3 21 9"/>
-                      <line x1="10" y1="14" x2="21" y2="3"/>
-                    </svg>
+                </div>
+              </div>
+
+              <div className="credential-item">
+                <label>API Secret</label>
+                <div className="credential-value">
+                  <code>{newAppCredentials.api_secret}</code>
+                  <button 
+                    className="btn-icon"
+                    onClick={() => handleCopyToClipboard(newAppCredentials.api_secret, 'API Secret')}
+                  >
+                    📋
                   </button>
                 </div>
               </div>
             </div>
-          ))}
+
+            <div className="integration-guide">
+              <h3>Quick Start</h3>
+              <p>Add these credentials to your app's environment variables:</p>
+              <pre>
+{`AUTH_API_KEY=${newAppCredentials.api_key}
+AUTH_API_SECRET=${newAppCredentials.api_secret}
+AUTH_SERVER_URL=http://localhost:5001/api`}
+              </pre>
+            </div>
+
+            <div className="modal-footer">
+              <button 
+                className="btn-primary btn-large"
+                onClick={handleCloseCredentialsModal}
+              >
+                I've Saved My Credentials
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -6,6 +6,7 @@ import DashboardLayout from './components/Layout/DashboardLayout';
 import Home from './pages/Home/Home';
 import Apps from './pages/Apps/Apps';
 import Settings from './pages/Settings/Settings';
+import Documentation from './pages/Documentation/Documentation';
 import './App.css';
 
 const API_BASE_URL = import.meta.env.VITE_CPANEL_API_BASE_URL || 'http://localhost:5001/api/developer';
@@ -119,6 +120,9 @@ function App() {
   }
 
   if (!developer) {
+    useEffect(() => {
+      window.location.href = 'http://localhost:5173';
+    }, []);
     return (
       <div className="container">
         <h2>Not authenticated</h2>
@@ -135,6 +139,7 @@ function App() {
         <Route index element={<Home />} />
         <Route path="apps" element={<Apps />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="documentation" element={<Documentation />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

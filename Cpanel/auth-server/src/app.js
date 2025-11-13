@@ -3,6 +3,9 @@ const cors = require('cors');
 const helmet = require('helmet');
 
 const authRoutes = require('./routes/authRoutes.js');
+const settingsRoutes = require('./routes/settingsRoutes.js');
+const appRoutes = require('./routes/appRoutes.js');
+const publicApiRoutes = require('./routes/publicApiRoutes.js');
 
 const app = express();
 
@@ -42,6 +45,9 @@ app.use((req, res, next) => {
 
 // routes
 app.use('/api/developer', authRoutes);
+app.use('/api/developer', settingsRoutes);
+app.use('/api/developer/apps', appRoutes);
+app.use('/api/v1', publicApiRoutes);
 
 // error handler (simple)
 app.use((err, req, res, next) => {

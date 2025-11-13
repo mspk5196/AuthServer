@@ -6,12 +6,20 @@ import './Settings.css';
 
 const Settings = () => {
   const { developer } = useAuth();
+  // console.log(developer);
+
   const [planInfo, setPlanInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetchPlanInfo();
+    const reloaded = sessionStorage.getItem("reloaded");
+    if (!reloaded) {
+      sessionStorage.setItem("reloaded", "true");
+      location.reload();
+    } else {
+      fetchPlanInfo();
+    }
   }, []);
 
   const fetchPlanInfo = async () => {
@@ -22,7 +30,7 @@ const Settings = () => {
       const response = await api.get('/settings/plan', token);
       setPlanInfo(response);
       // console.log(response);
-      
+
     } catch (error) {
       console.error('Error fetching plan info:', error);
       setError(error.message || 'Failed to load plan information');
@@ -69,7 +77,7 @@ const Settings = () => {
   const apiCallsPercentage = planInfo ? (planInfo.api_calls_used / planInfo.max_api_calls) * 100 : 0;
 
   // Convert features object to array for display
-  const featuresArray = planInfo?.features 
+  const featuresArray = planInfo?.features
     ? Object.values(planInfo.features)
     : [];
 
@@ -82,14 +90,14 @@ const Settings = () => {
 
       <div className="info-banner">
         <svg className="info-banner-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="12" y1="16" x2="12" y2="12"/>
-          <line x1="12" y1="8" x2="12.01" y2="8"/>
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="16" x2="12" y2="12" />
+          <line x1="12" y1="8" x2="12.01" y2="8" />
         </svg>
         <div className="info-banner-content">
           <div className="info-banner-title">Account Management</div>
           <div className="info-banner-text">
-            To edit your profile, enable two-factor authentication, or reset your password, 
+            To edit your profile, enable two-factor authentication, or reset your password,
             please visit the <a href="http://localhost:5173" target="_blank" rel="noopener noreferrer">main developer portal</a>.
           </div>
         </div>
@@ -145,7 +153,7 @@ const Settings = () => {
             <div className="usage-stat-value">{planInfo?.apps_used || 0}</div>
             <div className="usage-stat-limit">of {planInfo?.max_apps || 0} apps</div>
             <div className="progress-bar">
-              <div 
+              <div
                 className={`progress-bar-fill ${getProgressColor(appsPercentage)}`}
                 style={{ width: `${Math.min(appsPercentage, 100)}%` }}
               />
@@ -157,7 +165,7 @@ const Settings = () => {
             <div className="usage-stat-value">{(planInfo?.api_calls_used || 0).toLocaleString()}</div>
             <div className="usage-stat-limit">of {(planInfo?.max_api_calls || 0).toLocaleString()} calls</div>
             <div className="progress-bar">
-              <div 
+              <div
                 className={`progress-bar-fill ${getProgressColor(apiCallsPercentage)}`}
                 style={{ width: `${Math.min(apiCallsPercentage, 100)}%` }}
               />
@@ -178,7 +186,7 @@ const Settings = () => {
               <div className="settings-label">
                 <div className="settings-label-title">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline', marginRight: '0.5rem', color: 'var(--success-color)' }}>
-                    <polyline points="20 6 9 17 4 12"/>
+                    <polyline points="20 6 9 17 4 12" />
                   </svg>
                   {feature}
                 </div>

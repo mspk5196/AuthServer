@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../context/AuthContext';
-import './Apps.css';
+import { useAuth } from '../../../context/AuthContext';
+import { api } from '../../../services/api';
+import { tokenService } from '../../../services/tokenService';
+import '../AppHome/Apps.css';
 
 const Apps = () => {
   const { developer } = useAuth();
@@ -26,18 +28,10 @@ const Apps = () => {
     try {
       setLoading(true);
       setError('');
-      
-      const token = localStorage.getItem('cpanel_jwt');
-      const response = await fetch('http://localhost:5001/api/developer/apps/getApps', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      const data = await response.json();
-      
+      const token = tokenService.get();
+      const data = await api.get('/apps/getApps', token);
       if (data.success) {
-        setApps(data.data);
+        setApps(data.data || []);
       } else {
         setError(data.message || 'Failed to fetch apps');
       }
@@ -61,24 +55,20 @@ const Apps = () => {
       setCreating(true);
       setError('');
 
-      const token = localStorage.getItem('cpanel_jwt');
-      const response = await fetch('http://localhost:5001/api/developer/apps/createApp', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(formData)
-      });
-
-      const data = await response.json();
-
+      const token = tokenService.get();
+      const payload = {
+        app_name: formData.app_name,
+        base_url: formData.base_url,
+        allow_google_signin: formData.allow_google_signin,
+        allow_email_signin: formData.allow_email_signin
+      };
+      const data = await api.post('/apps/createApp', payload, token);
       if (data.success) {
         // Show credentials modal
         setNewAppCredentials(data.data);
         setShowCredentialsModal(true);
         setShowCreateModal(false);
-        
+
         // Reset form
         setFormData({
           app_name: '',
@@ -215,7 +205,7 @@ const Apps = () => {
                 </button>
                 <button 
                   className="btn-secondary btn-small"
-                  onClick={() => {/* Open settings modal */}}
+                  onClick={() => window.location.href = `/apps/${app.id}/settings`}
                 >
                   ⚙️ Settings
                 </button>

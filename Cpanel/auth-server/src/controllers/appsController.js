@@ -446,11 +446,226 @@ const regenerateApiKey = async (req, res) => {
   }
 };
 
+// exports moved to bottom after all functions are defined
+
+/**
+ * App summary (quick stats)
+ */
+const getAppSummary = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { appId } = req.params;
+
+    // verify ownership
+    const owner = await pool.query('SELECT id FROM dev_apps WHERE id = $1 AND developer_id = $2', [appId, developerId]);
+    if (!owner.rows.length) return res.status(404).json({ success: false, message: 'App not found' });
+
+    const q = await pool.query(`
+      SELECT a.id, a.app_name, a.base_url, a.allow_google_signin, a.allow_email_signin,
+        COUNT(u.id) FILTER (WHERE u.id IS NOT NULL) AS total_users,
+        COUNT(u.id) FILTER (WHERE u.created_at >= NOW() - INTERVAL '30 days') AS new_users_30d
+      FROM dev_apps a
+      LEFT JOIN users u ON u.app_id = a.id
+      WHERE a.id = $1
+      GROUP BY a.id
+    `, [appId]);
+
+    // usage this month
+    const usage = await pool.query(`
+      SELECT count(*) AS calls_this_month
+      FROM dev_api_calls
+      WHERE app_id = $1 AND date_trunc('month', created_at) = date_trunc('month', now())
+    `, [appId]);
+
+    // plan limits for developer
+    const plan = await pool.query(`
+      SELECT p.features
+      FROM developer_plan_registrations dpr
+      JOIN dev_plans p ON dpr.plan_id = p.id
+      WHERE dpr.developer_id = $1 AND dpr.is_active = true
+      LIMIT 1
+    `, [developerId]);
+
+    res.json({ success: true, data: { app: q.rows[0], usage: usage.rows[0], plan: plan.rows[0] ? plan.rows[0].features : null } });
+  } catch (err) {
+    console.error('getAppSummary error', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/**
+ * List app users (paginated, filters)
+ */
+const listAppUsers = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { appId } = req.params;
+    const page = parseInt(req.query.page || '1', 10);
+    const limit = Math.min(parseInt(req.query.limit || '25', 10), 200);
+    const q = (req.query.q || '').trim();
+    const blocked = req.query.blocked;
+    const verified = req.query.verified;
+    const offset = (page - 1) * limit;
+
+    // verify ownership
+    const owner = await pool.query('SELECT id FROM dev_apps WHERE id = $1 AND developer_id = $2', [appId, developerId]);
+    if (!owner.rows.length) return res.status(404).json({ success: false, message: 'App not found' });
+
+    const filters = ['app_id = $1'];
+    const params = [appId];
+    let idx = 2;
+
+    if (q) {
+      filters.push(`(email ILIKE $${idx} OR username ILIKE $${idx} OR name ILIKE $${idx})`);
+      params.push(`%${q}%`);
+      idx++;
+    }
+    if (blocked !== undefined) {
+      filters.push(`is_blocked = $${idx}`);
+      params.push(blocked === 'true');
+      idx++;
+    }
+    if (verified !== undefined) {
+      filters.push(`email_verified = $${idx}`);
+      params.push(verified === 'true');
+      idx++;
+    }
+
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+
+    const users = await pool.query(`
+      SELECT id, name, username, email, email_verified, google_linked, is_blocked, last_login, created_at
+      FROM users
+      ${where}
+      ORDER BY created_at DESC
+      LIMIT $${idx} OFFSET $${idx + 1}
+    `, params.concat([limit, offset]));
+
+    const totalQ = await pool.query(`SELECT COUNT(*) AS total FROM users ${where}`, params);
+
+    res.json({ success: true, data: users.rows, meta: { total: parseInt(totalQ.rows[0].total, 10), page, limit } });
+  } catch (err) {
+    console.error('listAppUsers error', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/**
+ * Get single user's login history
+ */
+const getUserLoginHistory = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { appId, userId } = req.params;
+
+    const owner = await pool.query('SELECT id FROM dev_apps WHERE id = $1 AND developer_id = $2', [appId, developerId]);
+    if (!owner.rows.length) return res.status(404).json({ success: false, message: 'App not found' });
+
+    const logs = await pool.query(`
+      SELECT id, ip_address, user_agent, login_method, created_at as login_time
+      FROM user_login_history
+      WHERE app_id = $1 AND user_id = $2
+      ORDER BY created_at DESC
+      LIMIT 200
+    `, [appId, userId]);
+
+    res.json({ success: true, data: logs.rows });
+  } catch (err) {
+    console.error('getUserLoginHistory error', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/**
+ * Create a user for an app (developer action)
+ */
+const createAppUser = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { appId } = req.params;
+    const { email, password, name, username, email_verified = false } = req.body;
+
+    const owner = await pool.query('SELECT id, allow_email_signin FROM dev_apps WHERE id = $1 AND developer_id = $2', [appId, developerId]);
+    if (!owner.rows.length) return res.status(404).json({ success: false, message: 'App not found' });
+    if (!owner.rows[0].allow_email_signin) return res.status(403).json({ success: false, message: 'Email signup disabled for this app' });
+
+    if (!email || !password) return res.status(400).json({ success: false, message: 'Email and password required' });
+
+    const bcrypt = require('bcryptjs');
+    const salt = await bcrypt.genSalt(10);
+    const hash = await bcrypt.hash(password, salt);
+
+    const insert = await pool.query(`
+      INSERT INTO users (id, app_id, email, password_hash, name, username, email_verified, created_at, updated_at)
+      VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, NOW(), NOW())
+      RETURNING id, email, name, username, email_verified, created_at
+    `, [appId, email.toLowerCase(), hash, name, username, email_verified]);
+
+    res.status(201).json({ success: true, data: insert.rows[0] });
+  } catch (err) {
+    console.error('createAppUser error', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/**
+ * Block or unblock a user
+ */
+const setUserBlocked = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { appId, userId } = req.params;
+    const { block } = req.body; // boolean
+
+    const owner = await pool.query('SELECT id FROM dev_apps WHERE id = $1 AND developer_id = $2', [appId, developerId]);
+    if (!owner.rows.length) return res.status(404).json({ success: false, message: 'App not found' });
+
+    await pool.query('UPDATE users SET is_blocked = $1, updated_at = NOW() WHERE id = $2 AND app_id = $3', [block === true, userId, appId]);
+
+    res.json({ success: true, message: block ? 'User blocked' : 'User unblocked' });
+  } catch (err) {
+    console.error('setUserBlocked error', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/**
+ * Get app API usage and per-endpoint breakdown
+ */
+const getAppUsage = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { appId } = req.params;
+
+    const owner = await pool.query('SELECT id FROM dev_apps WHERE id = $1 AND developer_id = $2', [appId, developerId]);
+    if (!owner.rows.length) return res.status(404).json({ success: false, message: 'App not found' });
+
+    const total = await pool.query('SELECT count(*) as total_calls FROM dev_api_calls WHERE app_id = $1', [appId]);
+    const perEndpoint = await pool.query(`
+      SELECT endpoint, count(*) as calls
+      FROM dev_api_calls
+      WHERE app_id = $1 AND created_at >= NOW() - INTERVAL '30 days'
+      GROUP BY endpoint ORDER BY calls DESC LIMIT 50
+    `, [appId]);
+
+    res.json({ success: true, data: { total_calls: parseInt(total.rows[0].total_calls, 10), per_endpoint: perEndpoint.rows } });
+  } catch (err) {
+    console.error('getAppUsage error', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 module.exports = {
   createApp,
   getMyApps,
   getAppDetails,
   updateApp,
   deleteApp,
-  regenerateApiKey
+  regenerateApiKey,
+  getAppSummary,
+  listAppUsers,
+  getUserLoginHistory,
+  createAppUser,
+  setUserBlocked,
+  getAppUsage
 };

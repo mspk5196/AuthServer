@@ -2,45 +2,17 @@ import { useEffect, useMemo, useRef } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { tokenService } from './services/tokenService';
+import { api } from './services/api';
 import DashboardLayout from './components/Layout/DashboardLayout';
 import Home from './pages/Home/Home';
-import Apps from './pages/Apps/Apps';
+import Apps from './pages/Apps/AppHome/Apps';
+import AppDetails from './pages/Apps/AppDetails/AppDetails';
+import AppSettings from './pages/Apps/AppSettings/AppSettings';
 import Settings from './pages/Settings/Settings';
 import Documentation from './pages/Documentation/Documentation';
 import './App.css';
 
-const API_BASE_URL = import.meta.env.VITE_CPANEL_API_BASE_URL || 'http://localhost:5001/api/developer';
-
-async function apiGet(path) {
-  const token = tokenService.get();
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    credentials: 'include',
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw Object.assign(new Error(data.message || 'Request failed'), { data });
-  return data;
-}
-
-async function apiPost(path, body) {
-  const token = tokenService.get();
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    credentials: 'include',
-    body: JSON.stringify(body || {}),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw Object.assign(new Error(data.message || 'Request failed'), { data });
-  return data;
-}
+// use shared api service imported above
 
 function App() {
   const { developer, setDeveloper, loading, setLoading } = useAuth();
@@ -69,7 +41,7 @@ function App() {
           if (consumedOnceRef.current) return;
           consumedOnceRef.current = true;
           
-          const resp = await apiPost('/sso/consume', { ticket });
+          const resp = await api.post('/sso/consume', { ticket });
           const token = resp?.data?.token || resp?.token;
           const dev = resp?.data?.developer || resp?.developer;
           
@@ -96,7 +68,7 @@ function App() {
           // Check for existing token
           const existing = tokenService.get();
           if (existing) {
-            const me = await apiGet('/me');
+            const me = await api.get('/me', existing);
             setDeveloper(me.developer);
           }
         }
@@ -138,6 +110,8 @@ function App() {
       <Route path="/" element={<DashboardLayout />}>
         <Route index element={<Home />} />
         <Route path="apps" element={<Apps />} />
+        <Route path="apps/:appId" element={<AppDetails />} />
+        <Route path="apps/:appId/settings" element={<AppSettings />} />
         <Route path="settings" element={<Settings />} />
         <Route path="documentation" element={<Documentation />} />
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,0 +1,54 @@
+version: "3.8"
+
+services:
+  #───────────────────────────#
+  # Cpanel Backend
+  #───────────────────────────#
+  auth-server-cpanel-backend:
+    build:
+      context: ./Cpanel/auth-server
+    container_name: auth-server-cpanel-backend
+    ports:
+      - "5000"
+    networks:
+      - webnet
+
+  #───────────────────────────#
+  # Cpanel Frontend
+  #───────────────────────────#
+  auth-server-cpanel-frontend:
+    build:
+      context: ./Cpanel/CpanelWeb
+    container_name: auth-server-cpanel-frontend
+    ports:
+      - "4000"
+    networks:
+      - webnet
+
+  #───────────────────────────#
+  # Developer Backend
+  #───────────────────────────#
+  auth-server-developer-backend:
+    build:
+      context: ./developerWeb/Backend
+    container_name: auth-server-developer-backend
+    ports:
+      - "5000"
+    networks:
+      - webnet
+
+  #───────────────────────────#
+  # Developer Frontend
+  #───────────────────────────#
+  auth-server-developer-frontend:
+    build:
+      context: ./developerWeb/authServerWeb
+    container_name: auth-server-developer-frontend
+    ports:
+      - "4000"
+    networks:
+      - webnet
+
+networks:
+  webnet:
+    external: true

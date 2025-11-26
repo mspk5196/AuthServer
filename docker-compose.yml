@@ -9,7 +9,7 @@ services:
       context: ./Cpanel/auth-server
     container_name: auth-server-cpanel-backend
     ports:
-      - "5000"
+      - "5002:5000"
     networks:
       - webnet
 
@@ -21,7 +21,7 @@ services:
       context: ./Cpanel/CpanelWeb
     container_name: auth-server-cpanel-frontend
     ports:
-      - "4000"
+      - "4002:4000"
     networks:
       - webnet
 
@@ -33,7 +33,7 @@ services:
       context: ./developerWeb/Backend
     container_name: auth-server-developer-backend
     ports:
-      - "5000"
+      - "5001:5000"
     networks:
       - webnet
 
@@ -45,7 +45,7 @@ services:
       context: ./developerWeb/authServerWeb
     container_name: auth-server-developer-frontend
     ports:
-      - "4000"
+      - "4001:4000"
     networks:
       - webnet
 

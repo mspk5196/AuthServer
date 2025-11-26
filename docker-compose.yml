@@ -4,10 +4,10 @@ services:
   #───────────────────────────#
   # Cpanel Backend
   #───────────────────────────#
-  auth-server-cpanel-backend:
+  cpanel-backend:
     build:
       context: ./Cpanel/auth-server
-    container_name: auth-server-cpanel-backend
+    container_name: cpanel-backend
     ports:
       - "5002:5000"
     networks:
@@ -16,10 +16,10 @@ services:
   #───────────────────────────#
   # Cpanel Frontend
   #───────────────────────────#
-  auth-server-cpanel-frontend:
+  cpanel-frontend:
     build:
       context: ./Cpanel/CpanelWeb
-    container_name: auth-server-cpanel-frontend
+    container_name: cpanel-frontend
     ports:
       - "4002:4000"
     networks:
@@ -28,10 +28,10 @@ services:
   #───────────────────────────#
   # Developer Backend
   #───────────────────────────#
-  auth-server-developer-backend:
+  developer-backend:
     build:
       context: ./developerWeb/Backend
-    container_name: auth-server-developer-backend
+    container_name: developer-backend
     ports:
       - "5001:5000"
     networks:
@@ -40,10 +40,10 @@ services:
   #───────────────────────────#
   # Developer Frontend
   #───────────────────────────#
-  auth-server-developer-frontend:
+  developer-frontend:
     build:
       context: ./developerWeb/authServerWeb
-    container_name: auth-server-developer-frontend
+    container_name: developer-frontend
     ports:
       - "4001:4000"
     networks:

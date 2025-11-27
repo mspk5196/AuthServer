@@ -12,6 +12,8 @@ services:
       - "5002:5000"
     networks:
       - webnet
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   #───────────────────────────#
   # Cpanel Frontend
@@ -36,6 +38,8 @@ services:
       - "5001:5000"
     networks:
       - webnet
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   #───────────────────────────#
   # Developer Frontend

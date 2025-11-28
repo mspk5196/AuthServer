@@ -21,7 +21,7 @@ let client;
 async function connectRedis() {
   try {
     const c = createClient({ url: process.env.REDIS_URL });
-    c.on('error', (e) => console.error('Redis error:', process.env.REDIS_URL, e.message));
+    c.on('error', (e) => console.error('Redis error1:', process.env.REDIS_URL, e.message));
     await c.connect();
     console.log('Redis connected');
     // Polyfill getdel for Redis < 6.2 using Lua

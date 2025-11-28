@@ -20,7 +20,7 @@ function createMemoryRedis() {
 let client;
 async function connectRedis() {
   try {
-    const c = createClient({ url: process.env.REDIS_URL || 'redis://localhost:6379' });
+    const c = createClient({ url: process.env.REDIS_URL });
     c.on('error', (e) => console.error('Redis error:', e.message));
     await c.connect();
     console.log('Redis connected');

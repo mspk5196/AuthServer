@@ -9,31 +9,58 @@ const publicApiRoutes = require('./routes/publicApiRoutes.js');
 
 const app = express();
 
-// Robust CORS: allow localhost:5173 and :5174 and optional FRONTEND_URL (normalize trailing slashes)
+// Robust CORS setup
 const normalizeOrigin = (o) => (o ? o.replace(/\/$/, '') : o);
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   'https://authservices.mspkapps.in',
   'https://cpanel.authservices.mspkapps.in',
+  'https://cpanel.backend.mspkapps.in', // backend domain if front-end may embed assets
 ].filter(Boolean).map(normalizeOrigin);
 
-app.use(cors({
+const allowedHeaders = [
+  'Content-Type',
+  'Authorization',
+  'X-API-Key',
+  'X-API-Secret',
+  'X-Requested-With',
+  'Accept',
+  'Origin',
+  'x-csrf-token'
+];
+
+const corsConfig = {
   origin: function (origin, callback) {
-    if (!origin) return callback(null, true); // allow mobile apps / curl
-    const o = normalizeOrigin(origin);
-    if (allowedOrigins.includes(o)) {
-      return callback(null, true); // reflect request origin
+    const normalized = normalizeOrigin(origin);
+    if (!origin || allowedOrigins.includes(normalized)) {
+      if (origin) {
+        console.log(`[CORS] allow origin: ${origin}`);
+      } else {
+        console.log('[CORS] allow non-browser/no-origin request');
+      }
+      return callback(null, true);
     }
-    return callback(null, false);
+    console.warn(`[CORS] blocked origin: ${origin}`);
+    return callback(new Error('CORS not allowed'), false);
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-csrf-token'],
+  allowedHeaders,
   exposedHeaders: ['x-csrf-token'],
   credentials: true,
-}));
+  maxAge: 600
+};
 
-// Handle preflight for all routes (Express 5: avoid '*' path-to-regexp)
-app.options(/.*/, cors());
+app.use((req, res, next) => {
+  // Preflight debugging
+  if (req.method === 'OPTIONS') {
+    console.log('[CORS][Preflight] Origin:', req.headers.origin, 'Req-Headers:', req.headers['access-control-request-headers']);
+  }
+  next();
+});
+
+app.use(cors(corsConfig));
+// Explicit preflight handler reusing same config
+app.options(/.*/, cors(corsConfig));
 app.use(express.json());
 app.use(helmet());
 

@@ -13,8 +13,8 @@ const app = express();
 const normalizeOrigin = (o) => (o ? o.replace(/\/$/, '') : o);
 const allowedOrigins = [
   process.env.FRONTEND_URL,
-  'http://localhost:5173',
-  'http://localhost:5174',
+  'https://authservices.mspkapps.in/',
+  'https://cpanel.authservices.mspkapps.in/',
 ].filter(Boolean).map(normalizeOrigin);
 
 app.use(cors({

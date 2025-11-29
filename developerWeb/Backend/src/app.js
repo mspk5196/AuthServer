@@ -10,7 +10,7 @@ getRedis().catch(console.error);
 
 const app = express();
 app.use(cors({
-  origin: "https://authservices.mspkapps.in/", // specify exact frontend origin
+  origin: "https://authservices.mspkapps.in", // specify exact frontend origin
   credentials: true,               // allow cookies and credentials
 }));
 app.use(express.json());

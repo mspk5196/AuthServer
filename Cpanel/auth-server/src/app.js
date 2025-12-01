@@ -58,7 +58,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(cors(corsConfig));
+// app.use(cors(corsConfig));
 // Explicit preflight handler reusing same config
 app.options(/.*/, cors(corsConfig));
 app.use(express.json());

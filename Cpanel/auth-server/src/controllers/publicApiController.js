@@ -10,7 +10,7 @@ const { sendMail } = require('../utils/mailer');
  */
 const verifyAppCredentials = async (req, res, next) => {
   try {
-    const apiKey = req.headers['x-api-key'];
+    const apiKey = req.params.apiKey || req.headers['x-api-key'];
     const apiSecret = req.headers['x-api-secret'];
 
     if (!apiKey || !apiSecret) {
@@ -66,8 +66,8 @@ const verifyAppCredentials = async (req, res, next) => {
       });
     }
 
-    // Attach app and plan info to request
-    req.app = app;
+    // Attach app and plan info to request (avoid shadowing Express req.app)
+    req.devApp = app;
     req.plan = planCheck.rows[0];
 
     // Track API call (non-blocking)
@@ -116,7 +116,7 @@ async function trackApiCall(appId, developerId, req) {
 const registerUser = async (req, res) => {
   try {
     const { email, password, name, username } = req.body;
-    const app = req.app;
+    const app = req.devApp;
 
     // Validation
     if (!email || !password) {
@@ -235,7 +235,7 @@ const registerUser = async (req, res) => {
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
-    const app = req.app;
+    const app = req.devApp;
 
     // Validation
     if (!email || !password) {
@@ -348,7 +348,7 @@ const loginUser = async (req, res) => {
 const verifyEmail = async (req, res) => {
   try {
     const { token } = req.query;
-    const app = req.app;
+    const app = req.devApp;
 
     if (!token) {
       return res.status(400).json({
@@ -421,7 +421,7 @@ const getUserProfile = async (req, res) => {
     // Get user info
     const result = await pool.query(
       'SELECT id, email, name, username, email_verified, google_linked, is_blocked, last_login, created_at FROM users WHERE id = $1 AND app_id = $2',
-      [decoded.userId, req.app.id]
+      [decoded.userId, req.devApp.id]
     );
 
     if (result.rows.length === 0) {

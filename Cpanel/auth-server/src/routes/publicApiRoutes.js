@@ -12,9 +12,13 @@ const {
 router.use(verifyAppCredentials);
 
 // Authentication endpoints
-router.post('/auth/register', registerUser);
-router.post('/auth/login', loginUser);
+// router.post('/auth/register', registerUser);
+// router.post('/auth/login', loginUser);
+// router.get('/auth/user/profile', getUserProfile);
 router.get('/auth/verify-email', verifyEmail);
-router.get('/auth/user/profile', getUserProfile);
+
+router.post('/:apiKey/auth/register', registerUser);
+router.post('/:apiKey/auth/login', loginUser);
+router.get('/:apiKey/user/profile', getUserProfile);
 
 module.exports = router;

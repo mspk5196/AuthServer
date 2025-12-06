@@ -71,7 +71,7 @@ const verifyAppCredentials = async (req, res, next) => {
     req.plan = planCheck.rows[0];
 
     // Track API call (non-blocking)
-    trackApiCall(app.id, app.developer_id, req).catch(err => 
+    trackApiCall(app.id, app.developer_id, req).catch(err =>
       console.error('API tracking error:', err)
     );
 
@@ -97,9 +97,9 @@ async function trackApiCall(appId, developerId, req) {
         ip_address, user_agent, created_at
       ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
     `, [
-      appId, 
-      developerId, 
-      req.path, 
+      appId,
+      developerId,
+      req.path,
       req.method,
       req.ip,
       req.headers['user-agent']
@@ -183,16 +183,17 @@ const registerUser = async (req, res) => {
 
     // Send verification email (non-blocking)
     const verificationUrl = `${app.base_url}/verify-email?token=${verificationToken}`;
-    sendMail(
-      email,
-      'Verify Your Email',
-      `
+
+    sendMail({
+      to: email,
+      subject: 'Verify Your Email',
+      html: `
         <h2>Welcome to ${app.app_name}!</h2>
         <p>Please verify your email address by clicking the link below:</p>
         <a href="${verificationUrl}">${verificationUrl}</a>
         <p>This link will expire in 24 hours.</p>
       `
-    ).catch(err => console.error('Send verification email error:', err));
+    }).catch(err => console.error('Send verification email error:', err));
 
     // Generate access token
     const accessToken = jwt.sign(
@@ -282,7 +283,7 @@ const loginUser = async (req, res) => {
 
     // Verify password
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
-    
+
     if (!isPasswordValid) {
       return res.status(401).json({
         success: false,
@@ -404,7 +405,7 @@ const verifyEmail = async (req, res) => {
 const getUserProfile = async (req, res) => {
   try {
     const authHeader = req.headers['authorization'];
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({
         success: false,
@@ -414,7 +415,7 @@ const getUserProfile = async (req, res) => {
     }
 
     const token = authHeader.substring(7);
-    
+
     // Verify JWT token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 

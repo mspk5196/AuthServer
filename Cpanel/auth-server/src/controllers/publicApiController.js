@@ -1025,6 +1025,7 @@ const completePasswordReset = async (req, res) => {
     
     const token = req.query.token || (req.body && req.body.token);
     const new_password = req.body && req.body.new_password;
+    console.log(new_password);
     
     if (!token) {
       return res.status(400).json({

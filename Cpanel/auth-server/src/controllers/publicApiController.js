@@ -896,7 +896,8 @@ const resetPasswordPage = async (req, res) => {
           
           <div id="message" class="message"></div>
           
-          <form id="resetForm">
+          <!-- Progressive enhancement: works with or without JS -->
+          <form id="resetForm" method="POST" action="/api/v1/auth/reset-password?token=${token}">
             <div class="form-group">
               <label for="password">New Password</label>
               <input type="password" id="password" name="password" required minlength="6" placeholder="Enter new password">
@@ -965,7 +966,7 @@ const resetPasswordPage = async (req, res) => {
 
             try {
             console.log('Submitting password reset for token:', token);
-              // Post to the same path without query; send token in body
+              // JS-enabled path: post without query and include token in body
               const response = await fetch(window.location.pathname, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

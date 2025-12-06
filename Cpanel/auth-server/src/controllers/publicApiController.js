@@ -292,7 +292,6 @@ const loginUser = async (req, res) => {
 
     // Verify password
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
-console.log(isPasswordValid);
 
     if (!isPasswordValid) {
       return res.status(401).json({
@@ -323,7 +322,6 @@ console.log(isPasswordValid);
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
-console.log("token generated");
 
     res.json({
       success: true,

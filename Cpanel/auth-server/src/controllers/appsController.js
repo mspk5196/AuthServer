@@ -16,16 +16,16 @@ function generateApiCredentials() {
 const createApp = async (req, res) => {
   try {
     const developerId = req.user.developerId;
-    const { app_name, base_url, allow_google_signin = false, allow_email_signin = true } = req.body;
+    const { app_name, allow_google_signin = false, allow_email_signin = true } = req.body;
 
     console.log('Create app request from developer:', developerId);
-    console.log('Form data:', { app_name, base_url, allow_google_signin, allow_email_signin });
+    console.log('Form data:', { app_name, allow_google_signin, allow_email_signin });
 
     // Validation
-    if (!app_name || !base_url) {
+    if (!app_name) {
       return res.status(400).json({
         success: false,
-        message: 'App name and base URL are required'
+        message: 'App name is required'
       });
     }
 
@@ -111,14 +111,14 @@ const createApp = async (req, res) => {
     // Create app with hashed secret
     const result = await pool.query(`
       INSERT INTO dev_apps (
-        id, developer_id, app_name, api_key, api_secret_hash, base_url,
+        id, developer_id, app_name, api_key, api_secret_hash,
         allow_google_signin, allow_email_signin,
         created_at, updated_at
       ) VALUES (
-        gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, NOW(), NOW()
+        gen_random_uuid(), $1, $2, $3, $4, $5, $6, NOW(), NOW()
       )
-      RETURNING id, app_name, api_key, base_url, allow_google_signin, allow_email_signin, created_at
-    `, [developerId, app_name, apiKey, hashedSecret, base_url, allow_google_signin, allow_email_signin]);
+      RETURNING id, app_name, api_key, allow_google_signin, allow_email_signin, created_at
+    `, [developerId, app_name, apiKey, hashedSecret, allow_google_signin, allow_email_signin]);
 
     const app = result.rows[0];
     console.log('App created successfully:', app.id);
@@ -156,7 +156,6 @@ const getMyApps = async (req, res) => {
         a.id,
         a.app_name,
         a.api_key,
-        a.base_url,
         a.allow_google_signin,
         a.allow_email_signin,
         a.google_client_id,
@@ -274,7 +273,6 @@ const updateApp = async (req, res) => {
     const { appId } = req.params;
     const { 
       app_name, 
-      base_url, 
       allow_google_signin, 
       allow_email_signin,
       google_client_id,
@@ -302,10 +300,6 @@ const updateApp = async (req, res) => {
     if (app_name) {
       updates.push(`app_name = $${paramCount++}`);
       values.push(app_name);
-    }
-    if (base_url) {
-      updates.push(`base_url = $${paramCount++}`);
-      values.push(base_url);
     }
     if (typeof allow_google_signin === 'boolean') {
       updates.push(`allow_google_signin = $${paramCount++}`);
@@ -461,7 +455,7 @@ const getAppSummary = async (req, res) => {
     if (!owner.rows.length) return res.status(404).json({ success: false, message: 'App not found' });
 
     const q = await pool.query(`
-      SELECT a.id, a.app_name, a.base_url, a.allow_google_signin, a.allow_email_signin,
+      SELECT a.id, a.app_name, a.allow_google_signin, a.allow_email_signin,
         COUNT(u.id) FILTER (WHERE u.id IS NOT NULL) AS total_users,
         COUNT(u.id) FILTER (WHERE u.created_at >= NOW() - INTERVAL '30 days') AS new_users_30d
       FROM dev_apps a

@@ -14,7 +14,6 @@ const Apps = () => {
   const [newAppCredentials, setNewAppCredentials] = useState(null);
   const [formData, setFormData] = useState({
     app_name: '',
-    base_url: '',
     allow_google_signin: false,
     allow_email_signin: true
   });
@@ -46,8 +45,8 @@ const Apps = () => {
   const handleCreateApp = async (e) => {
     e.preventDefault();
     
-    if (!formData.app_name.trim() || !formData.base_url.trim()) {
-      setError('App name and base URL are required');
+    if (!formData.app_name.trim()) {
+      setError('App name is required');
       return;
     }
 
@@ -58,7 +57,6 @@ const Apps = () => {
       const token = tokenService.get();
       const payload = {
         app_name: formData.app_name,
-        base_url: formData.base_url,
         allow_google_signin: formData.allow_google_signin,
         allow_email_signin: formData.allow_email_signin
       };
@@ -72,7 +70,6 @@ const Apps = () => {
         // Reset form
         setFormData({
           app_name: '',
-          base_url: '',
           allow_google_signin: false,
           allow_email_signin: true
         });
@@ -156,10 +153,6 @@ const Apps = () => {
               </div>
               
               <div className="app-card-body">
-                <div className="app-info-row">
-                  <span className="label">Base URL:</span>
-                  <span className="value">{app.base_url}</span>
-                </div>
                 
                 <div className="app-info-row">
                   <span className="label">API Key:</span>
@@ -239,18 +232,6 @@ const Apps = () => {
                   onChange={(e) => setFormData({...formData, app_name: e.target.value})}
                   required
                 />
-              </div>
-
-              <div className="form-group">
-                <label>Base URL *</label>
-                <input
-                  type="url"
-                  placeholder="https://myapp.com"
-                  value={formData.base_url}
-                  onChange={(e) => setFormData({...formData, base_url: e.target.value})}
-                  required
-                />
-                <small>Your application's URL (used for redirects)</small>
               </div>
 
               <div className="form-group-checkbox">

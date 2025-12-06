@@ -349,7 +349,7 @@ const loginUser = async (req, res) => {
 const verifyEmail = async (req, res) => {
   try {
     const { token } = req.query;
-    const app = req.devApp;
+    // const app = req.devApp;
 
     if (!token) {
       return res.status(400).json({
@@ -362,8 +362,8 @@ const verifyEmail = async (req, res) => {
     // Find verification record
     const result = await pool.query(`
       SELECT * FROM user_email_verifications 
-      WHERE app_id = $1 AND token = $2 AND expires_at > NOW() AND used = 0
-    `, [app.id, token]);
+      WHERE token = $1 AND expires_at > NOW() AND used = false
+    `, [token]);
 
     if (result.rows.length === 0) {
       return res.status(400).json({
@@ -382,7 +382,7 @@ const verifyEmail = async (req, res) => {
     );
 
     // Delete verification token (one-time use)
-    await pool.query('UPDATE user_email_verifications SET used = 1 WHERE id = $1', [verification.id]);
+    await pool.query('UPDATE user_email_verifications SET used = true WHERE id = $1', [verification.id]);
 
     res.json({
       success: true,

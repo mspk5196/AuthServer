@@ -769,7 +769,8 @@ const resetPasswordPage = async (req, res) => {
       JOIN dev_apps a ON u.app_id = a.id
       WHERE pr.token = $1 AND pr.expires_at > NOW() AND pr.used = false
     `, [token]);
-
+      console.log(result);
+      
     if (result.rows.length === 0) {
       return res.status(400).send(`
         <!DOCTYPE html>

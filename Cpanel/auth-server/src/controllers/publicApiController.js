@@ -310,9 +310,9 @@ const loginUser = async (req, res) => {
     // Log login history
     await pool.query(`
       INSERT INTO user_login_history (
-        id, user_id, app_id, login_method, ip_address, user_agent, login_time
+        id, user_id, app_id, login_method, ip_address, user_agent, login_time, created_at
       ) VALUES (
-        gen_random_uuid(), $1, $2, 'email', $3, $4, NOW()
+        gen_random_uuid(), $1, $2, 'email', $3, $4, NOW(), NOW()
       )
     `, [user.id, app.id, req.ip, req.headers['user-agent']]);
 
@@ -501,14 +501,14 @@ const requestPasswordReset = async (req, res) => {
     const resetToken = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-    // Save to user_password_change
+    // Save to password_resets table
     await pool.query(`
-      INSERT INTO user_password_change (
-        id, user_id, app_id, token, expires_at, change_type, created_at
+      INSERT INTO password_resets (
+        id, user_id, token, expires_at, used, created_at
       ) VALUES (
-        gen_random_uuid(), $1, $2, $3, $4, 'Forget', NOW()
+        gen_random_uuid(), $1, $2, $3, false, NOW()
       )
-    `, [user.id, app.id, resetToken, expiresAt]);
+    `, [user.id, resetToken, expiresAt]);
 
     // Send reset email
     const resetUrl = `${process.env.BACKEND_URL}/api/v1/auth/reset-password?token=${resetToken}`;
@@ -606,20 +606,20 @@ const changePassword = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(new_password, salt);
 
+    // Log old password before updating
+    await pool.query(`
+      INSERT INTO user_password_history (
+        id, user_id, old_password_hash, changed_at
+      ) VALUES (
+        gen_random_uuid(), $1, $2, NOW()
+      )
+    `, [user.id, user.password_hash]);
+
     // Update password
     await pool.query(
       'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2',
       [hashedPassword, user.id]
     );
-
-    // Log password change
-    await pool.query(`
-      INSERT INTO user_password_change (
-        id, user_id, app_id, change_type, created_at
-      ) VALUES (
-        gen_random_uuid(), $1, $2, 'Request', NOW()
-      )
-    `, [user.id, app.id]);
 
     res.json({
       success: true,
@@ -764,10 +764,10 @@ const resetPasswordPage = async (req, res) => {
     // Verify token exists and is not expired
     const result = await pool.query(`
       SELECT u.email, u.name, a.app_name
-      FROM user_password_change pc
-      JOIN users u ON pc.user_id = u.id
-      JOIN dev_apps a ON pc.app_id = a.id
-      WHERE pc.token = $1 AND pc.expires_at > NOW() AND pc.change_type = 'Forget'
+      FROM password_resets pr
+      JOIN users u ON pr.user_id = u.id
+      JOIN dev_apps a ON u.app_id = a.id
+      WHERE pr.token = $1 AND pr.expires_at > NOW() AND pr.used = false
     `, [token]);
 
     if (result.rows.length === 0) {
@@ -1042,11 +1042,12 @@ const completePasswordReset = async (req, res) => {
       });
     }
 
-    // Find valid reset token
+    // Find valid reset token and get current password
     const result = await pool.query(`
-      SELECT pc.id, pc.user_id, pc.app_id
-      FROM user_password_change pc
-      WHERE pc.token = $1 AND pc.expires_at > NOW() AND pc.change_type = 'Forget'
+      SELECT pr.id, pr.user_id, u.password_hash
+      FROM password_resets pr
+      JOIN users u ON pr.user_id = u.id
+      WHERE pr.token = $1 AND pr.expires_at > NOW() AND pr.used = false
     `, [token]);
 
     if (result.rows.length === 0) {
@@ -1059,6 +1060,15 @@ const completePasswordReset = async (req, res) => {
 
     const resetRecord = result.rows[0];
 
+    // Log old password to history
+    await pool.query(`
+      INSERT INTO user_password_history (
+        id, user_id, old_password_hash, changed_at
+      ) VALUES (
+        gen_random_uuid(), $1, $2, NOW()
+      )
+    `, [resetRecord.user_id, resetRecord.password_hash]);
+
     // Hash new password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(new_password, salt);
@@ -1069,15 +1079,15 @@ const completePasswordReset = async (req, res) => {
       [hashedPassword, resetRecord.user_id]
     );
 
-    // Delete used token (one-time use)
+    // Mark token as used
     await pool.query(
-      'DELETE FROM user_password_change WHERE id = $1',
+      'UPDATE password_resets SET used = true WHERE id = $1',
       [resetRecord.id]
     );
 
     // Invalidate all other pending tokens for this user
     await pool.query(
-      'DELETE FROM user_password_change WHERE user_id = $1 AND change_type = \'Forget\'',
+      'UPDATE password_resets SET used = true WHERE user_id = $1 AND used = false',
       [resetRecord.user_id]
     );
 

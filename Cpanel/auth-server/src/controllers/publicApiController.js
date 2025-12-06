@@ -1020,10 +1020,12 @@ const resetPasswordPage = async (req, res) => {
  */
 const completePasswordReset = async (req, res) => {
   try {
-    // Accept token from query or request body to be robust against proxies stripping query params
+    
     const token = req.query.token || req.body.token;
     const { new_password } = req.body;
 
+    console.log(token, new_password);
+    
     if (!token) {
       return res.status(400).json({
         success: false,

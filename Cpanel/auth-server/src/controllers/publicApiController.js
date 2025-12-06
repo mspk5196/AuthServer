@@ -182,7 +182,7 @@ const registerUser = async (req, res) => {
     `, [user.id, app.id, verificationToken, expiresAt]);
 
     // Send verification email (non-blocking)
-    const verificationUrl = `${app.base_url}/verify-email?token=${verificationToken}`;
+    const verificationUrl = `${process.env.BACKEND_URL}/api/v1/auth/verify-email?token=${verificationToken}`;
 
     sendMail({
       to: email,

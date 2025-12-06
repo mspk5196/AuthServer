@@ -62,6 +62,7 @@ app.use((req, res, next) => {
 // Explicit preflight handler reusing same config
 app.options(/.*/, cors(corsConfig));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(helmet());
 
 // simple request logger

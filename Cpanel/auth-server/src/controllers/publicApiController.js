@@ -965,7 +965,6 @@ const resetPasswordPage = async (req, res) => {
             submitBtn.textContent = 'Resetting...';
 
             try {
-            console.log('Submitting password reset for token:', token);
               // JS-enabled path: post without query and include token in body
               const response = await fetch(window.location.pathname, {
                 method: 'POST',
@@ -1024,8 +1023,8 @@ const resetPasswordPage = async (req, res) => {
 const completePasswordReset = async (req, res) => {
   try {
     
-    const token = req.query.token || req.body.token;
-    const { new_password } = req.body;
+    const token = req.query.token || (req.body && req.body.token);
+    const new_password = req.body && req.body.new_password;
     
     if (!token) {
       return res.status(400).json({

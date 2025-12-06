@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const pool = require('../config/db');
-const { passwordEncryptAES } = require('../utils/decryptAES');
+const { passwordEncryptAES, passwordDecryptAES } = require('../utils/decryptAES');
 const { sendMail } = require('../utils/mailer');
 const { log } = require('console');
 
@@ -287,7 +287,8 @@ const loginUser = async (req, res) => {
     }
 
     // Verify password
-    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+    const decryptPassword = passwordDecryptAES(user.password_hash);
+    const isPasswordValid = await bcrypt.compare(password, decryptPassword);
 console.log(isPasswordValid);
 
     if (!isPasswordValid) {

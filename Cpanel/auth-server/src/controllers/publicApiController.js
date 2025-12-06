@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const pool = require('../config/db');
 const { passwordEncryptAES } = require('../utils/decryptAES');
 const { sendMail } = require('../utils/mailer');
+const { log } = require('console');
 
 /**
  * Middleware to verify app credentials (API Key + Secret)
@@ -236,7 +237,11 @@ const registerUser = async (req, res) => {
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
+    console.log("hi");
+    
     const app = req.devApp;
+    console.log("app");
+    
 
     // Validation
     if (!email || !password) {

@@ -1024,7 +1024,8 @@ const completePasswordReset = async (req, res) => {
   try {
     
     const token = req.query.token || (req.body && req.body.token);
-    let new_password = req.body && req.body.new_password;
+    // Accept both 'password' (form submission) and 'new_password' (JSON API)
+    let new_password = (req.body && req.body.new_password) || (req.body && req.body.password);
     
     // Sanitize and trim password
     if (typeof new_password === 'string') {

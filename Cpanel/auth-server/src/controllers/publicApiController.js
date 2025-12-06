@@ -236,11 +236,8 @@ const registerUser = async (req, res) => {
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
-    console.log("hi");
     
     const app = req.devApp;
-    console.log("app",app);
-    
 
     // Validation
     if (!email || !password) {
@@ -282,6 +279,14 @@ const loginUser = async (req, res) => {
         success: false,
         error: 'Account blocked',
         message: 'Your account has been blocked. Please contact support.'
+      }); 
+    }
+
+    if (user.email_verified === false) {
+      return res.status(403).json({
+        success: false,
+        error: 'Account not verified',
+        message: 'Your account has not been verified. Please check your email for the verification link.'
       }); 
     }
 

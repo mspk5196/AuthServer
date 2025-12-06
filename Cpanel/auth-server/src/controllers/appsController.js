@@ -111,11 +111,11 @@ const createApp = async (req, res) => {
     // Create app with hashed secret
     const result = await pool.query(`
       INSERT INTO dev_apps (
-        id, developer_id, app_name, api_key, api_secret_hash,
+        developer_id, app_name, api_key, api_secret_hash,
         allow_google_signin, allow_email_signin,
         created_at, updated_at
       ) VALUES (
-        gen_random_uuid(), $1, $2, $3, $4, $5, $6, NOW(), NOW()
+        $1, $2, $3, $4, $5, $6, NOW(), NOW()
       )
       RETURNING id, app_name, api_key, allow_google_signin, allow_email_signin, created_at
     `, [developerId, app_name, apiKey, hashedSecret, allow_google_signin, allow_email_signin]);
@@ -590,8 +590,8 @@ const createAppUser = async (req, res) => {
     const hash = await bcrypt.hash(password, salt);
 
     const insert = await pool.query(`
-      INSERT INTO users (id, app_id, email, password_hash, name, username, email_verified, created_at, updated_at)
-      VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, NOW(), NOW())
+      INSERT INTO users (app_id, email, password_hash, name, username, email_verified, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
       RETURNING id, email, name, username, email_verified, created_at
     `, [appId, email.toLowerCase(), hash, name, username, email_verified]);
 

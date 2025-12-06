@@ -158,11 +158,11 @@ const registerUser = async (req, res) => {
     // Create user
     const result = await pool.query(`
       INSERT INTO users (
-        id, app_id, email, password_hash, name, username,
+        app_id, email, password_hash, name, username,
         email_verified, google_linked, is_blocked,
         created_at, updated_at
       ) VALUES (
-        gen_random_uuid(), $1, $2, $3, $4, $5, false, false, false, NOW(), NOW()
+        $1, $2, $3, $4, $5, false, false, false, NOW(), NOW()
       )
       RETURNING id, email, name, username, email_verified, created_at
     `, [app.id, email.toLowerCase(), hashedPassword, name, username]);
@@ -171,15 +171,14 @@ const registerUser = async (req, res) => {
 
     // Generate email verification token
     const verificationToken = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     await pool.query(`
       INSERT INTO user_email_verifications (
-        id, user_id, app_id, token, expires_at, created_at, verify_type
+        user_id, app_id, token, expires_at, created_at, verify_type
       ) VALUES (
-        gen_random_uuid(), $1, $2, $3, $4, NOW(), 'New Account'
+       $1, $2, $3, NOW() + INTERVAL '24 hours', NOW(), 'New Account'
       )
-    `, [user.id, app.id, verificationToken, expiresAt]);
+    `, [user.id, app.id, verificationToken]);
 
     // Send verification email (non-blocking)
     const verificationUrl = `${process.env.BACKEND_URL}/api/v1/auth/verify-email?token=${verificationToken}`;
@@ -310,9 +309,9 @@ const loginUser = async (req, res) => {
     // Log login history
     await pool.query(`
       INSERT INTO user_login_history (
-        id, user_id, app_id, login_method, ip_address, user_agent, login_time, created_at
+        user_id, app_id, login_method, ip_address, user_agent, login_time, created_at
       ) VALUES (
-        gen_random_uuid(), $1, $2, 'email', $3, $4, NOW(), NOW()
+        $1, $2, 'email', $3, $4, NOW(), NOW()
       )
     `, [user.id, app.id, req.ip, req.headers['user-agent']]);
 
@@ -499,16 +498,15 @@ const requestPasswordReset = async (req, res) => {
 
     // Generate reset token
     const resetToken = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
     // Save to password_resets table
     await pool.query(`
       INSERT INTO password_resets (
-        id, user_id, token, expires_at, used, created_at
+        user_id, token, expires_at, used, created_at
       ) VALUES (
-        gen_random_uuid(), $1, $2, $3, false, NOW()
+        $1, $2, NOW() + INTERVAL '1 hour', false, NOW()
       )
-    `, [user.id, resetToken, expiresAt]);
+    `, [user.id, resetToken]);
 
     // Send reset email
     const resetUrl = `${process.env.BACKEND_URL}/api/v1/auth/reset-password?token=${resetToken}`;
@@ -609,9 +607,9 @@ const changePassword = async (req, res) => {
     // Log old password before updating
     await pool.query(`
       INSERT INTO user_password_history (
-        id, user_id, old_password_hash, changed_at
+        user_id, old_password_hash, changed_at
       ) VALUES (
-        gen_random_uuid(), $1, $2, NOW()
+        $1, $2, NOW()
       )
     `, [user.id, user.password_hash]);
 
@@ -695,15 +693,14 @@ const resendVerification = async (req, res) => {
 
     // Generate new token
     const verificationToken = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     await pool.query(`
       INSERT INTO user_email_verifications (
-        id, user_id, app_id, token, expires_at, verify_type, created_at
+        user_id, app_id, token, expires_at, verify_type, created_at
       ) VALUES (
-        gen_random_uuid(), $1, $2, $3, $4, $5, NOW()
+        $1, $2, $3, NOW() + INTERVAL '24 hours', $4, NOW()
       )
-    `, [user.id, app.id, verificationToken, expiresAt, verifyPurpose]);
+    `, [user.id, app.id, verificationToken, verifyPurpose]);
 
     // Send verification email
     const verificationUrl = `${process.env.BACKEND_URL}/api/v1/auth/verify-email?token=${verificationToken}`;
@@ -769,7 +766,6 @@ const resetPasswordPage = async (req, res) => {
       JOIN dev_apps a ON u.app_id = a.id
       WHERE pr.token = $1 AND pr.expires_at > NOW() AND pr.used = false
     `, [token]);
-      console.log(result);
       
     if (result.rows.length === 0) {
       return res.status(400).send(`
@@ -1064,9 +1060,9 @@ const completePasswordReset = async (req, res) => {
     // Log old password to history
     await pool.query(`
       INSERT INTO user_password_history (
-        id, user_id, old_password_hash, changed_at
+        user_id, old_password_hash, changed_at
       ) VALUES (
-        gen_random_uuid(), $1, $2, NOW()
+        $1, $2, NOW()
       )
     `, [resetRecord.user_id, resetRecord.password_hash]);
 

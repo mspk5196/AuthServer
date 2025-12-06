@@ -138,8 +138,8 @@ const updateProfile = async (req, res) => {
 
     // Record profile edit in history
     await client.query(
-      `INSERT INTO dev_profile_edit_history (id, dev_id, old_details, new_details, update_ip, updated_at)
-       VALUES (gen_random_uuid(), $1, $2, $3, $4, NOW())`,
+      `INSERT INTO dev_profile_edit_history ( dev_id, old_details, new_details, update_ip, updated_at)
+       VALUES ($1, $2, $3, $4, NOW())`,
       [developerId, JSON.stringify(oldDetails), JSON.stringify(newDetails), updateIp]
     );
 
@@ -156,8 +156,8 @@ const updateProfile = async (req, res) => {
 
         // Store verification token
         await pool.query(
-          `INSERT INTO dev_email_verifications (id, dev_id, token, expires_at, used, created_at, verify_type)
-           VALUES (gen_random_uuid(), $1, $2, NOW() + INTERVAL '5 minutes', false, NOW(), 'profile_update')`,
+          `INSERT INTO dev_email_verifications ( dev_id, token, expires_at, used, created_at, verify_type)
+           VALUES ($1, $2, NOW() + INTERVAL '5 minutes', false, NOW(), 'profile_update')`,
           [developerId, verifyToken]
         );
 

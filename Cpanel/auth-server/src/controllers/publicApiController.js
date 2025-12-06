@@ -1042,6 +1042,16 @@ const completePasswordReset = async (req, res) => {
       });
     }
 
+    // Trim whitespace that may come from form submission
+    const trimmedPassword = typeof new_password === 'string' ? new_password.trim() : '';
+    if (trimmedPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation error',
+        message: 'Password must be at least 6 characters'
+      });
+    }
+
     // Find valid reset token and get current password
     const result = await pool.query(`
       SELECT pr.id, pr.user_id, u.password_hash
@@ -1069,9 +1079,9 @@ const completePasswordReset = async (req, res) => {
       )
     `, [resetRecord.user_id, resetRecord.password_hash]);
 
-    // Hash new password
+    // Hash new password (use trimmed version)
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(new_password, salt);
+    const hashedPassword = await bcrypt.hash(trimmedPassword, salt);
 
     // Update user password
     await pool.query(

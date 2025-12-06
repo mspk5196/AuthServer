@@ -154,7 +154,6 @@ const registerUser = async (req, res) => {
     // Hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
-    const encryptedPassword = passwordEncryptAES(hashedPassword);
 
     // Create user
     const result = await pool.query(`
@@ -166,7 +165,7 @@ const registerUser = async (req, res) => {
         gen_random_uuid(), $1, $2, $3, $4, $5, false, false, false, NOW(), NOW()
       )
       RETURNING id, email, name, username, email_verified, created_at
-    `, [app.id, email.toLowerCase(), encryptedPassword, name, username]);
+    `, [app.id, email.toLowerCase(), hashedPassword, name, username]);
 
     const user = result.rows[0];
 
@@ -287,9 +286,8 @@ const loginUser = async (req, res) => {
     }
 
     // Verify password
-    const decryptPassword = passwordDecryptAES(user.password_hash);
-    const isPasswordValid = await bcrypt.compare(password, decryptPassword);
-console.log(decryptPassword, "\n",isPasswordValid);
+    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+console.log(isPasswordValid);
 
     if (!isPasswordValid) {
       return res.status(401).json({

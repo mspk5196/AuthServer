@@ -174,7 +174,7 @@ const registerUser = async (req, res) => {
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     await pool.query(`
-      INSERT INTO email_verifications (
+      INSERT INTO user_email_verifications (
         id, user_id, app_id, token, expires_at, created_at
       ) VALUES (
         gen_random_uuid(), $1, $2, $3, $4, NOW()
@@ -360,7 +360,7 @@ const verifyEmail = async (req, res) => {
 
     // Find verification record
     const result = await pool.query(`
-      SELECT * FROM email_verifications 
+      SELECT * FROM user_email_verifications 
       WHERE app_id = $1 AND token = $2 AND expires_at > NOW()
     `, [app.id, token]);
 
@@ -381,7 +381,7 @@ const verifyEmail = async (req, res) => {
     );
 
     // Delete verification token (one-time use)
-    await pool.query('DELETE FROM email_verifications WHERE id = $1', [verification.id]);
+    await pool.query('DELETE FROM user_email_verifications WHERE id = $1', [verification.id]);
 
     res.json({
       success: true,

@@ -287,9 +287,9 @@ const loginUser = async (req, res) => {
     }
 
     // Verify password
-    const encryptPassword = passwordEncryptAES(password);
-    const isPasswordValid = await bcrypt.compare(encryptPassword, user.password_hash);
-console.log(isPasswordValid);
+    const decryptPassword = passwordDecryptAES(user.password_hash);
+    const isPasswordValid = await bcrypt.compare(password, decryptPassword);
+console.log(decryptPassword, "\n",isPasswordValid);
 
     if (!isPasswordValid) {
       return res.status(401).json({

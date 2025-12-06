@@ -283,7 +283,7 @@ const loginUser = async (req, res) => {
         success: false,
         error: 'Account blocked',
         message: 'Your account has been blocked. Please contact support.'
-      });
+      }); 
     }
 
     // Verify password

@@ -965,7 +965,8 @@ const resetPasswordPage = async (req, res) => {
 
             try {
             console.log('Submitting password reset for token:', token);
-              const response = await fetch(window.location.pathname + window.location.search, {
+              // Post to the same path without query; send token in body
+              const response = await fetch(window.location.pathname, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ token, new_password: password })

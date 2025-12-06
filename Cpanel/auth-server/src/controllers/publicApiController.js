@@ -175,9 +175,9 @@ const registerUser = async (req, res) => {
 
     await pool.query(`
       INSERT INTO user_email_verifications (
-        id, user_id, app_id, token, expires_at, created_at
+        id, user_id, app_id, token, expires_at, created_at, verify_type
       ) VALUES (
-        gen_random_uuid(), $1, $2, $3, $4, NOW()
+        gen_random_uuid(), $1, $2, $3, $4, NOW(), 'New Account'
       )
     `, [user.id, app.id, verificationToken, expiresAt]);
 
@@ -361,7 +361,7 @@ const verifyEmail = async (req, res) => {
     // Find verification record
     const result = await pool.query(`
       SELECT * FROM user_email_verifications 
-      WHERE app_id = $1 AND token = $2 AND expires_at > NOW()
+      WHERE app_id = $1 AND token = $2 AND expires_at > NOW() AND used = 0
     `, [app.id, token]);
 
     if (result.rows.length === 0) {
@@ -381,7 +381,7 @@ const verifyEmail = async (req, res) => {
     );
 
     // Delete verification token (one-time use)
-    await pool.query('DELETE FROM user_email_verifications WHERE id = $1', [verification.id]);
+    await pool.query('UPDATE user_email_verifications SET used = 1 WHERE id = $1', [verification.id]);
 
     res.json({
       success: true,

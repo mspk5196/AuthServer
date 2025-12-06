@@ -967,7 +967,7 @@ const resetPasswordPage = async (req, res) => {
               const response = await fetch(window.location.pathname + window.location.search, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ new_password: password })
+                body: JSON.stringify({ token, new_password: password })
               });
 
               const data = await response.json();
@@ -1020,7 +1020,8 @@ const resetPasswordPage = async (req, res) => {
  */
 const completePasswordReset = async (req, res) => {
   try {
-    const { token } = req.query;
+    // Accept token from query or request body to be robust against proxies stripping query params
+    const token = req.query.token || req.body.token;
     const { new_password } = req.body;
 
     if (!token) {

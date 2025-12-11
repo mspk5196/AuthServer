@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const pool = require('../config/db');
 const { passwordEncryptAES, passwordDecryptAES } = require('../utils/decryptAES');
 const { sendMail } = require('../utils/mailer');
-const { log } = require('console');
+const { log, error } = require('console');
 
 /**
  * Middleware to verify app credentials (API Key + Secret)
@@ -551,6 +551,97 @@ const requestPasswordReset = async (req, res) => {
       success: false,
       error: 'Reset request failed',
       message: 'Failed to process password reset request'
+    });
+  }
+};
+
+/**
+ * Request change password link (frontend sends only email)
+ */
+const requestChangePasswordLink = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const app = req.devApp;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation error',
+        message: 'Email is required'
+      });
+    }
+
+    // Check if email login is enabled
+    if (!app.allow_email_signin) {
+      return res.status(403).json({
+        success: false,
+        error: 'Feature disabled',
+        message: 'Email/password change is not enabled for this app'
+      });
+    }
+
+    // Find user
+    const result = await pool.query(
+      'SELECT id, email, name, password_hash FROM users WHERE app_id = $1 AND email = $2',
+      [app.id, email.toLowerCase()]
+    );
+
+    // Always return success to avoid email enumeration
+    if (result.rows.length === 0) {
+      return res.json({
+        success: true,
+        message: 'If the email exists, a change password link has been sent'
+      });
+    }
+
+    const user = result.rows[0];
+
+    // If user doesn't have a password set, suggest set-password flow instead
+    if (!user.password_hash) {
+      res.json({
+        success: true,
+        error: 'No password set',
+        message: 'If the email exists, a change password link has been sent'
+      });
+      return;
+    }
+
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+
+    await pool.query(`
+      INSERT INTO user_email_verifications (
+        user_id, app_id, token, expires_at, created_at, verify_type
+      ) VALUES (
+       $1, $2, $3, NOW() + INTERVAL '24 hours', NOW(), 'Change Password'
+      )
+    `, [user.id, app.id, verificationToken]);
+
+    const verificationUrl = `${process.env.BACKEND_URL}/api/v1/auth/verify-change-password?token=${verificationToken}`;
+
+    sendMail({
+      to: user.email,
+      subject: 'Change your password',
+      html: `
+        <h2>Change your password on ${app.app_name}</h2>
+        <p>Hi ${user.name || 'there'},</p>
+        <p>Click the link below to open the password change page:</p>
+        <a href="${verificationUrl}">${verificationUrl}</a>
+        <p>This link will expire in 24 hours.</p>
+        <p>If you didn't request this, you can ignore this email.</p>
+      `
+    }).catch(err => console.error('Send change password link email error:', err));
+
+    res.json({
+      success: true,
+      message: 'If the email exists, a change password link has been sent'
+    });
+
+  } catch (error) {
+    console.error('Request change password link error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Request failed',
+      message: 'Failed to send change password link'
     });
   }
 };
@@ -2301,13 +2392,270 @@ module.exports = {
   verifyEmail,
   getUserProfile,
   requestPasswordReset,
+  requestChangePasswordLink,
   resetPasswordPage,
   completePasswordReset,
   changePassword,
+  verifyChangePassword,
   resendVerification,
   deleteAccount,
   verifyDeleteEmail,
   googleAuth,
   setPasswordGoogleUser,
   verifyEmailSetPasswordGoogleUser
+};
+
+/**
+ * Verify change password link and process GET/POST
+ */
+const verifyChangePassword = async (req, res) => {
+  try {
+    const { token } = req.query;
+    const method = req.method;
+
+    if (!token) {
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Invalid Link</title>
+          <style>
+            body { font-family: Arial, sans-serif; max-width: 500px; margin: 50px auto; padding: 20px; text-align: center; }
+            .error { color: #dc3545; }
+          </style>
+        </head>
+        <body>
+          <h2 class="error">Invalid Link</h2>
+          <p>The change password link is invalid or missing the token.</p>
+        </body>
+        </html>
+      `);
+    }
+
+    const result = await pool.query(`
+      SELECT * FROM user_email_verifications
+      WHERE token = $1 AND expires_at > NOW() AND used = false AND verify_type = 'Change Password'
+    `, [token]);
+
+    if (result.rows.length === 0) {
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Expired Link</title>
+          <style>
+            body { font-family: Arial, sans-serif; max-width: 500px; margin: 50px auto; padding: 20px; text-align: center; }
+            .error { color: #dc3545; }
+          </style>
+        </head>
+        <body>
+          <h2 class="error">Link Expired</h2>
+          <p>This change password link has expired or has already been used.</p>
+        </body>
+        </html>
+      `);
+    }
+
+    const verification = result.rows[0];
+
+    const appData = await pool.query('SELECT app_name FROM dev_apps WHERE id = $1', [verification.app_id]);
+    const app = appData.rows[0] || { app_name: 'your app' };
+
+    const userRes = await pool.query(
+      'SELECT id, email, name, password_hash FROM users WHERE id = $1 AND app_id = $2',
+      [verification.user_id, verification.app_id]
+    );
+
+    if (userRes.rows.length === 0) {
+      return res.status(404).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>User Not Found</title>
+          <style>
+            body { font-family: Arial, sans-serif; max-width: 500px; margin: 50px auto; padding: 20px; text-align: center; }
+            .error { color: #dc3545; }
+          </style>
+        </head>
+        <body>
+          <h2 class="error">User Not Found</h2>
+          <p>The user associated with this request does not exist.</p>
+        </body>
+        </html>
+      `);
+    }
+
+    const user = userRes.rows[0];
+
+    // Handle POST: verify current password, set new password
+    if (method === 'POST') {
+      let { current_password, new_password, password, confirmPassword } = req.body || {};
+      // Support both field names
+      if (!new_password && password) new_password = password;
+
+      if (typeof current_password === 'string') current_password = current_password.trim().replace(/[\n\r\t]/g, '');
+      if (typeof new_password === 'string') new_password = new_password.trim().replace(/[\n\r\t]/g, '');
+      if (typeof confirmPassword === 'string') confirmPassword = confirmPassword.trim().replace(/[\n\r\t]/g, '');
+
+      if (!current_password || !new_password) {
+        return res.status(400).json({
+          success: false,
+          error: 'Validation error',
+          message: 'Current password and new password are required'
+        });
+      }
+
+      if (new_password.length < 6) {
+        return res.status(400).json({
+          success: false,
+          error: 'Validation error',
+          message: 'New password must be at least 6 characters'
+        });
+      }
+
+      if (confirmPassword && new_password !== confirmPassword) {
+        return res.status(400).json({
+          success: false,
+          error: 'Validation error',
+          message: 'Passwords do not match'
+        });
+      }
+
+      if (!user.password_hash) {
+        return res.status(400).json({
+          success: false,
+          error: 'No existing password',
+          message: 'No password is set for this account. Use the set password option.'
+        });
+      }
+
+      const valid = await bcrypt.compare(current_password, user.password_hash);
+      if (!valid) {
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid password',
+          message: 'Current password is incorrect'
+        });
+      }
+
+      // Log old password
+      await pool.query(`
+        INSERT INTO user_password_history (user_id, old_password_hash, changed_at)
+        VALUES ($1, $2, NOW())
+      `, [user.id, user.password_hash]);
+
+      const salt = await bcrypt.genSalt(10);
+      const hashed = await bcrypt.hash(new_password, salt);
+
+      await pool.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [hashed, user.id]);
+
+      await pool.query('UPDATE user_email_verifications SET used = true WHERE id = $1', [verification.id]);
+
+      sendMail({
+        to: user.email,
+        subject: 'Password changed successfully',
+        html: `
+          <h2>Your account password was changed on ${app.app_name} at ${new Date().toLocaleString()}!</h2>
+          <p>If you did not initiate this change, please contact support immediately.</p>
+          <p>Authentication system powered by MSPK Apps.</p>
+        `
+      }).catch(err => console.error('Send change password confirmation email error:', err));
+
+      return res.json({ success: true, message: 'Password changed successfully.' });
+    }
+
+    // GET: render HTML form
+    return res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Change Password - ${app.app_name}</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #00b09b 0%, #96c93d 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+          .container { background: white; border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 500px; width: 100%; padding: 40px; }
+          h2 { color: #2b7a0b; margin-bottom: 10px; text-align: center; }
+          .subtitle { color: #666; text-align: center; margin-bottom: 30px; font-size: 14px; }
+          .form-group { margin-bottom: 20px; }
+          label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; font-size: 14px; }
+          input { width: 100%; padding: 12px 15px; border: 2px solid #e1e8ed; border-radius: 8px; font-size: 15px; transition: all 0.3s; }
+          input:focus { outline: none; border-color: #28a745; box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.1); }
+          .btn { width: 100%; padding: 14px; background: linear-gradient(135deg, #00b09b 0%, #96c93d 100%); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+          .btn:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(40, 167, 69, 0.3); }
+          .btn:disabled { background: #ccc; cursor: not-allowed; }
+          .message { padding: 12px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; display: none; }
+          .message.error { background: #fee; color: #c33; border: 1px solid #fcc; }
+          .message.success { background: #efe; color: #3c3; border: 1px solid #cfc; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h2>Change Your Password</h2>
+          <p class="subtitle">Enter your current and new password</p>
+          <div id="message" class="message"></div>
+          <form id="changeForm" method="POST">
+            <div class="form-group">
+              <label for="current_password">Current Password</label>
+              <input type="password" id="current_password" name="current_password" required autocomplete="current-password" placeholder="Enter current password">
+            </div>
+            <div class="form-group">
+              <label for="new_password">New Password</label>
+              <input type="password" id="new_password" name="new_password" required autocomplete="new-password" placeholder="Enter new password">
+            </div>
+            <div class="form-group">
+              <label for="confirmPassword">Confirm New Password</label>
+              <input type="password" id="confirmPassword" name="confirmPassword" required placeholder="Confirm new password">
+            </div>
+            <button type="submit" class="btn" id="submitBtn">Change Password</button>
+          </form>
+        </div>
+        <script>
+          const form = document.getElementById('changeForm');
+          const currentEl = document.getElementById('current_password');
+          const newEl = document.getElementById('new_password');
+          const confirmEl = document.getElementById('confirmPassword');
+          const message = document.getElementById('message');
+          const submitBtn = document.getElementById('submitBtn');
+          function showMessage(text, type) { message.textContent = text; message.className = 'message ' + type; message.style.display = 'block'; }
+          form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const current_password = currentEl.value;
+            const new_password = newEl.value;
+            const confirmPassword = confirmEl.value;
+            if (!current_password || !new_password) { showMessage('Current password and new password are required', 'error'); return; }
+            if (new_password.length < 6) { showMessage('New password must be at least 6 characters', 'error'); return; }
+            if (new_password !== confirmPassword) { showMessage('Passwords do not match', 'error'); return; }
+            submitBtn.disabled = true; submitBtn.textContent = 'Changing...';
+            try {
+              const resp = await fetch(window.location.href, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ current_password, new_password, confirmPassword }) });
+              const data = await resp.json();
+              if (data.success) { showMessage(data.message, 'success'); form.reset(); setTimeout(() => window.close(), 3000); }
+              else { showMessage(data.message || 'Failed to change password', 'error'); submitBtn.disabled = false; submitBtn.textContent = 'Change Password'; }
+            } catch (err) { showMessage('Network error. Please try again.', 'error'); submitBtn.disabled = false; submitBtn.textContent = 'Change Password'; }
+          });
+        </script>
+      </body>
+      </html>
+    `);
+
+  } catch (error) {
+    console.error('Verify change password error:', error);
+    res.status(500).send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Error</title>
+        <style>
+          body { font-family: Arial, sans-serif; max-width: 500px; margin: 50px auto; padding: 20px; text-align: center; }
+          .error { color: #dc3545; }
+        </style>
+      </head>
+      <body>
+        <h2 class="error">Something Went Wrong</h2>
+        <p>An error occurred while processing your request. Please try again later.</p>
+      </body>
+      </html>
+    `);
+  }
 };

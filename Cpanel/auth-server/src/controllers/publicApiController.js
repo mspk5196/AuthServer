@@ -1202,7 +1202,7 @@ const deleteAccount = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Account deleted successfully'
+      message: 'Account deletion email sent successfully'
     });
 
   } catch (error) {
@@ -1210,7 +1210,7 @@ const deleteAccount = async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Delete failed',
-      message: 'Failed to delete account'
+      message: 'Failed to send delete account email. Please try again.'
     });
   }
 };

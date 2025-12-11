@@ -1258,6 +1258,12 @@ const verifyDeleteEmail = async (req, res) => {
       });
     }
     const verification = result.rows[0];
+
+    const appData = await pool.query(
+      'SELECT app_name FROM dev_apps WHERE id = $1',
+      [verification.app_id]
+    );
+    const app = appData.rows[0];
     
     const user_result = await pool.query(
       'SELECT id, name, username, email, created_at FROM users WHERE app_id = $1 AND id = $2',

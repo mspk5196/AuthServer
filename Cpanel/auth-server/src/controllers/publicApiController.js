@@ -1959,7 +1959,7 @@ const setPasswordGoogleUser = async (req, res) => {
         error: 'Already password set, try resetting password',
         message: 'Password is already set for this account. Please use the password reset option if you forgot your password.'
       });
-    }
+    } 
 
     if (!user.google_linked) {
       return res.status(400).json({

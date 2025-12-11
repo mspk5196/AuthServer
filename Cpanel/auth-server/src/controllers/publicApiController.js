@@ -596,40 +596,33 @@ const requestChangePasswordLink = async (req, res) => {
 
     const user = result.rows[0];
 
-    // If user doesn't have a password set, suggest set-password flow instead
-    if (!user.password_hash) {
-      res.json({
-        success: true,
-        error: 'No password set',
-        message: 'If the email exists, a change password link has been sent'
-      });
-      return;
-    }
-
+    // Decide email type based on whether user has a password set
     const verificationToken = crypto.randomBytes(32).toString('hex');
 
-    await pool.query(`
-      INSERT INTO user_email_verifications (
-        user_id, app_id, token, expires_at, created_at, verify_type
-      ) VALUES (
-       $1, $2, $3, NOW() + INTERVAL '24 hours', NOW(), 'Change Password'
-      )
-    `, [user.id, app.id, verificationToken]);
+      // Send Change Password link for accounts with existing password
+      await pool.query(`
+        INSERT INTO user_email_verifications (
+          user_id, app_id, token, expires_at, created_at, verify_type
+        ) VALUES (
+         $1, $2, $3, NOW() + INTERVAL '24 hours', NOW(), 'Password change'
+        )
+      `, [user.id, app.id, verificationToken]);
 
-    const verificationUrl = `${process.env.BACKEND_URL}/api/v1/auth/verify-change-password?token=${verificationToken}`;
+      const verificationUrl = `${process.env.BACKEND_URL}/api/v1/auth/verify-change-password?token=${verificationToken}`;
 
-    sendMail({
-      to: user.email,
-      subject: 'Change your password',
-      html: `
-        <h2>Change your password on ${app.app_name}</h2>
-        <p>Hi ${user.name || 'there'},</p>
-        <p>Click the link below to open the password change page:</p>
-        <a href="${verificationUrl}">${verificationUrl}</a>
-        <p>This link will expire in 24 hours.</p>
-        <p>If you didn't request this, you can ignore this email.</p>
-      `
-    }).catch(err => console.error('Send change password link email error:', err));
+      sendMail({
+        to: user.email,
+        subject: 'Change your password',
+        html: `
+          <h2>Change your password on ${app.app_name}</h2>
+          <p>Hi ${user.name || 'there'},</p>
+          <p>Click the link below to open the password change page:</p>
+          <a href="${verificationUrl}">${verificationUrl}</a>
+          <p>This link will expire in 24 hours.</p>
+          <p>If you didn't request this, you can ignore this email.</p>
+        `
+      }).catch(err => console.error('Send change password link email error:', err));
+    
 
     res.json({
       success: true,

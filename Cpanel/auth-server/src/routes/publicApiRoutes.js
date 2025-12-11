@@ -7,7 +7,9 @@ router.get('/auth/verify-email', publicApis.verifyEmail);
 router.get('/auth/reset-password', publicApis.resetPasswordPage);
 router.post('/auth/reset-password', publicApis.completePasswordReset);
 router.get('/auth/verify-delete-email', publicApis.verifyDeleteEmail);
+// Public GET + POST: user enters password directly on backend-served page
 router.get('/auth/verify-email-set-password-google-user', publicApis.verifyEmailSetPasswordGoogleUser);
+router.post('/auth/verify-email-set-password-google-user', publicApis.verifyEmailSetPasswordGoogleUser);
 
 // All routes below require API key and secret
 router.use(publicApis.verifyAppCredentials);

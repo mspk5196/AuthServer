@@ -2064,7 +2064,76 @@ const verifyEmailSetPasswordGoogleUser = async (req, res) => {
     }
     const verification = result.rows[0];
 
-    // Render password setup form
+    // Handle POST: set password when user submits the form
+    if (req.method === 'POST') {
+      let { password } = req.body || {};
+      if (typeof password === 'string') {
+        password = password.trim().replace(/[\n\r\t]/g, '');
+      }
+
+      if (!password || password.length < 6) {
+        return res.status(400).json({
+          success: false,
+          error: 'Validation error',
+          message: 'Password must be at least 6 characters'
+        });
+      }
+
+      // Get user
+      const userRes = await pool.query(
+        'SELECT id, email, password_hash FROM users WHERE id = $1 AND app_id = $2',
+        [verification.user_id, verification.app_id]
+      );
+
+      if (userRes.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'User not found',
+          message: 'User does not exist'
+        });
+      }
+
+      const user = userRes.rows[0];
+
+      // If password already set, reject to avoid overwriting silently
+      if (user.password_hash) {
+        return res.status(400).json({
+          success: false,
+          error: 'Password already set',
+          message: 'Password is already set. Use password reset instead.'
+        });
+      }
+
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password, salt);
+
+      await pool.query(
+        'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2',
+        [hashedPassword, user.id]
+      );
+
+      // Mark verification token as used
+      await pool.query('UPDATE user_email_verifications SET used = true WHERE id = $1', [verification.id]);
+
+      // Send confirmation email
+      sendMail({
+        to: user.email,
+        subject: 'Password linked to your account',
+        html: `
+          <h2>Your password was set on ${new Date().toLocaleString()}!</h2>
+          <p>You can now log in using your new password.</p>
+          <p>If you did not perform this action, please contact support immediately.</p>
+          <p>Authentication system powered by MSPK Apps.</p>
+        `
+      }).catch(err => console.error('Send password setup confirmation email error:', err));
+
+      return res.json({
+        success: true,
+        message: 'Password set successfully. You can now log in with your password.'
+      });
+    }
+
+    // Render password setup form (GET)
     res.send(`
       <!DOCTYPE html>
       <html>
@@ -2200,24 +2269,8 @@ const verifyEmailSetPasswordGoogleUser = async (req, res) => {
           });
         </script>
       </body>
-      </html>
-    `);
-
-    await pool.query(
-      'UPDATE user_email_verifications SET used = true WHERE id = $1',
-      [verification.id]
-    );
-
-    sendMail({
-      to: verification.email,
-      subject: 'Password has been linked to your account',
-      html: `
-        <h2>The password has been linked to your account on ${new Date().toLocaleString()}!</h2>
-        <p>You can now log in using your new password.</p>
-        <p>If you did not perform this action, please contact support immediately.</p>
-        <p>Authentication system powered by MSPK Apps.</p>
-      `
-    }).catch(err => console.error('Send password setup accessed email error:', err));
+        </html>
+      `);
 
   } catch (error) {
     console.error('Verify email set password Google user error:', error);

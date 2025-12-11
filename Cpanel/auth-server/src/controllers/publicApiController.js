@@ -1025,7 +1025,7 @@ const completePasswordReset = async (req, res) => {
     
     const token = req.query.token || (req.body && req.body.token);
     // Accept both 'password' (form submission) and 'new_password' (JSON API)
-    console.log(req.body);
+    // console.log(req.body);
     
     let new_password = (req.body && req.body.new_password) || (req.body && req.body.password);
     

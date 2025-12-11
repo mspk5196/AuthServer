@@ -1327,6 +1327,180 @@ const verifyDeleteEmail = async (req, res) => {
   }
 };
 
+/**
+ * Google OAuth login/register for end users
+ */
+const googleAuth = async (req, res) => {
+  try {
+    const { id_token, access_token } = req.body;
+    const app = req.devApp;
+
+    // Validation
+    if (!id_token && !access_token) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation error',
+        message: 'Google token is required (id_token or access_token)'
+      });
+    }
+
+    // Check if Google sign-in is enabled
+    if (!app.allow_google_signin) {
+      return res.status(403).json({
+        success: false,
+        error: 'Feature disabled',
+        message: 'Google sign-in is not enabled for this app'
+      });
+    }
+
+    // Validate token with Google
+    let googleUser;
+    try {
+      const tokenToVerify = id_token || access_token;
+      const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${tokenToVerify}`);
+      
+      if (!response.ok) {
+        throw new Error('Invalid Google token');
+      }
+
+      googleUser = await response.json();
+
+      // Verify the token is for this app's client ID (if configured)
+      if (app.google_client_id && googleUser.aud !== app.google_client_id) {
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid token',
+          message: 'Token is not for this application'
+        });
+      }
+
+    } catch (error) {
+      console.error('Google token validation error:', error);
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid token',
+        message: 'Failed to validate Google token'
+      });
+    }
+
+    // Check if user exists by google_id
+    let userResult = await pool.query(
+      'SELECT * FROM users WHERE app_id = $1 AND google_id = $2',
+      [app.id, googleUser.sub]
+    );
+
+    let user;
+    let isNewUser = false;
+
+    if (userResult.rows.length === 0) {
+      // Check if email exists (link accounts)
+      const emailResult = await pool.query(
+        'SELECT * FROM users WHERE app_id = $1 AND email = $2',
+        [app.id, googleUser.email?.toLowerCase()]
+      );
+
+      if (emailResult.rows.length > 0) {
+        // Link Google to existing account
+        user = emailResult.rows[0];
+        
+        await pool.query(`
+          UPDATE users 
+          SET google_linked = true, 
+              google_id = $1, 
+              email_verified = true,
+              updated_at = NOW()
+          WHERE id = $2
+        `, [googleUser.sub, user.id]);
+
+        user.google_linked = true;
+        user.google_id = googleUser.sub;
+        user.email_verified = true;
+
+      } else {
+        // Create new user
+        const insertResult = await pool.query(`
+          INSERT INTO users (
+            app_id, email, name, google_id, google_linked,
+            email_verified, is_blocked, created_at, updated_at
+          ) VALUES (
+            $1, $2, $3, $4, true, true, false, NOW(), NOW()
+          )
+          RETURNING id, email, name, username, google_id, google_linked, email_verified, created_at
+        `, [
+          app.id,
+          googleUser.email?.toLowerCase(),
+          googleUser.name,
+          googleUser.sub
+        ]);
+
+        user = insertResult.rows[0];
+        isNewUser = true;
+      }
+    } else {
+      user = userResult.rows[0];
+    }
+
+    // Check if user is blocked
+    if (user.is_blocked) {
+      return res.status(403).json({
+        success: false,
+        error: 'Account blocked',
+        message: 'Your account has been blocked. Please contact support.'
+      });
+    }
+
+    // Update last login
+    await pool.query(
+      'UPDATE users SET last_login = NOW() WHERE id = $1',
+      [user.id]
+    );
+
+    // Log login history
+    await pool.query(`
+      INSERT INTO user_login_history (
+        user_id, app_id, login_method, ip_address, user_agent, login_time, created_at
+      ) VALUES (
+        $1, $2, 'google', $3, $4, NOW(), NOW()
+      )
+    `, [user.id, app.id, req.ip, req.headers['user-agent']]);
+
+    // Generate access token
+    const accessToken = jwt.sign(
+      { userId: user.id, appId: app.id, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      success: true,
+      message: isNewUser ? 'Account created successfully' : 'Login successful',
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          username: user.username,
+          google_linked: user.google_linked,
+          email_verified: user.email_verified,
+          last_login: user.last_login
+        },
+        access_token: accessToken,
+        token_type: 'Bearer',
+        expires_in: 604800,
+        is_new_user: isNewUser
+      }
+    });
+
+  } catch (error) {
+    console.error('Google auth error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Authentication failed',
+      message: 'Failed to authenticate with Google'
+    });
+  }
+};
+
 module.exports = {
   verifyAppCredentials,
   registerUser,
@@ -1339,5 +1513,6 @@ module.exports = {
   changePassword,
   resendVerification,
   deleteAccount,
-  verifyDeleteEmail
+  verifyDeleteEmail,
+  googleAuth
 };

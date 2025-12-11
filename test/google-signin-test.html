@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Google Sign-In Test</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    
+    .container {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      max-width: 500px;
+      width: 100%;
+      padding: 40px;
+    }
+    
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+    
+    .subtitle {
+      color: #666;
+      text-align: center;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+    
+    .config-section {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    
+    .config-section h3 {
+      color: #495057;
+      font-size: 14px;
+      margin-bottom: 15px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .form-group {
+      margin-bottom: 15px;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 5px;
+      color: #495057;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    
+    input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 2px solid #dee2e6;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: all 0.2s;
+      font-family: 'Monaco', 'Courier New', monospace;
+    }
+    
+    input:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    
+    .google-btn-container {
+      display: flex;
+      justify-content: center;
+      margin: 30px 0;
+      padding: 20px;
+      background: #f8f9fa;
+      border-radius: 8px;
+    }
+    
+    .result-box {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 8px;
+      margin-top: 20px;
+      display: none;
+    }
+    
+    .result-box.success {
+      background: #d4edda;
+      border: 2px solid #c3e6cb;
+      display: block;
+    }
+    
+    .result-box.error {
+      background: #f8d7da;
+      border: 2px solid #f5c6cb;
+      display: block;
+    }
+    
+    .result-box h3 {
+      margin-bottom: 10px;
+      color: #155724;
+      font-size: 16px;
+    }
+    
+    .result-box.error h3 {
+      color: #721c24;
+    }
+    
+    pre {
+      background: white;
+      padding: 15px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    
+    .note {
+      background: #fff3cd;
+      border: 2px solid #ffc107;
+      padding: 15px;
+      border-radius: 8px;
+      margin-top: 20px;
+      font-size: 13px;
+      color: #856404;
+    }
+    
+    .note strong {
+      display: block;
+      margin-bottom: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔐 Google Sign-In Test</h1>
+    <p class="subtitle">Test your Google OAuth integration</p>
+    
+    <div class="config-section">
+      <h3>Configuration</h3>
+      
+      <div class="form-group">
+        <label for="googleClientId">Google Client ID</label>
+        <input 
+          type="text" 
+          id="googleClientId" 
+          placeholder="123456789-abc123.apps.googleusercontent.com"
+          value=""
+        >
+      </div>
+      
+      <div class="form-group">
+        <label for="apiKey">Your API Key</label>
+        <input 
+          type="text" 
+          id="apiKey" 
+          placeholder="ak_..."
+          value=""
+        >
+      </div>
+      
+      <div class="form-group">
+        <label for="apiSecret">Your API Secret</label>
+        <input 
+          type="password" 
+          id="apiSecret" 
+          placeholder="as_..."
+          value=""
+        >
+      </div>
+      
+      <div class="form-group">
+        <label for="apiUrl">API URL</label>
+        <input 
+          type="text" 
+          id="apiUrl" 
+          placeholder="https://your-api.com/api/v1"
+          value="http://localhost:5000/api/v1"
+        >
+      </div>
+    </div>
+    
+    <div class="google-btn-container">
+      <div id="g_id_onload"
+           data-client_id=""
+           data-callback="handleGoogleCallback">
+      </div>
+      <div class="g_id_signin" 
+           data-type="standard"
+           data-size="large"
+           data-theme="outline"
+           data-text="signin_with"
+           data-shape="rectangular"
+           data-logo_alignment="left">
+      </div>
+    </div>
+    
+    <div id="resultBox" class="result-box">
+      <h3 id="resultTitle">Response</h3>
+      <pre id="resultData"></pre>
+    </div>
+    
+    <div class="note">
+      <strong>⚠️ Security Warning</strong>
+      Never expose your API Secret in production client-side code. Use a backend proxy instead.
+    </div>
+  </div>
+
+  <script>
+    // Update Google Client ID dynamically
+    const googleClientIdInput = document.getElementById('googleClientId');
+    const gIdOnload = document.getElementById('g_id_onload');
+    
+    googleClientIdInput.addEventListener('blur', function() {
+      const clientId = this.value.trim();
+      if (clientId) {
+        gIdOnload.setAttribute('data-client_id', clientId);
+        // Reload Google Sign-In button
+        if (window.google) {
+          google.accounts.id.initialize({
+            client_id: clientId,
+            callback: handleGoogleCallback
+          });
+          google.accounts.id.renderButton(
+            document.querySelector('.g_id_signin'),
+            { theme: 'outline', size: 'large' }
+          );
+        }
+      }
+    });
+    
+    async function handleGoogleCallback(response) {
+      const resultBox = document.getElementById('resultBox');
+      const resultTitle = document.getElementById('resultTitle');
+      const resultData = document.getElementById('resultData');
+      
+      const apiKey = document.getElementById('apiKey').value.trim();
+      const apiSecret = document.getElementById('apiSecret').value.trim();
+      const apiUrl = document.getElementById('apiUrl').value.trim();
+      
+      if (!apiKey || !apiSecret) {
+        resultBox.className = 'result-box error';
+        resultTitle.textContent = '❌ Configuration Error';
+        resultData.textContent = 'Please enter your API Key and Secret';
+        return;
+      }
+      
+      resultBox.className = 'result-box';
+      resultTitle.textContent = '⏳ Authenticating...';
+      resultData.textContent = 'Please wait...';
+      
+      try {
+        const url = `${apiUrl}/${apiKey}/auth/google`;
+        
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': apiKey,
+            'X-API-Secret': apiSecret
+          },
+          body: JSON.stringify({
+            id_token: response.credential
+          })
+        });
+        
+        const data = await res.json();
+        
+        if (data.success) {
+          resultBox.className = 'result-box success';
+          resultTitle.textContent = '✅ Authentication Successful!';
+          resultData.textContent = JSON.stringify(data, null, 2);
+          
+          // Store token (for demo purposes)
+          if (data.data && data.data.access_token) {
+            console.log('Access Token:', data.data.access_token);
+          }
+        } else {
+          resultBox.className = 'result-box error';
+          resultTitle.textContent = '❌ Authentication Failed';
+          resultData.textContent = JSON.stringify(data, null, 2);
+        }
+      } catch (error) {
+        resultBox.className = 'result-box error';
+        resultTitle.textContent = '❌ Network Error';
+        resultData.textContent = error.message + '\n\nMake sure:\n- API URL is correct\n- CORS is enabled on your API\n- API credentials are valid';
+      }
+    }
+    
+    // Load saved values from localStorage
+    window.addEventListener('DOMContentLoaded', () => {
+      const savedClientId = localStorage.getItem('googleClientId');
+      const savedApiKey = localStorage.getItem('apiKey');
+      const savedApiUrl = localStorage.getItem('apiUrl');
+      
+      if (savedClientId) document.getElementById('googleClientId').value = savedClientId;
+      if (savedApiKey) document.getElementById('apiKey').value = savedApiKey;
+      if (savedApiUrl) document.getElementById('apiUrl').value = savedApiUrl;
+    });
+    
+    // Save values to localStorage on change
+    document.getElementById('googleClientId').addEventListener('change', (e) => {
+      localStorage.setItem('googleClientId', e.target.value);
+    });
+    document.getElementById('apiKey').addEventListener('change', (e) => {
+      localStorage.setItem('apiKey', e.target.value);
+    });
+    document.getElementById('apiUrl').addEventListener('change', (e) => {
+      localStorage.setItem('apiUrl', e.target.value);
+    });
+  </script>
+</body>
+</html>

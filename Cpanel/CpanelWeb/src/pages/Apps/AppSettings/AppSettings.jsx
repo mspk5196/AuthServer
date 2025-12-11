@@ -12,13 +12,21 @@ export default function AppSettings(){
   const [usage, setUsage] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [showGoogleConfig, setShowGoogleConfig] = useState(false);
+  const [googleClientId, setGoogleClientId] = useState('');
+  const [googleClientSecret, setGoogleClientSecret] = useState('');
 
   useEffect(()=>{ fetchSettings(); fetchUsage(); }, [appId]);
 
   async function fetchSettings(){
     try {
       const resp = await api.get(`/apps/appDetails/${appId}`, token);
-      if (resp.success) setApp(resp.data.app || resp.data);
+      if (resp.success) {
+        const appData = resp.data.app || resp.data;
+        setApp(appData);
+        setGoogleClientId(appData.google_client_id || '');
+        setGoogleClientSecret(appData.google_client_secret || '');
+      }
     } catch (err) {
       console.error(err);
       setError('Failed to fetch settings');
@@ -48,6 +56,30 @@ export default function AppSettings(){
     } catch (err) {
       console.error(err);
       alert('Failed to save settings');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveGoogleConfig(){
+    setSaving(true);
+    setError('');
+    try {
+      const body = {
+        google_client_id: googleClientId.trim(),
+        google_client_secret: googleClientSecret.trim()
+      };
+      const resp = await api.put(`/apps/updateApp/${appId}`, body, token);
+      if (resp.success) {
+        alert('Google OAuth credentials saved successfully!');
+        setShowGoogleConfig(false);
+        await fetchSettings();
+      } else {
+        setError(resp.message || 'Failed to save Google credentials');
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Failed to save Google credentials');
     } finally {
       setSaving(false);
     }
@@ -119,7 +151,79 @@ export default function AppSettings(){
               <p className="toggle-description">Allow users to sign in using their Google accounts via OAuth.</p>
             </div>
           </label>
+          
+          {/* Google Configuration Button */}
+          {app.allow_google_signin && (
+            <button 
+              className="config-btn"
+              onClick={() => setShowGoogleConfig(!showGoogleConfig)}
+            >
+              {showGoogleConfig ? '✕ Close' : '⚙️ Configure OAuth'}
+            </button>
+          )}
         </div>
+
+        {/* Google OAuth Configuration Panel */}
+        {showGoogleConfig && app.allow_google_signin && (
+          <div className="google-config-panel">
+            <h4 className="config-title">Google OAuth Configuration</h4>
+            <p className="config-info">
+              Get your OAuth credentials from <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Google Cloud Console</a>
+            </p>
+            
+            <div className="config-field">
+              <label>Client ID</label>
+              <input 
+                type="text"
+                className="config-input"
+                value={googleClientId}
+                onChange={(e) => setGoogleClientId(e.target.value)}
+                placeholder="e.g., 123456789-abc123.apps.googleusercontent.com"
+              />
+            </div>
+            
+            <div className="config-field">
+              <label>Client Secret</label>
+              <input 
+                type="password"
+                className="config-input"
+                value={googleClientSecret}
+                onChange={(e) => setGoogleClientSecret(e.target.value)}
+                placeholder="Enter your Google OAuth Client Secret"
+              />
+            </div>
+            
+            <div className="config-actions">
+              <button 
+                className="save-config-btn"
+                onClick={saveGoogleConfig}
+                disabled={saving || !googleClientId.trim()}
+              >
+                {saving ? '💾 Saving...' : '✓ Save Credentials'}
+              </button>
+              <button 
+                className="cancel-config-btn"
+                onClick={() => {
+                  setShowGoogleConfig(false);
+                  setGoogleClientId(app.google_client_id || '');
+                  setGoogleClientSecret(app.google_client_secret || '');
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+            
+            <div className="config-note">
+              <strong>📋 Setup Instructions:</strong>
+              <ol>
+                <li>Create OAuth 2.0 credentials in Google Cloud Console</li>
+                <li>Add authorized redirect URIs for your app</li>
+                <li>Copy Client ID and Client Secret here</li>
+                <li>Use the endpoint: <code>POST /api/v1/:apiKey/auth/google</code></li>
+              </ol>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Usage Statistics Card */}

@@ -27,7 +27,7 @@ export const AuthProvider = ({ children }) => {
     setDeveloper(null);
     
     // Redirect to main developer portal
-    const mainPortalUrl = import.meta.env.VITE_MAIN_PORTAL_URL || 'http://localhost:5173';
+    const mainPortalUrl = import.meta.env.VITE_MAIN_PORTAL_URL;
     window.location.href = mainPortalUrl;
   };
 

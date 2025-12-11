@@ -13,6 +13,7 @@ router.use(publicApis.verifyAppCredentials);
 // Auth endpoints
 router.post('/:apiKey/auth/register', publicApis.registerUser);
 router.post('/:apiKey/auth/login', publicApis.loginUser);
+router.post('/:apiKey/auth/google', publicApis.googleAuth);
 router.post('/:apiKey/auth/request-password-reset', publicApis.requestPasswordReset);
 router.post('/:apiKey/auth/change-password', publicApis.changePassword);
 router.post('/:apiKey/auth/resend-verification', publicApis.resendVerification);

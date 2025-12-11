@@ -2385,25 +2385,6 @@ const verifyEmailSetPasswordGoogleUser = async (req, res) => {
   }
 };
 
-module.exports = {
-  verifyAppCredentials,
-  registerUser,
-  loginUser,
-  verifyEmail,
-  getUserProfile,
-  requestPasswordReset,
-  requestChangePasswordLink,
-  resetPasswordPage,
-  completePasswordReset,
-  changePassword,
-  verifyChangePassword,
-  resendVerification,
-  deleteAccount,
-  verifyDeleteEmail,
-  googleAuth,
-  setPasswordGoogleUser,
-  verifyEmailSetPasswordGoogleUser
-};
 
 /**
  * Verify change password link and process GET/POST
@@ -2658,4 +2639,26 @@ const verifyChangePassword = async (req, res) => {
       </html>
     `);
   }
+};
+
+
+module.exports = {
+  verifyAppCredentials,
+  registerUser,
+  loginUser,
+  verifyEmail,
+  getUserProfile,
+  requestPasswordReset,
+  requestChangePasswordLink,
+  resetPasswordPage,
+  completePasswordReset,
+  changePassword,
+  verifyChangePassword,
+  resendVerification,
+  deleteAccount,
+  verifyDeleteEmail,
+  googleAuth,
+  setPasswordGoogleUser,
+  verifyEmailSetPasswordGoogleUser,
+  verifyChangePassword
 };

@@ -619,6 +619,16 @@ const changePassword = async (req, res) => {
       [hashedPassword, user.id]
     );
 
+    sendMail({
+      to: user.email,
+      subject: 'Account password changed successfully',
+      html: `
+        <h2>Your account password was changed on ${app.app_name} at ${new Date().toLocaleString()}!</h2>
+        <p>If you did not initiate this change, please contact support immediately.</p>
+        <p>Authentication system powered by MSPK Apps.</p>
+      `
+    }).catch(err => console.error('Send verification email error:', err));
+
     res.json({
       success: true,
       message: 'Password changed successfully'
@@ -1033,7 +1043,6 @@ const completePasswordReset = async (req, res) => {
     if (typeof new_password === 'string') {
       new_password = new_password.trim().replace(/[\n\r\t]/g, '');
     }
-    console.log('Password after sanitization:', JSON.stringify(new_password), 'Length:', new_password?.length);
 
     if (!token) {
       return res.status(400).json({
@@ -1063,7 +1072,7 @@ const completePasswordReset = async (req, res) => {
 
     // Find valid reset token and get current password
     const result = await pool.query(`
-      SELECT pr.id, pr.user_id, u.password_hash
+      SELECT pr.id, pr.user_id, u.password_hash, u.email
       FROM password_resets pr
       JOIN users u ON pr.user_id = u.id
       WHERE pr.token = $1 AND pr.expires_at > NOW() AND pr.used = false
@@ -1109,6 +1118,16 @@ const completePasswordReset = async (req, res) => {
       'UPDATE password_resets SET used = true WHERE user_id = $1 AND used = false',
       [resetRecord.user_id]
     );
+
+    sendMail({
+      to: resetRecord.email,
+      subject: 'Account password changed successfully',
+      html: `
+        <h2>Your account password was changed on ${app.app_name} at ${new Date().toLocaleString()}!</h2>
+        <p>If you did not initiate this change, please contact support immediately.</p>
+        <p>Authentication system powered by MSPK Apps.</p>
+      `
+    }).catch(err => console.error('Send verification email error:', err));
 
     res.json({
       success: true,
@@ -1195,7 +1214,7 @@ const deleteAccount = async (req, res) => {
     }).catch(err => console.error('Send verification email error:', err));
 
     // Soft delete: mark as deleted (recommended for data retention/compliance)
-    
+
 
     // Optional: Hard delete (uncomment if you prefer complete removal)
     // await pool.query('DELETE FROM users WHERE id = $1', [user.id]);
@@ -1277,6 +1296,17 @@ const verifyDeleteEmail = async (req, res) => {
 
     // Mark token as used
     await pool.query('UPDATE user_email_verifications SET used = true WHERE id = $1', [verification.id]);
+
+    sendMail({
+      to: user.email,
+      subject: 'Account deleted successfully',
+      html: `
+        <h2>Your account was deleted on ${app.app_name} at ${new Date().toLocaleString()}!</h2>
+        <p>All data associated with your account has been permanently deleted.</p>
+        <p>Authentication system powered by MSPK Apps.</p>
+      `
+    }).catch(err => console.error('Send verification email error:', err));
+
     res.json({
       success: true,
       message: 'Email verified successfully. Your account deletion is now complete.'

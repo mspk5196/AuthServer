@@ -1271,7 +1271,8 @@ const verifyDeleteEmail = async (req, res) => {
       });
     }
     const user = user_result.rows[0];
-
+    console.log(user);
+    
     await pool.query(
       'INSERT INTO user_deletion_history (app_id, name, username, email, account_created_at, account_deleted_at) VALUES ($1, $2, $3, $4, $5, NOW())',
       [user.app_id, user.name, user.username, user.email, user.created_at]

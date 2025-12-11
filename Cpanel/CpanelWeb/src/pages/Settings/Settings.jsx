@@ -98,7 +98,7 @@ const Settings = () => {
           <div className="info-banner-title">Account Management</div>
           <div className="info-banner-text">
             To edit your profile, enable two-factor authentication, or reset your password,
-            please visit the <a href="http://localhost:5173" target="_blank" rel="noopener noreferrer">main developer portal</a>.
+            please visit the <a href="https://authservices.mspkapps.in/" target="_blank" rel="noopener noreferrer">main developer portal</a>.
           </div>
         </div>
       </div>

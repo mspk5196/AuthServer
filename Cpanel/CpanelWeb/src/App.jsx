@@ -93,7 +93,7 @@ function App() {
 
   if (!developer) {
     useEffect(() => {
-      window.location.href = 'http://localhost:5173';
+      window.location.href = 'https://authservices.mspkapps.in/';
     }, []);
     return (
       <div className="container">

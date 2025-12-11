@@ -1982,7 +1982,7 @@ const setPasswordGoogleUser = async (req, res) => {
       INSERT INTO user_email_verifications (
         user_id, app_id, token, expires_at, verify_type, created_at
       ) VALUES (
-        $1, $2, $3, NOW() + INTERVAL '24 hours', $4, NOW()
+        $1, $2, $3, NOW() + INTERVAL '1 day', $4, NOW()
       )
     `, [user.id, app.id, verificationToken, 'Set Password - Google User']);
 

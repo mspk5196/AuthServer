@@ -1260,8 +1260,8 @@ const verifyDeleteEmail = async (req, res) => {
     const verification = result.rows[0];
 
     const user_result = await pool.query(
-      'SELECT id, name, username, email, created_at FROM users WHERE app_id = $1 AND email = $2',
-      [verification.app_id, verification.email]
+      'SELECT id, name, username, email, created_at FROM users WHERE app_id = $1 AND user_id = $2',
+      [verification.app_id, verification.user_id]
     );
     if (user_result.rows.length === 0) {
       return res.status(404).json({

@@ -1,36 +1,24 @@
 const express = require('express');
 const router = express.Router();
-const {
-  verifyAppCredentials,
-  registerUser,
-  loginUser,
-  verifyEmail,
-  getUserProfile,
-  requestPasswordReset,
-  resetPasswordPage,
-  completePasswordReset,
-  changePassword,
-  resendVerification,
-  deleteAccount
-} = require('../controllers/publicApiController');
+const  publicApis  = require('../controllers/publicApiController');
 
 // Public routes (no API key required)
-router.get('/auth/verify-email', verifyEmail);
-router.get('/auth/reset-password', resetPasswordPage);
-router.post('/auth/reset-password', completePasswordReset);
+router.get('/auth/verify-email', publicApis.verifyEmail);
+router.get('/auth/reset-password', publicApis.resetPasswordPage);
+router.post('/auth/reset-password', publicApis.completePasswordReset);
+router.get('/auth/verify-delete-email', publicApis.verifyDeleteEmail);
 
 // All routes below require API key and secret
-router.use(verifyAppCredentials);
-
+router.use(publicApis.verifyAppCredentials);
 // Auth endpoints
-router.post('/:apiKey/auth/register', registerUser);
-router.post('/:apiKey/auth/login', loginUser);
-router.post('/:apiKey/auth/request-password-reset', requestPasswordReset);
-router.post('/:apiKey/auth/change-password', changePassword);
-router.post('/:apiKey/auth/resend-verification', resendVerification);
-router.post('/:apiKey/auth/delete-account', deleteAccount);
+router.post('/:apiKey/auth/register', publicApis.registerUser);
+router.post('/:apiKey/auth/login', publicApis.loginUser);
+router.post('/:apiKey/auth/request-password-reset', publicApis.requestPasswordReset);
+router.post('/:apiKey/auth/change-password', publicApis.changePassword);
+router.post('/:apiKey/auth/resend-verification', publicApis.resendVerification);
+router.post('/:apiKey/auth/delete-account', publicApis.deleteAccount);
 
 // User profile (requires Bearer token)
-router.get('/:apiKey/user/profile', getUserProfile);
+router.get('/:apiKey/user/profile', publicApis.getUserProfile);
 
 module.exports = router;

@@ -235,7 +235,7 @@ const registerUser = async (req, res) => {
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
-    
+
     const app = req.devApp;
 
     // Validation
@@ -278,7 +278,7 @@ const loginUser = async (req, res) => {
         success: false,
         error: 'Account blocked',
         message: 'Your account has been blocked. Please contact support.'
-      }); 
+      });
     }
 
     if (user.email_verified === false) {
@@ -286,7 +286,7 @@ const loginUser = async (req, res) => {
         success: false,
         error: 'Account not verified',
         message: 'Your account has not been verified. Please check your email for the verification link.'
-      }); 
+      });
     }
 
     // Verify password
@@ -766,7 +766,7 @@ const resetPasswordPage = async (req, res) => {
       JOIN dev_apps a ON u.app_id = a.id
       WHERE pr.token = $1 AND pr.expires_at > NOW() AND pr.used = false
     `, [token]);
-      
+
     if (result.rows.length === 0) {
       return res.status(400).send(`
         <!DOCTYPE html>
@@ -1022,19 +1022,19 @@ const resetPasswordPage = async (req, res) => {
  */
 const completePasswordReset = async (req, res) => {
   try {
-    
+
     const token = req.query.token || (req.body && req.body.token);
     // Accept both 'password' (form submission) and 'new_password' (JSON API)
     // console.log(req.body);
-    
+
     let new_password = (req.body && req.body.new_password) || (req.body && req.body.password);
-    
+
     // Sanitize and trim password
     if (typeof new_password === 'string') {
       new_password = new_password.trim().replace(/[\n\r\t]/g, '');
     }
     console.log('Password after sanitization:', JSON.stringify(new_password), 'Length:', new_password?.length);
-    
+
     if (!token) {
       return res.status(400).json({
         success: false,
@@ -1143,7 +1143,7 @@ const deleteAccount = async (req, res) => {
 
     // Find user
     const result = await pool.query(
-      'SELECT id, email, password_hash FROM users WHERE app_id = $1 AND email = $2',
+      'SELECT id, name, username, email, created_at, password_hash FROM users WHERE app_id = $1 AND email = $2',
       [app.id, email.toLowerCase()]
     );
 
@@ -1167,11 +1167,35 @@ const deleteAccount = async (req, res) => {
       });
     }
 
+    // Generate email verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+
+    await pool.query(`
+      INSERT INTO user_email_verifications (
+        user_id, app_id, token, expires_at, created_at, verify_type
+      ) VALUES (
+       $1, $2, $3, NOW() + INTERVAL '24 hours', NOW(), 'Delete Account'
+      )
+    `, [user.id, app.id, verificationToken]);
+
+    // Send verification email (non-blocking)
+    const verificationUrl = `${process.env.BACKEND_URL}/api/v1/auth/verify-delete-email?token=${verificationToken}`;
+
+    sendMail({
+      to: email,
+      subject: 'Delete Your Account',
+      html: `
+        <h2>Reconsider deleting your account on ${app.app_name}!</h2>
+        <p>If you still want to proceed, please confirm your email address by clicking the link below:</p>
+        <a href="${verificationUrl}">${verificationUrl}</a>
+        <p style="color:blue;">This link will expire in 24 hours.</p>
+        <p style="color:red;">All Data associated with your account will be permanently deleted upon confirmation.</p>
+        <p style="color:red;">This action is irreversible.</p>
+      `
+    }).catch(err => console.error('Send verification email error:', err));
+
     // Soft delete: mark as deleted (recommended for data retention/compliance)
-    await pool.query(
-      'UPDATE users SET is_blocked = true, updated_at = NOW() WHERE id = $1',
-      [user.id]
-    );
+    
 
     // Optional: Hard delete (uncomment if you prefer complete removal)
     // await pool.query('DELETE FROM users WHERE id = $1', [user.id]);
@@ -1191,6 +1215,82 @@ const deleteAccount = async (req, res) => {
   }
 };
 
+const verifyDeleteEmail = async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation error',
+        message: 'Verification token is required'
+      });
+    }
+    // Find verification record
+    const result = await pool.query(`
+      SELECT * FROM user_email_verifications
+      WHERE token = $1 AND expires_at > NOW() AND used = false AND verify_type = 'Delete Account'
+    `, [token]);
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid token',
+        message: 'Verification token is invalid or expired'
+      });
+    }
+    const verification = result.rows[0];
+
+    const user_result = await pool.query(
+      'SELECT id, name, username, email, created_at FROM users WHERE app_id = $1 AND email = $2',
+      [verification.app_id, verification.email]
+    );
+    if (user_result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+        message: 'User does not exist'
+      });
+    }
+    const user = user_result.rows[0];
+
+    await pool.query(
+      'INSERT INTO user_deletion_history (app_id, name, username, email, account_created_at, account_deleted_at) VALUES ($1, $2, $3, $4, $5, NOW())',
+      [user.app_id, user.name, user.username, user.email, user.created_at]
+    );
+
+    await pool.query(
+      'DELETE FROM users WHERE id = $1',
+      [user.id]
+    );
+    await pool.query(
+      'DELETE FROM user_password_history WHERE user_id = $1',
+      [user.id]
+    );
+    await pool.query(
+      'DELETE FROM password_resets WHERE user_id = $1',
+      [user.id]
+    );
+    await pool.query(
+      'DELETE FROM user_login_history WHERE user_id = $1',
+      [user.id]
+    );
+
+    // Mark token as used
+    await pool.query('UPDATE user_email_verifications SET used = true WHERE id = $1', [verification.id]);
+    res.json({
+      success: true,
+      message: 'Email verified successfully. Your account deletion is now complete.'
+    });
+  } catch (error) {
+    console.error('Verify delete email error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Verification failed',
+      message: 'Failed to verify email. Please try again.'
+    });
+  }
+};
+
 module.exports = {
   verifyAppCredentials,
   registerUser,
@@ -1202,5 +1302,6 @@ module.exports = {
   completePasswordReset,
   changePassword,
   resendVerification,
-  deleteAccount
+  deleteAccount,
+  verifyDeleteEmail
 };

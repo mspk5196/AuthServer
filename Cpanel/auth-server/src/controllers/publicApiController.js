@@ -139,11 +139,19 @@ const registerUser = async (req, res) => {
 
     // Check if email already exists for this app
     const existingUser = await pool.query(
-      'SELECT id FROM users WHERE app_id = $1 AND email = $2',
+      'SELECT id, password_hash, google_linked FROM users WHERE app_id = $1 AND email = $2',
       [app.id, email.toLowerCase()]
     );
+    const existingUserData = existingUser.rows[0];
 
     if (existingUser.rows.length > 0) {
+      if (existingUserData.password_hash === null && existingUserData.google_linked === true) {
+        return res.status(403).json({
+          success: false,
+          error: 'You have signed up through Google OAuth. Please use Google Sign-In to log in.',
+          message: 'You have signed up through Google OAuth. Please use Google Sign-In to log in.'
+        });
+      }
       return res.status(409).json({
         success: false,
         error: 'Email exists',
@@ -289,6 +297,14 @@ const loginUser = async (req, res) => {
       });
     }
 
+    if (user.password_hash === null && user.google_linked === true) {
+      return res.status(403).json({
+        success: false,
+        error: 'You have signed up through Google OAuth. Please use Google Sign-In to log in.',
+        message: 'You have signed up through Google OAuth. Please use Google Sign-In to log in.'
+      });
+    }
+
     // Verify password
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
 
@@ -333,7 +349,8 @@ const loginUser = async (req, res) => {
           username: user.username,
           email_verified: user.email_verified,
           google_linked: user.google_linked,
-          last_login: user.last_login
+          last_login: user.last_login,
+          login_method: 'email'
         },
         access_token: accessToken,
         token_type: 'Bearer',
@@ -1149,20 +1166,20 @@ const completePasswordReset = async (req, res) => {
  */
 const deleteAccount = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email } = req.body;
     const app = req.devApp;
 
-    if (!email || !password) {
+    if (!email) {
       return res.status(400).json({
         success: false,
         error: 'Validation error',
-        message: 'Email and password are required'
+        message: 'Email is required'
       });
     }
 
     // Find user
     const result = await pool.query(
-      'SELECT id, name, username, email, created_at, password_hash FROM users WHERE app_id = $1 AND email = $2',
+      'SELECT id, email FROM users WHERE app_id = $1 AND email = $2',
       [app.id, email.toLowerCase()]
     );
 
@@ -1170,21 +1187,12 @@ const deleteAccount = async (req, res) => {
       return res.status(404).json({
         success: false,
         error: 'User not found',
-        message: 'Invalid email or password'
+        message: 'Invalid email'
       });
     }
 
     const user = result.rows[0];
 
-    // Verify password
-    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
-    if (!isPasswordValid) {
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid credentials',
-        message: 'Invalid email or password'
-      });
-    }
 
     // Generate email verification token
     const verificationToken = crypto.randomBytes(32).toString('hex');
@@ -1237,13 +1245,27 @@ const deleteAccount = async (req, res) => {
 const verifyDeleteEmail = async (req, res) => {
   try {
     const { token } = req.query;
+    const { password } = req.body;
+
     if (!token) {
-      return res.status(400).json({
-        success: false,
-        error: 'Validation error',
-        message: 'Verification token is required'
-      });
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Invalid Link</title>
+          <style>
+            body { font-family: Arial, sans-serif; max-width: 500px; margin: 50px auto; padding: 20px; text-align: center; }
+            .error { color: #dc3545; }
+          </style>
+        </head>
+        <body>
+          <h2 class="error">Invalid Deletion Link</h2>
+          <p>The account deletion link is invalid or missing the token.</p>
+        </body>
+        </html>
+      `);
     }
+
     // Find verification record
     const result = await pool.query(`
       SELECT * FROM user_email_verifications
@@ -1251,12 +1273,25 @@ const verifyDeleteEmail = async (req, res) => {
     `, [token]);
 
     if (result.rows.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid token',
-        message: 'Verification token is invalid or expired'
-      });
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Expired Link</title>
+          <style>
+            body { font-family: Arial, sans-serif; max-width: 500px; margin: 50px auto; padding: 20px; text-align: center; }
+            .error { color: #dc3545; }
+          </style>
+        </head>
+        <body>
+          <h2 class="error">Deletion Link Expired</h2>
+          <p>This account deletion link has expired or has already been used.</p>
+          <p>Please request a new deletion link if you still wish to delete your account.</p>
+        </body>
+        </html>
+      `);
     }
+
     const verification = result.rows[0];
 
     const appData = await pool.query(
@@ -1264,43 +1299,415 @@ const verifyDeleteEmail = async (req, res) => {
       [verification.app_id]
     );
     const app = appData.rows[0];
-    
+
     const user_result = await pool.query(
-      'SELECT id, name, username, email, created_at FROM users WHERE app_id = $1 AND id = $2',
+      'SELECT id, name, username, email, created_at, password_hash, google_linked FROM users WHERE app_id = $1 AND id = $2',
       [verification.app_id, verification.user_id]
     );
+
     if (user_result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'User not found',
-        message: 'User does not exist'
-      });
+      return res.status(404).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>User Not Found</title>
+          <style>
+            body { font-family: Arial, sans-serif; max-width: 500px; margin: 50px auto; padding: 20px; text-align: center; }
+            .error { color: #dc3545; }
+          </style>
+        </head>
+        <body>
+          <h2 class="error">User Not Found</h2>
+          <p>The user associated with this deletion request does not exist.</p>
+        </body>
+        </html>
+      `);
     }
+
     const user = user_result.rows[0];
-    
+
+    // If no password in request body, show the confirmation form (GET request)
+    if (!password) {
+      // Google-only users don't need password
+      if (user.google_linked && !user.password_hash) {
+        return res.send(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Confirm Account Deletion - ${app.app_name}</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+              }
+              .container {
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                max-width: 500px;
+                width: 100%;
+                padding: 40px;
+              }
+              h2 { color: #dc3545; margin-bottom: 10px; text-align: center; }
+              .subtitle { color: #666; text-align: center; margin-bottom: 30px; font-size: 14px; }
+              .warning-box {
+                background: #fff3cd;
+                border: 2px solid #ffc107;
+                padding: 20px;
+                border-radius: 8px;
+                margin-bottom: 30px;
+              }
+              .warning-box h3 {
+                color: #856404;
+                margin-bottom: 10px;
+                font-size: 16px;
+              }
+              .warning-box ul {
+                margin-left: 20px;
+                color: #856404;
+                font-size: 14px;
+              }
+              .warning-box li { margin-bottom: 8px; }
+              .btn-group {
+                display: flex;
+                gap: 10px;
+                margin-top: 20px;
+              }
+              .btn {
+                flex: 1;
+                padding: 14px;
+                border: none;
+                border-radius: 8px;
+                font-size: 16px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s;
+              }
+              .btn-danger {
+                background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+                color: white;
+              }
+              .btn-danger:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(220, 53, 69, 0.3); }
+              .btn-secondary {
+                background: #f8f9fa;
+                color: #495057;
+                border: 2px solid #dee2e6;
+              }
+              .btn-secondary:hover { background: #e2e6ea; }
+              .message {
+                padding: 12px;
+                border-radius: 8px;
+                margin-bottom: 20px;
+                font-size: 14px;
+                display: none;
+              }
+              .message.error { background: #fee; color: #c33; border: 1px solid #fcc; }
+              .message.success { background: #efe; color: #3c3; border: 1px solid #cfc; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h2>⚠️ Confirm Account Deletion</h2>
+              <p class="subtitle">Hi ${user.name || user.email}</p>
+              
+              <div id="message" class="message"></div>
+              
+              <div class="warning-box">
+                <h3>This action cannot be undone!</h3>
+                <ul>
+                  <li>All your personal data will be permanently deleted</li>
+                  <li>Your login history will be removed</li>
+                  <li>You will not be able to recover your account</li>
+                  <li>This process is irreversible</li>
+                </ul>
+              </div>
+              
+              <form id="deleteForm" method="POST">
+                <div class="btn-group">
+                  <button type="button" class="btn btn-secondary" onclick="window.close()">
+                    Cancel
+                  </button>
+                  <button type="submit" class="btn btn-danger" id="submitBtn">
+                    Yes, Delete My Account
+                  </button>
+                </div>
+              </form>
+            </div>
+            
+            <script>
+              const form = document.getElementById('deleteForm');
+              const message = document.getElementById('message');
+              const submitBtn = document.getElementById('submitBtn');
+              
+              function showMessage(text, type) {
+                message.textContent = text;
+                message.className = 'message ' + type;
+                message.style.display = 'block';
+              }
+              
+              form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Deleting...';
+                
+                try {
+                  const response = await fetch(window.location.href, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: 'no-password-required' })
+                  });
+                  
+                  const data = await response.json();
+                  
+                  if (data.success) {
+                    showMessage(data.message, 'success');
+                    setTimeout(() => window.close(), 3000);
+                  } else {
+                    showMessage(data.message || 'Failed to delete account', 'error');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Yes, Delete My Account';
+                  }
+                } catch (error) {
+                  showMessage('Network error. Please try again.', 'error');
+                  submitBtn.disabled = false;
+                  submitBtn.textContent = 'Yes, Delete My Account';
+                }
+              });
+            </script>
+          </body>
+          </html>
+        `);
+      }
+
+      // Show password confirmation form for users with passwords
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Confirm Account Deletion - ${app.app_name}</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+              min-height: 100vh;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              padding: 20px;
+            }
+            .container {
+              background: white;
+              border-radius: 12px;
+              box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+              max-width: 500px;
+              width: 100%;
+              padding: 40px;
+            }
+            h2 { color: #dc3545; margin-bottom: 10px; text-align: center; }
+            .subtitle { color: #666; text-align: center; margin-bottom: 30px; font-size: 14px; }
+            .warning-box {
+              background: #fff3cd;
+              border: 2px solid #ffc107;
+              padding: 20px;
+              border-radius: 8px;
+              margin-bottom: 30px;
+            }
+            .warning-box h3 {
+              color: #856404;
+              margin-bottom: 10px;
+              font-size: 16px;
+            }
+            .warning-box ul {
+              margin-left: 20px;
+              color: #856404;
+              font-size: 14px;
+            }
+            .warning-box li { margin-bottom: 8px; }
+            .form-group { margin-bottom: 20px; }
+            label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; font-size: 14px; }
+            input {
+              width: 100%;
+              padding: 12px 15px;
+              border: 2px solid #e1e8ed;
+              border-radius: 8px;
+              font-size: 15px;
+              transition: all 0.3s;
+            }
+            input:focus {
+              outline: none;
+              border-color: #dc3545;
+              box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1);
+            }
+            .btn-group {
+              display: flex;
+              gap: 10px;
+              margin-top: 20px;
+            }
+            .btn {
+              flex: 1;
+              padding: 14px;
+              border: none;
+              border-radius: 8px;
+              font-size: 16px;
+              font-weight: 600;
+              cursor: pointer;
+              transition: all 0.2s;
+            }
+            .btn-danger {
+              background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+              color: white;
+            }
+            .btn-danger:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(220, 53, 69, 0.3); }
+            .btn-danger:disabled { background: #ccc; cursor: not-allowed; }
+            .btn-secondary {
+              background: #f8f9fa;
+              color: #495057;
+              border: 2px solid #dee2e6;
+            }
+            .btn-secondary:hover { background: #e2e6ea; }
+            .message {
+              padding: 12px;
+              border-radius: 8px;
+              margin-bottom: 20px;
+              font-size: 14px;
+              display: none;
+            }
+            .message.error { background: #fee; color: #c33; border: 1px solid #fcc; }
+            .message.success { background: #efe; color: #3c3; border: 1px solid #cfc; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h2>⚠️ Confirm Account Deletion</h2>
+            <p class="subtitle">Hi ${user.name || user.email}, enter your password to confirm</p>
+            
+            <div id="message" class="message"></div>
+            
+            <div class="warning-box">
+              <h3>This action cannot be undone!</h3>
+              <ul>
+                <li>All your personal data will be permanently deleted</li>
+                <li>Your login history will be removed</li>
+                <li>You will not be able to recover your account</li>
+                <li>This process is irreversible</li>
+              </ul>
+            </div>
+            
+            <form id="deleteForm" method="POST">
+              <div class="form-group">
+                <label for="password">Password</label>
+                <input 
+                  type="password" 
+                  id="password" 
+                  name="password" 
+                  required 
+                  placeholder="Enter your password to confirm"
+                  autocomplete="current-password"
+                >
+              </div>
+              
+              <div class="btn-group">
+                <button type="button" class="btn btn-secondary" onclick="window.close()">
+                  Cancel
+                </button>
+                <button type="submit" class="btn btn-danger" id="submitBtn">
+                  Delete My Account
+                </button>
+              </div>
+            </form>
+          </div>
+          
+          <script>
+            const form = document.getElementById('deleteForm');
+            const passwordInput = document.getElementById('password');
+            const message = document.getElementById('message');
+            const submitBtn = document.getElementById('submitBtn');
+            
+            function showMessage(text, type) {
+              message.textContent = text;
+              message.className = 'message ' + type;
+              message.style.display = 'block';
+            }
+            
+            form.addEventListener('submit', async (e) => {
+              e.preventDefault();
+              
+              const password = passwordInput.value;
+              
+              if (!password) {
+                showMessage('Password is required', 'error');
+                return;
+              }
+              
+              submitBtn.disabled = true;
+              submitBtn.textContent = 'Deleting...';
+              
+              try {
+                const response = await fetch(window.location.href, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                  showMessage(data.message, 'success');
+                  form.reset();
+                  setTimeout(() => window.close(), 3000);
+                } else {
+                  showMessage(data.message || 'Failed to delete account', 'error');
+                  submitBtn.disabled = false;
+                  submitBtn.textContent = 'Delete My Account';
+                }
+              } catch (error) {
+                showMessage('Network error. Please try again.', 'error');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Delete My Account';
+              }
+            });
+          </script>
+        </body>
+        </html>
+      `);
+    }
+
+    // POST request with password - proceed with deletion
+
+    // Verify password if user has one
+    if (user.password_hash) {
+      const trimmedPassword = password.trim().replace(/[\n\r\t]/g, '');
+      const isPasswordValid = await bcrypt.compare(trimmedPassword, user.password_hash);
+
+      if (!isPasswordValid) {
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid credentials',
+          message: 'Password is incorrect'
+        });
+      }
+    }
+
+    // Delete user data from all related tables
     await pool.query(
       'INSERT INTO user_deletion_history (app_id, name, username, email, account_created_at, account_deleted_at) VALUES ($1, $2, $3, $4, $5, NOW())',
       [verification.app_id, user.name, user.username, user.email, user.created_at]
     );
 
-    await pool.query(
-      'DELETE FROM users WHERE id = $1',
-      [user.id]
-    );
-    await pool.query(
-      'DELETE FROM user_password_history WHERE user_id = $1',
-      [user.id]
-    );
-    await pool.query(
-      'DELETE FROM password_resets WHERE user_id = $1',
-      [user.id]
-    );
-    await pool.query(
-      'DELETE FROM user_login_history WHERE user_id = $1',
-      [user.id]
-    );
-
-    // Mark token as used
+    await pool.query('DELETE FROM users WHERE id = $1', [user.id]);
+    await pool.query('DELETE FROM user_password_history WHERE user_id = $1', [user.id]);
+    await pool.query('DELETE FROM password_resets WHERE user_id = $1', [user.id]);
+    await pool.query('DELETE FROM user_login_history WHERE user_id = $1', [user.id]);
     await pool.query('UPDATE user_email_verifications SET used = true WHERE id = $1', [verification.id]);
 
     sendMail({
@@ -1311,18 +1718,19 @@ const verifyDeleteEmail = async (req, res) => {
         <p>All data associated with your account has been permanently deleted.</p>
         <p>Authentication system powered by MSPK Apps.</p>
       `
-    }).catch(err => console.error('Send verification email error:', err));
+    }).catch(err => console.error('Send deletion confirmation email error:', err));
 
     res.json({
       success: true,
-      message: 'Email verified successfully. Your account deletion is now complete.'
+      message: 'Account deleted successfully. All your data has been permanently removed.'
     });
+
   } catch (error) {
     console.error('Verify delete email error:', error);
     res.status(500).json({
       success: false,
       error: 'Verification failed',
-      message: 'Failed to verify email. Please try again.'
+      message: 'Failed to process account deletion. Please try again.'
     });
   }
 };
@@ -1358,7 +1766,7 @@ const googleAuth = async (req, res) => {
     try {
       const tokenToVerify = id_token || access_token;
       const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${tokenToVerify}`);
-      
+
       if (!response.ok) {
         throw new Error('Invalid Google token');
       }
@@ -1402,7 +1810,7 @@ const googleAuth = async (req, res) => {
       if (emailResult.rows.length > 0) {
         // Link Google to existing account
         user = emailResult.rows[0];
-        
+
         await pool.query(`
           UPDATE users 
           SET google_linked = true, 
@@ -1435,6 +1843,20 @@ const googleAuth = async (req, res) => {
 
         user = insertResult.rows[0];
         isNewUser = true;
+
+        sendMail({
+          to: googleUser.email?.toLowerCase(),
+          subject: 'Welcome to ' + app.app_name,
+          html: `
+            <h2>Welcome to ${app.app_name}!</h2>
+            <p>Hi ${googleUser.name || 'there'},</p>
+            <p>Your account has been created successfully using Google sign-in.</p>
+            <p>You can also enable password sign-in for added security in your account settings.</p>
+            <p>We're excited to have you on board!</p>
+            <p>Authentication system powered by MSPK Apps.</p>
+          `
+        }).catch(err => console.error('Send welcome email error:', err));
+
       }
     } else {
       user = userResult.rows[0];
@@ -1482,7 +1904,8 @@ const googleAuth = async (req, res) => {
           username: user.username,
           google_linked: user.google_linked,
           email_verified: user.email_verified,
-          last_login: user.last_login
+          last_login: user.last_login,
+          login_method: 'google'
         },
         access_token: accessToken,
         token_type: 'Bearer',
@@ -1501,6 +1924,323 @@ const googleAuth = async (req, res) => {
   }
 };
 
+const setPasswordGoogleUser = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const app = req.devApp;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation error',
+        message: 'Email is required'
+      });
+    }
+
+    // Find user
+    const result = await pool.query(
+      'SELECT id, email, name, email_verified, google_linked FROM users WHERE app_id = $1 AND email = $2',
+      [app.id, email.toLowerCase()]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+        message: 'No user found with this email'
+      });
+    }
+
+    const user = result.rows[0];
+
+    if (user.email_verified && user.password_hash) {
+      return res.status(400).json({
+        success: false,
+        error: 'Already password set, try resetting password',
+        message: 'Password is already set for this account. Please use the password reset option if you forgot your password.'
+      });
+    }
+
+    if (!user.google_linked) {
+      return res.status(400).json({
+        success: false,
+        error: 'Not a Google-linked account',
+        message: 'This account is not linked with Google sign-in.'
+      });
+    }
+
+    // Invalidate old tokens
+    await pool.query(
+      'UPDATE user_email_verifications SET used = true WHERE user_id = $1 AND used = false',
+      [user.id]
+    );
+
+    // Generate new token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+
+    await pool.query(`
+      INSERT INTO user_email_verifications (
+        user_id, app_id, token, expires_at, verify_type, created_at
+      ) VALUES (
+        $1, $2, $3, NOW() + INTERVAL '24 hours', $4, NOW()
+      )
+    `, [user.id, app.id, verificationToken, 'Set Password - Google User']);
+
+    // Send verification email
+    const verificationUrl = `${process.env.BACKEND_URL}/api/v1/auth/verify-email-set-password-google-user?token=${verificationToken}`;
+    sendMail({
+      to: email,
+      subject: 'Link to set your password',
+      html: `
+        <h2>Here is your link requested to set password for ${app.app_name}</h2>
+        <p>Hi ${user.name || 'there'},</p>
+        <p>Please set your password by clicking the link below:</p>
+        <a href="${verificationUrl}">${verificationUrl}</a>
+        <p>This link will expire in 24 hours.</p>
+        <p>Purpose: Set Password - Google User</p>
+        <p>Authentication system powered by MSPK Apps.</p>
+      `
+    }).catch(err => console.error('Send verification email error:', err));
+
+    res.json({
+      success: true,
+      message: 'Verification email sent successfully'
+    });
+  } catch (error) {
+    console.error('Set password for Google user error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Operation failed',
+      message: 'Failed to set password. Please try again.'
+    });
+  }
+};
+
+const verifyEmailSetPasswordGoogleUser = async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) {
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+
+          <title>Invalid Link</title>
+          <style>
+            body { font-family: Arial, sans-serif; max-width: 500px; margin: 50px auto; padding: 20px; text-align: center; }
+            .error { color: #dc3545; }
+          </style>
+        </head>
+        <body>
+
+          <h2 class="error">Invalid Link</h2>
+          <p>The password setup link is invalid or missing the token.</p>
+        </body>
+        </html>
+      `);
+    }
+    // Find verification record
+    const result = await pool.query(`
+      SELECT * FROM user_email_verifications
+      WHERE token = $1 AND expires_at > NOW() AND used = false AND verify_type = 'Set Password - Google User'
+    `, [token]);
+    if (result.rows.length === 0) {
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Expired Link</title>
+          <style>
+            body { font-family: Arial, sans-serif; max-width: 500px; margin: 50px auto; padding: 20px; text-align: center; }
+            .error { color: #dc3545; }
+          </style>
+        </head>
+        <body>
+          <h2 class="error">Link Expired</h2>
+          <p>This password setup link has expired or has already been used.</p>
+        </body>
+        </html>
+      `);
+    }
+    const verification = result.rows[0];
+
+    // Render password setup form
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+
+        <title>Set Your Password</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+          }
+          .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 500px;
+            width: 100%;
+            padding: 40px;
+          }
+          h2 { color: #007bff; margin-bottom: 10px; text-align: center; }
+          .subtitle { color: #666; text-align: center; margin-bottom: 30px; font-size: 14px; }
+          .form-group { margin-bottom: 20px; }
+          label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; font-size: 14px; }
+          input {
+
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: all 0.3s;
+          }
+          input:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+          }
+          .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+            color: white;
+            transition: all 0.2s;
+          }
+          .btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(0, 123, 255, 0.3); }
+          .btn:disabled { background: #ccc; cursor: not-allowed; }
+          .message {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: none;
+          }
+          .message.error { background: #fee; color: #c33; border: 1px solid #fcc; }
+          .message.success { background: #efe; color: #3c3; border: 1px solid #cfc; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h2>Set Your Password</h2>
+          <p class="subtitle">Please set your password to secure your account.</p>
+          <div id="message" class="message"></div>
+          <form id="setPasswordForm" method="POST">
+            <div class="form-group
+">              <label for="password">New Password</label>
+              <input 
+                type="password" 
+                id="password"
+                name="password"
+                required
+                placeholder="Enter your new password"
+                autocomplete="new-password"
+              >
+            </div>
+            <button type="submit" class="btn" id="submitBtn">
+
+              Set Password
+            </button>
+          </form>
+        </div>
+        <script>
+          const form = document.getElementById('setPasswordForm');
+          const passwordInput = document.getElementById('password');
+          const message = document.getElementById('message');
+          const submitBtn = document.getElementById('submitBtn');
+          function showMessage(text, type) {
+            message.textContent = text;
+            message.className = 'message ' + type;
+            message.style.display = 'block';
+          }
+          form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const password = passwordInput.value;
+            if (!password) {
+              showMessage('Password is required', 'error');
+              return;
+            }
+            submitBtn.disabled = true;  
+            submitBtn.textContent = 'Setting...';
+            try {
+              const response = await fetch(window.location.href, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: password })  
+              });
+              const data = await response.json();
+              if (data.success) {
+                showMessage(data.message, 'success');
+                form.reset();
+                setTimeout(() => window.close(), 3000);
+              } else {
+                showMessage(data.message || 'Failed to set password', 'error');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Set Password';
+              }
+            } catch (error) { 
+              showMessage('Network error. Please try again.', 'error');
+              submitBtn.disabled = false;
+              submitBtn.textContent = 'Set Password';
+            }
+          });
+        </script>
+      </body>
+      </html>
+    `);
+
+    await pool.query(
+      'UPDATE user_email_verifications SET used = true WHERE id = $1',
+      [verification.id]
+    );
+
+    sendMail({
+      to: verification.email,
+      subject: 'Password has been linked to your account',
+      html: `
+        <h2>The password has been linked to your account on ${new Date().toLocaleString()}!</h2>
+        <p>You can now log in using your new password.</p>
+        <p>If you did not perform this action, please contact support immediately.</p>
+        <p>Authentication system powered by MSPK Apps.</p>
+      `
+    }).catch(err => console.error('Send password setup accessed email error:', err));
+
+  } catch (error) {
+    console.error('Verify email set password Google user error:', error);
+    res.status(500).send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+
+        <title>Error</title>
+        <style>
+          body { font-family: Arial, sans-serif; max-width: 500px; margin: 50px auto; padding: 20px; text-align: center; }
+          .error { color: #dc3545; }
+        </style>
+      </head>
+      <body>
+        <h2 class="error">Error</h2>
+        <p>Failed to process your request. Please try again later.</p>
+      </body> 
+      </html>
+    `);
+  }
+};
+
 module.exports = {
   verifyAppCredentials,
   registerUser,
@@ -1514,5 +2254,7 @@ module.exports = {
   resendVerification,
   deleteAccount,
   verifyDeleteEmail,
-  googleAuth
+  googleAuth,
+  setPasswordGoogleUser,
+  verifyEmailSetPasswordGoogleUser
 };

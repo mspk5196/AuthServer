@@ -10,7 +10,7 @@ const verifyDeveloper = async (req, res) => {
     const { id, email } = decoded;
 
     // Activate developer (email_verified is the correct column)
-    await pool.query('UPDATE developers SET email_verified = $1, updated_at = NOW(), activated_at = NOW() WHERE id = $2 AND email = $3', [true, id, email]);
+    await pool.query('UPDATE developers SET email_verified = $1, updated_at = NOW(), activated_at = NOW(), is_active = true WHERE id = $2 AND email = $3', [true, id, email]);
     await pool.query(
       `UPDATE dev_email_verifications SET used = $1, updated_at = NOW() WHERE dev_id = $2 AND token = $3`,
       [true, id, token]

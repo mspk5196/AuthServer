@@ -257,54 +257,6 @@ const Settings = () => {
                   {loading ? 'Sending...' : 'Send Password Change Link'}
                 </button>
               </div>
-
-              <div className="divider-text">OR</div>
-
-              <div className="option-card">
-                <h3>Change Password Here</h3>
-                <form onSubmit={handlePasswordChange}>
-                  <div className="form-group">
-                    <label htmlFor="currentPassword">Current Password</label>
-                    <input
-                      type="password"
-                      id="currentPassword"
-                      value={passwordForm.currentPassword}
-                      onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
-                      required
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label htmlFor="newPassword">New Password</label>
-                    <input
-                      type="password"
-                      id="newPassword"
-                      value={passwordForm.newPassword}
-                      onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
-                      required
-                      minLength={8}
-                    />
-                    <small className="form-hint">
-                      Password must be at least 8 characters long
-                    </small>
-                  </div>
-
-                  <div className="form-group">
-                    <label htmlFor="confirmPassword">Confirm New Password</label>
-                    <input
-                      type="password"
-                      id="confirmPassword"
-                      value={passwordForm.confirmPassword}
-                      onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
-                      required
-                    />
-                  </div>
-
-                  <button type="submit" className="btn btn-primary" disabled={loading}>
-                    {loading ? 'Changing...' : 'Change Password'}
-                  </button>
-                </form>
-              </div>
             </div>
           </div>
         )}

@@ -1,7 +1,33 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import { useEffect } from 'react';
 import './Home.scss';
 
 const Home = () => {
+    const { developer, loading } = useAuth();
+    const navigate = useNavigate();
+
+    // Redirect authenticated users to dashboard
+    useEffect(() => {
+      if (!loading && developer) {
+        navigate('/dashboard', { replace: true });
+      }
+    }, [developer, loading, navigate]);
+
+    // Show loading while checking auth
+    if (loading) {
+      return (
+        <div className="loading">
+          <div className="spinner"></div>
+        </div>
+      );
+    }
+
+    // Only show home page if not authenticated
+    if (developer) {
+      return null; // Will redirect via useEffect
+    }
+
   return (
     <div className="home-page">
       <section className="hero">

@@ -35,7 +35,7 @@ router.get('/me', profileController.getProfile);
 // Profile management
 router.get('/profile', profileController.getProfile);
 router.put('/profile', profileController.updateProfile);
-router.post('/change-password', profileController.changePassword);
+// router.post('/change-password', profileController.changePassword);
 
 // Password change request (authenticated) - sends email with link
 router.post('/request-password-change', authController.requestPasswordChange);

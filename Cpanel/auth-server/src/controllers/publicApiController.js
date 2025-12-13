@@ -644,7 +644,7 @@ const requestChangePasswordLink = async (req, res) => {
  */
 const changePassword = async (req, res) => {
   try {
-    const { current_password, new_password } = req.body;
+    const { email } = req.body;
     const app = req.devApp;
     const authHeader = req.headers['authorization'];
 
@@ -656,21 +656,15 @@ const changePassword = async (req, res) => {
       });
     }
 
-    if (!current_password || !new_password) {
+    if (!email) {
       return res.status(400).json({
         success: false,
         error: 'Validation error',
-        message: 'Current password and new password are required'
+        message: 'Email is required'
       });
     }
 
-    if (new_password.length < 6) {
-      return res.status(400).json({
-        success: false,
-        error: 'Validation error',
-        message: 'New password must be at least 6 characters'
-      });
-    }
+ 
 
     const token = authHeader.substring(7);
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -2408,7 +2402,7 @@ const verifyChangePassword = async (req, res) => {
 
     const result = await pool.query(`
       SELECT * FROM user_email_verifications
-      WHERE token = $1 AND expires_at > NOW() AND used = false AND verify_type = 'Change Password'
+      WHERE token = $1 AND expires_at > NOW() AND used = false AND verify_type = 'Password Change'
     `, [token]);
 
     if (result.rows.length === 0) {

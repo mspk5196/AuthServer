@@ -696,7 +696,7 @@ const changePasswordWithToken = async (req, res) => {
           
           <div id="message" class="message"></div>
           
-          <form id="changePasswordForm">
+          <form id="changePasswordForm" method="post" action="#">
             <input type="hidden" id="token" value="${token}">
             
             <div class="form-group">
@@ -746,8 +746,10 @@ const changePasswordWithToken = async (req, res) => {
 
           form.addEventListener('submit', async (e) => {
             e.preventDefault();
+            console.log('Form submit event triggered');
             
             const token = document.getElementById('token').value;
+            console.log('Token value:', token ? 'present' : 'missing');
             const currentPassword = document.getElementById('currentPassword').value;
             const newPassword = document.getElementById('newPassword').value;
             const confirmPassword = document.getElementById('confirmPassword').value;
@@ -775,7 +777,9 @@ const changePasswordWithToken = async (req, res) => {
                 body: JSON.stringify({ token, currentPassword, newPassword }),
               });
 
+              console.log('Response status:', response.status);
               const data = await response.json();
+              console.log('Response data:', data);
 
               if (data.success) {
                 showMessage('Password changed successfully! You can close this window.', 'success');
@@ -789,13 +793,15 @@ const changePasswordWithToken = async (req, res) => {
                 submitBtn.textContent = 'Change Password';
               }
             } catch (error) {
-              showMessage('Network error. Please try again.', 'error');
+              console.error('Fetch error:', error);
+              showMessage('Network error. Please try again. Error: ' + error.message, 'error');
               submitBtn.disabled = false;
               submitBtn.textContent = 'Change Password';
             }
           });
 
           function showMessage(text, type) {
+            console.log('Showing message:', text);
             messageDiv.textContent = text;
             messageDiv.className = 'message ' + type;
             messageDiv.style.display = 'block';
@@ -1161,7 +1167,7 @@ const resetPasswordWithToken = async (req, res) => {
           
           <div id="message" class="message"></div>
           
-          <form id="resetPasswordForm">
+          <form id="resetPasswordForm" method="post" action="#">
             <input type="hidden" id="token" value="${token}">
             
             <div class="form-group">

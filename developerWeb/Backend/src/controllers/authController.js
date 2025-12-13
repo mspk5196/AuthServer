@@ -767,7 +767,7 @@ const changePasswordWithToken = async (req, res) => {
             submitBtn.textContent = 'Changing...';
 
             try {
-              const response = await fetch(window.location.href, {
+              const response = await fetch(window.location.pathname, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
@@ -1220,7 +1220,7 @@ const resetPasswordWithToken = async (req, res) => {
 
             try {
               const token = document.getElementById('token').value;
-              const response = await fetch(window.location.href, {
+              const response = await fetch(window.location.pathname, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',

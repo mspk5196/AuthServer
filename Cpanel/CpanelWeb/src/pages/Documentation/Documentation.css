@@ -2,8 +2,6 @@
   display: flex;
   min-height: 100vh;
   background: #f8fafc;
-  max-width: 1400px;
-  margin: 0 auto;
 }
 
 .doc-sidebar {

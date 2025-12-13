@@ -745,9 +745,18 @@ const changePasswordWithToken = async (req, res) => {
         </div>
 
         <script>
+          console.log('Script loaded successfully');
           const form = document.getElementById('changePasswordForm');
           const messageDiv = document.getElementById('message');
           const submitBtn = document.getElementById('submitBtn');
+          
+          console.log('Form element:', form);
+          console.log('Message div:', messageDiv);
+          console.log('Submit button:', submitBtn);
+
+          if (!form || !messageDiv || !submitBtn) {
+            console.error('Missing required elements!');
+          }
 
           form.addEventListener('submit', async (e) => {
             e.preventDefault();

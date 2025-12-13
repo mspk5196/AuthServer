@@ -14,6 +14,7 @@ app.use(cors({
   credentials: true,               // allow cookies and credentials
 }));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(helmet());
 
 // simple request logger

@@ -71,8 +71,8 @@
 
 .doc-main {
   flex: 1;
-  max-width: 900px;
   padding: 2rem;
+  padding-left: 2rem;
 }
 
 .doc-header {

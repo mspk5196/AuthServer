@@ -2,6 +2,10 @@ const crypto = require('crypto');
 const pool = require('../config/db');
 const { sendMail } = require('../utils/mailer');
 const { Parser } = require('json2csv');
+const {
+  buildAppSupportEmailVerificationEmail,
+  buildAppSupportEmailUpdateEmail,
+} = require('../templates/emailTemplates');
 
 /**
  * Generate a secure API key and secret
@@ -144,14 +148,7 @@ const createApp = async (req, res) => {
     sendMail({
       to: support_email,
       subject: `Verify Your App Support Email - ${app_name}`,
-      html: `
-        <h2>Verify Your App Support Email</h2>
-        <p>Hi Developer,</p>
-        <p>Please verify the support email for your application <strong>${app_name}</strong> by clicking the link below:</p>
-        <a href="${verificationUrl}">Verify Email</a>
-        <p>This link will expire in 24 hours.</p>
-        <p>If you didn't create this app, you can ignore this email.</p>
-      `
+      html: buildAppSupportEmailVerificationEmail({ appName: app_name, verificationUrl }),
     }).catch(err => console.error('Send verification email error:', err));
 
     // Return response with plaintext secret and pending verification status
@@ -909,13 +906,7 @@ const updateAppSupportEmail = async (req, res) => {
     sendMail({
       to: support_email,
       subject: `Verify Updated Support Email - ${app.app_name}`,
-      html: `
-        <h2>Verify Updated Support Email</h2>
-        <p>Hi Developer,</p>
-        <p>You've updated the support email for your application <strong>${app.app_name}</strong>. Please verify this new email by clicking the link below:</p>
-        <a href="${verificationUrl}">Verify Email</a>
-        <p>This link will expire in 24 hours.</p>
-      `
+      html: buildAppSupportEmailUpdateEmail({ appName: app.app_name, verificationUrl }),
     }).catch(err => console.error('Send verification email error:', err));
 
     res.json({

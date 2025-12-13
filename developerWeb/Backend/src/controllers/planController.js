@@ -1,4 +1,6 @@
 const pool = require('../config/db');
+const { sendMail } = require('../utils/mailer');
+const { buildPlanSelectionEmail } = require('../templates/emailTemplates');
 
 /**
  * Get all active plans
@@ -175,22 +177,10 @@ const selectPlan = async (req, res) => {
     await client.query('COMMIT');
 
     try {
-      const emailHTML = `
-        <h2>Plan Selected Successfully</h2>
-        <p>Hello ${devRes.rows[0].name},</p>
-        <p>Your plan has been successfully selected for your developer account.</p>
-        <p><strong>If you made this change</strong>, you can ignore this email.</p>
-        <p><strong>If you did not make this change</strong>, please contact our support team immediately.</p>
-        <br />
-        <p>Changed at: ${new Date().toLocaleString()}</p>
-        <br />
-        <p>Best regards,<br />MSPK Auth Platform Support</p>
-      `;
-
       await sendMail({
         to: devRes.rows[0].email,
         subject: 'Plan Selected - Auth Platform',
-        html: emailHTML
+        html: buildPlanSelectionEmail({ name: devRes.rows[0].name, changedAt: new Date().toLocaleString() }),
       });
 
       console.log('Plan selection notification sent to:', devRes.rows[0].email);

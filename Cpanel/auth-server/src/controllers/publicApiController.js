@@ -4,6 +4,18 @@ const crypto = require('crypto');
 const pool = require('../config/db');
 const { passwordEncryptAES, passwordDecryptAES } = require('../utils/decryptAES');
 const { sendMail } = require('../utils/mailer');
+const {
+  buildWelcomeVerificationEmail,
+  buildPasswordResetEmail,
+  buildChangePasswordLinkEmail,
+  buildPasswordChangedEmail,
+  buildEmailVerificationEmail,
+  buildDeleteAccountEmail,
+  buildAccountDeletedEmail,
+  buildGoogleUserWelcomeEmail,
+  buildSetPasswordGoogleUserEmail,
+  buildPasswordSetConfirmationEmail,
+} = require('../templates/emailTemplates');
 const { log, error } = require('console');
 
 /**
@@ -194,12 +206,7 @@ const registerUser = async (req, res) => {
     sendMail({
       to: email,
       subject: 'Verify Your Email',
-      html: `
-        <h2>Welcome to ${app.app_name}!</h2>
-        <p>Please verify your email address by clicking the link below:</p>
-        <a href="${verificationUrl}">${verificationUrl}</a>
-        <p>This link will expire in 24 hours.</p>
-      `
+      html: buildWelcomeVerificationEmail({ appName: app.app_name, verificationUrl }),
     }).catch(err => console.error('Send verification email error:', err));
 
     // Generate access token
@@ -530,14 +537,7 @@ const requestPasswordReset = async (req, res) => {
     sendMail({
       to: email,
       subject: 'Reset Your Password',
-      html: `
-        <h2>Password Reset Request</h2>
-        <p>Hi ${user.name || 'there'},</p>
-        <p>Click the link below to reset your password:</p>
-        <a href="${resetUrl}">${resetUrl}</a>
-        <p>This link will expire in 1 hour.</p>
-        <p>If you didn't request this, please ignore this email.</p>
-      `
+      html: buildPasswordResetEmail({ name: user.name, resetUrl }),
     }).catch(err => console.error('Send reset email error:', err));
 
     res.json({
@@ -613,14 +613,7 @@ const requestChangePasswordLink = async (req, res) => {
       sendMail({
         to: user.email,
         subject: 'Change your password',
-        html: `
-          <h2>Change your password on ${app.app_name}</h2>
-          <p>Hi ${user.name || 'there'},</p>
-          <p>Click the link below to open the password change page:</p>
-          <a href="${verificationUrl}">${verificationUrl}</a>
-          <p>This link will expire in 24 hours.</p>
-          <p>If you didn't request this, you can ignore this email.</p>
-        `
+        html: buildChangePasswordLinkEmail({ appName: app.app_name, name: user.name, verificationUrl }),
       }).catch(err => console.error('Send change password link email error:', err));
     
 
@@ -717,11 +710,7 @@ const changePassword = async (req, res) => {
     sendMail({
       to: user.email,
       subject: 'Account password changed successfully',
-      html: `
-        <h2>Your account password was changed on ${app.app_name} at ${new Date().toLocaleString()}!</h2>
-        <p>If you did not initiate this change, please contact support immediately.</p>
-        <p>Authentication system powered by MSPK Apps.</p>
-      `
+      html: buildPasswordChangedEmail({ appName: app.app_name, changedAt: new Date().toLocaleString() }),
     }).catch(err => console.error('Send verification email error:', err));
 
     res.json({
@@ -812,14 +801,7 @@ const resendVerification = async (req, res) => {
     sendMail({
       to: email,
       subject: 'Verify Your Email',
-      html: `
-        <h2>Email Verification</h2>
-        <p>Hi ${user.name || 'there'},</p>
-        <p>Please verify your email address by clicking the link below:</p>
-        <a href="${verificationUrl}">${verificationUrl}</a>
-        <p>This link will expire in 24 hours.</p>
-        <p>Purpose: ${verifyPurpose}</p>
-      `
+      html: buildEmailVerificationEmail({ name: user.name, verificationUrl, verifyPurpose }),
     }).catch(err => console.error('Send verification email error:', err));
 
     res.json({
@@ -1217,11 +1199,7 @@ const completePasswordReset = async (req, res) => {
     sendMail({
       to: resetRecord.email,
       subject: 'Account password changed successfully',
-      html: `
-        <h2>Your account password was changed on ${app.app_name} at ${new Date().toLocaleString()}!</h2>
-        <p>If you did not initiate this change, please contact support immediately.</p>
-        <p>Authentication system powered by MSPK Apps.</p>
-      `
+      html: buildPasswordChangedEmail({ appName: app.app_name, changedAt: new Date().toLocaleString() }),
     }).catch(err => console.error('Send verification email error:', err));
 
     res.json({
@@ -1289,14 +1267,7 @@ const deleteAccount = async (req, res) => {
     sendMail({
       to: email,
       subject: 'Delete Your Account',
-      html: `
-        <h2>Reconsider deleting your account on ${app.app_name}!</h2>
-        <p>If you still want to proceed, please confirm your email address by clicking the link below:</p>
-        <a href="${verificationUrl}">${verificationUrl}</a>
-        <p style="color:blue;">This link will expire in 24 hours.</p>
-        <p style="color:red;">All Data associated with your account will be permanently deleted upon confirmation.</p>
-        <p style="color:red;">This action is irreversible.</p>
-      `
+      html: buildDeleteAccountEmail({ appName: app.app_name, verificationUrl }),
     }).catch(err => console.error('Send verification email error:', err));
 
     // Soft delete: mark as deleted (recommended for data retention/compliance)
@@ -1791,11 +1762,7 @@ const verifyDeleteEmail = async (req, res) => {
     sendMail({
       to: user.email,
       subject: 'Account deleted successfully',
-      html: `
-        <h2>Your account was deleted on ${app.app_name} at ${new Date().toLocaleString()}!</h2>
-        <p>All data associated with your account has been permanently deleted.</p>
-        <p>Authentication system powered by MSPK Apps.</p>
-      `
+      html: buildAccountDeletedEmail({ appName: app.app_name, deletedAt: new Date().toLocaleString() }),
     }).catch(err => console.error('Send deletion confirmation email error:', err));
 
     res.json({
@@ -1925,14 +1892,7 @@ const googleAuth = async (req, res) => {
         sendMail({
           to: googleUser.email?.toLowerCase(),
           subject: 'Welcome to ' + app.app_name,
-          html: `
-            <h2>Welcome to ${app.app_name}!</h2>
-            <p>Hi ${googleUser.name || 'there'},</p>
-            <p>Your account has been created successfully using Google sign-in.</p>
-            <p>You can also enable password sign-in for added security in your account settings.</p>
-            <p>We're excited to have you on board!</p>
-            <p>Authentication system powered by MSPK Apps.</p>
-          `
+          html: buildGoogleUserWelcomeEmail({ appName: app.app_name, name: googleUser.name }),
         }).catch(err => console.error('Send welcome email error:', err));
 
       }
@@ -2069,15 +2029,7 @@ const setPasswordGoogleUser = async (req, res) => {
     sendMail({
       to: email,
       subject: 'Link to set your password',
-      html: `
-        <h2>Here is your link requested to set password for ${app.app_name}</h2>
-        <p>Hi ${user.name || 'there'},</p>
-        <p>Please set your password by clicking the link below:</p>
-        <a href="${verificationUrl}">${verificationUrl}</a>
-        <p>This link will expire in 24 hours.</p>
-        <p>Purpose: Set Password - Google User</p>
-        <p>Authentication system powered by MSPK Apps.</p>
-      `
+      html: buildSetPasswordGoogleUserEmail({ appName: app.app_name, name: user.name, verificationUrl }),
     }).catch(err => console.error('Send verification email error:', err));
 
     res.json({
@@ -2197,12 +2149,7 @@ const verifyEmailSetPasswordGoogleUser = async (req, res) => {
       sendMail({
         to: user.email,
         subject: 'Password linked to your account',
-        html: `
-          <h2>Your password was set on ${new Date().toLocaleString()}!</h2>
-          <p>You can now log in using your new password.</p>
-          <p>If you did not perform this action, please contact support immediately.</p>
-          <p>Authentication system powered by MSPK Apps.</p>
-        `
+        html: buildPasswordSetConfirmationEmail({ setAt: new Date().toLocaleString() }),
       }).catch(err => console.error('Send password setup confirmation email error:', err));
 
       return res.json({
@@ -2522,11 +2469,7 @@ const verifyChangePassword = async (req, res) => {
       sendMail({
         to: user.email,
         subject: 'Password changed successfully',
-        html: `
-          <h2>Your account password was changed on ${app.app_name} at ${new Date().toLocaleString()}!</h2>
-          <p>If you did not initiate this change, please contact support immediately.</p>
-          <p>Authentication system powered by MSPK Apps.</p>
-        `
+        html: buildPasswordChangedEmail({ appName: app.app_name, changedAt: new Date().toLocaleString() }),
       }).catch(err => console.error('Send change password confirmation email error:', err));
 
       return res.json({ success: true, message: 'Password changed successfully.' });

@@ -6,6 +6,7 @@ const { promisify } = require('util');
 require('dotenv').config();
 const { passwordEncryptAES } = require('../utils/decryptAES')
 const { sendMail } = require("../utils/mailer.js");
+const { buildVerifyAccountEmail } = require('../templates/emailTemplates');
 
 /**
  * User registration (Admin only)
@@ -50,20 +51,10 @@ const register = async (req, res) => {
     // const verifyLink = `http://localhost:5000/api/developer/verify?token=${token}`;
     const verifyLink = `${process.env.BACKEND_URL}/api/developer/verify?token=${token}`;
 
-    // Send verification email
-     const emailHTML = `
-      <h2>Verify your Developer Account</h2>
-      <p>Hello ${name},</p>
-      <p>Click the link below to verify your account (valid for <b>5 minutes</b>):</p>
-      <a href="${verifyLink}" target="_blank" style="color:#1a73e8;">Verify My Account</a>
-      <br /><br />
-      <p>If you did not register, please ignore this email.</p>
-    `;
-
     const mailResponse = await sendMail({
       to: email,
       subject: "Verify your Developer Account",
-      html: emailHTML,
+      html: buildVerifyAccountEmail({ name, verifyLink }),
     });
 
     if (!mailResponse.success) {
@@ -295,21 +286,12 @@ const resendVerificationEmail = async (req, res) => {
       { expiresIn: "5m" }
     );
 
-    const verifyLink = `http://localhost:5000/api/developer/verify?token=${token}`;
-
-    const emailHTML = `
-      <h2>Verify your Developer Account</h2>
-      <p>Hello ${developer.name},</p>
-      <p>Click the link below to verify your account (valid for <b>5 minutes</b>):</p>
-      <a href="${verifyLink}" target="_blank" style="color:#1a73e8;">Verify My Account</a>
-      <br /><br />
-      <p>If you did not request this, please ignore this email.</p>
-    `;
+    const verifyLink = `${process.env.BACKEND_URL}/api/developer/verify?token=${token}`;
 
     const mailResponse = await sendMail({
       to: developer.email,
       subject: "Verify your Developer Account",
-      html: emailHTML,
+      html: buildVerifyAccountEmail({ name: developer.name, verifyLink }),
     });
 
     if (!mailResponse.success) {

@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
 const { passwordEncryptAES } = require('../utils/decryptAES');
 const { sendMail } = require('../utils/mailer');
+const { buildEmailUpdateVerificationEmail, buildPasswordChangedEmail } = require('../templates/emailTemplates');
 require('dotenv').config();
 
 /**
@@ -161,21 +162,12 @@ const updateProfile = async (req, res) => {
           [developerId, verifyToken]
         );
 
-        const verifyLink = `http://localhost:5000/api/developer/verify-email-update?token=${verifyToken}`;
-        
-        const emailHTML = `
-          <h2>Verify Your New Email Address</h2>
-          <p>Hello ${name || oldDetails.name},</p>
-          <p>You recently changed your email address. Please verify your new email by clicking the link below (valid for 5 minutes):</p>
-          <a href="${verifyLink}" target="_blank" style="color:#1a73e8;">Verify New Email</a>
-          <br /><br />
-          <p>If you did not make this change, please contact support immediately.</p>
-        `;
+        const verifyLink = `${process.env.BACKEND_URL}/api/developer/verify-email-update?token=${verifyToken}`;
 
         await sendMail({
           to: email,
           subject: 'Verify Your New Email Address',
-          html: emailHTML
+          html: buildEmailUpdateVerificationEmail({ name: name || oldDetails.name, verifyLink }),
         });
 
       } catch (emailError) {
@@ -363,22 +355,10 @@ const changePassword = async (req, res) => {
 
     // Send password change notification email
     try {
-      const emailHTML = `
-        <h2>Password Changed Successfully</h2>
-        <p>Hello ${developer.name},</p>
-        <p>Your password was recently changed for your developer account.</p>
-        <p><strong>If you made this change</strong>, you can ignore this email.</p>
-        <p><strong>If you did not make this change</strong>, please contact our support team immediately and reset your password.</p>
-        <br />
-        <p>Changed at: ${new Date().toLocaleString()}</p>
-        <br />
-        <p>Best regards,<br />MSPK Auth Platform Support</p>
-      `;
-
       await sendMail({
         to: developer.email,
         subject: 'Password Changed - Auth Platform',
-        html: emailHTML
+        html: buildPasswordChangedEmail({ name: developer.name, changedAt: new Date().toLocaleString() }),
       });
 
       console.log('Password change notification sent to:', developer.email);

@@ -129,7 +129,7 @@ export default function AppDetails(){
 
   async function handleExportCSV() {
     try {
-      const response = await fetch(`/api/apps/users/${appId}/export-csv`, {
+      const response = await fetch(`/api/developer/apps/users/${appId}/export-csv`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`

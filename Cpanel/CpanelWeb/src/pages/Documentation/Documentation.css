@@ -2,7 +2,6 @@
   display: flex;
   min-height: 100vh;
   background: #f8fafc;
-  position: absolute;
 }
 
 .doc-sidebar {
@@ -73,7 +72,6 @@
 .doc-main {
   flex: 1;
   max-width: 900px;
-  margin: 0 auto;
   padding: 2rem;
 }
 

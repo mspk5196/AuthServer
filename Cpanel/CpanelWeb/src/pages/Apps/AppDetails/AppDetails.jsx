@@ -36,7 +36,7 @@ export default function AppDetails(){
       const resp = await api.get(`/apps/summary/${appId}`, token);
       if (resp.success) {
         setApp(resp.data);
-        setNewSupportEmail(resp.data.app?.app_support_email || '');
+        setNewSupportEmail(resp.data.app?.support_email || '');
       }
     } catch (err) {
       console.error(err);
@@ -110,7 +110,7 @@ export default function AppDetails(){
     setUpdatingEmail(true);
     setError('');
     try {
-      const resp = await api.put(`/apps/support-email/${appId}`, { app_support_email: newSupportEmail }, token);
+      const resp = await api.put(`/apps/support-email/${appId}`, { support_email: newSupportEmail }, token);
       if (resp.success) {
         setEmailUpdateSuccess('Support email updated! Check your new email for verification link.');
         setShowEditEmailModal(false);
@@ -189,8 +189,8 @@ export default function AppDetails(){
         <div className="email-display">
           <div className="email-info">
             <p className="email-label">Current Support Email:</p>
-            <p className="email-value">{app?.app?.app_support_email}</p>
-            {app?.app?.email_verified ? (
+            <p className="email-value">{app?.app?.support_email}</p>
+            {app?.app?.support_email_verified ? (
               <span className="status-badge status-verified">✅ Verified</span>
             ) : (
               <span className="status-badge status-pending">⏳ Pending Verification</span>

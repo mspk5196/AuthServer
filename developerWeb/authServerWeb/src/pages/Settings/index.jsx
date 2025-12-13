@@ -121,12 +121,13 @@ const Settings = () => {
     setMessage({ type: '', text: '' });
 
     try {
-      const response = await authService.requestPasswordChange();
+      const response = await api.post('/developer/request-password-change', {});
       setMessage({ 
         type: 'success', 
-        text: 'Password change link sent to your email. Please check your inbox.' 
+        text: response.message || 'Password change link sent to your email. Please check your inbox.' 
       });
     } catch (error) {
+      console.error('Request password change error:', error);
       setMessage({ 
         type: 'error', 
         text: error.message || 'Failed to send password change link' 

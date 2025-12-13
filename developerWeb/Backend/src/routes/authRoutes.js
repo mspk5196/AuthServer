@@ -26,6 +26,10 @@ router.get('/auth/google/callback', authController.googleCallback);
 // Plan routes (public - to view available plans)
 router.get('/plans', planController.getPlans);
 
+// Password change via email link - public (token-based)
+router.get('/change-password', authController.changePasswordWithToken);
+router.post('/change-password', authController.changePasswordWithToken);
+
 // Protected routes (authentication required)
 router.use(authenticateToken);
 
@@ -39,8 +43,6 @@ router.put('/profile', profileController.updateProfile);
 
 // Password change request (authenticated) - sends email with link
 router.post('/request-password-change', authController.requestPasswordChange);
-router.get('/change-password', authController.changePasswordWithToken);
-router.post('/change-password', authController.changePasswordWithToken);
 
 // Plan management (authenticated)
 router.get('/my-plan', planController.getDeveloperPlan);

@@ -337,6 +337,7 @@
   color: #e2e8f0;
   display: block;
   white-space: pre
+}
 
 /* Step Cards */
 .step-card {
@@ -641,7 +642,7 @@
   letter-spacing: 0.5px;
 }
 
-.error-table td {968px) {
+.error-table td {
   .documentation-page {
     flex-direction: column;
   }
@@ -683,10 +684,11 @@
   }
 
   .code-block code {
-    font-size: 0.75rem
-  background: white;
-  color: #667eea;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    font-size: 0.75rem;
+    background: white;
+    color: #667eea;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
 }
 
 /* Security Cards */

@@ -344,8 +344,7 @@ const Apps = () => {
               <p>Add these credentials to your app's environment variables:</p>
               <pre>
 {`AUTH_API_KEY=${newAppCredentials.api_key}
-AUTH_API_SECRET=${newAppCredentials.api_secret}
-AUTH_SERVER_URL=http://localhost:5001/api`}
+AUTH_API_SECRET=${newAppCredentials.api_secret}`}
               </pre>
             </div>
 

@@ -57,7 +57,6 @@ const register = async (req, res) => {
       { expiresIn: "5m" }
     );
 
-    // const verifyLink = `http://localhost:5000/api/developer/verify?token=${token}`;
     const verifyLink = `${process.env.BACKEND_URL}/api/developer/verify?token=${token}`;
 
     const mailResponse = await sendMail({
@@ -1223,7 +1222,7 @@ const resetPasswordWithToken = async (req, res) => {
                 showMessage('Password reset successfully! Redirecting to login...', 'success');
                 form.reset();
                 setTimeout(() => {
-                  window.location.href = '${process.env.FRONTEND_URL || 'http://localhost:3000'}/login';
+                  window.location.href = '${process.env.FRONTEND_URL}/login';
                 }, 2000);
               } else {
                 showMessage(data.message || 'Failed to reset password', 'error');
@@ -1280,7 +1279,7 @@ const googleCallback = async (req, res) => {
     const { code } = req.query;
 
     if (!code) {
-      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=no_code`);
+      return res.redirect(`${process.env.FRONTEND_URL}/login?error=no_code`);
     }
 
     // Exchange code for tokens
@@ -1301,7 +1300,7 @@ const googleCallback = async (req, res) => {
     const tokens = await tokenResponse.json();
 
     if (!tokens.id_token) {
-      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=no_token`);
+      return res.redirect(`${process.env.FRONTEND_URL}/login?error=no_token`);
     }
 
     // Verify the Google ID token
@@ -1314,7 +1313,7 @@ const googleCallback = async (req, res) => {
     const { email, name, sub: googleId } = payload;
 
     if (!email) {
-      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=no_email`);
+      return res.redirect(`${process.env.FRONTEND_URL}/login?error=no_email`);
     }
 
     // Check if developer exists
@@ -1351,7 +1350,7 @@ const googleCallback = async (req, res) => {
 
     // Check if account is blocked
     if (developer.is_blocked) {
-      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=blocked`);
+      return res.redirect(`${process.env.FRONTEND_URL}/login?error=blocked`);
     }
 
     // Track login history
@@ -1379,7 +1378,7 @@ const googleCallback = async (req, res) => {
     );
 
     // Redirect to frontend with tokens
-    const redirectUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?` +
+    const redirectUrl = `${process.env.FRONTEND_URL}/login?` +
       `token=${encodeURIComponent(accessToken)}&` +
       `refreshToken=${encodeURIComponent(refreshToken)}`;
 
@@ -1387,7 +1386,7 @@ const googleCallback = async (req, res) => {
 
   } catch (error) {
     console.error('Google callback error:', error);
-    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=auth_failed`);
+    res.redirect(`${process.env.FRONTEND_URL}/login?error=auth_failed`);
   }
 };
 

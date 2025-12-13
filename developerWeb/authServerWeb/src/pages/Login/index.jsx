@@ -245,7 +245,7 @@ const Login = () => {
               type="button"
               className="btn btn-google btn-block btn-lg"
               onClick={() => {
-                window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/developer/auth/google`;
+                window.location.href = `${import.meta.env.VITE_API_URL}/api/developer/auth/google`;
               }}
             >
               <svg viewBox="0 0 24 24" width="20" height="20" style={{ marginRight: '10px' }}>

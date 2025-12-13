@@ -2,7 +2,7 @@ const { generateTokens } = require('../middleware/auth');
 const { postJson } = require('../utils/httpClient');
 
 // Base URL of the main Developer Auth API (where tickets are redeemed)
-const AUTH_API_BASE_URL = process.env.AUTH_API_BASE_URL || 'http://localhost:5000/api';
+const AUTH_API_BASE_URL = process.env.AUTH_API_BASE_URL;
 
 /**
  * POST /api/developer/sso/consume

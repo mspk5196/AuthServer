@@ -80,7 +80,7 @@ const helmetConfig = helmet({
 const corsOptions = {
   origin: function (origin, callback) {
     const allowedOrigins = [
-      process.env.FRONTEND_URL || 'http://localhost:5173',
+      process.env.FRONTEND_URL,
       'http://localhost:3000',
       'https://mspkapps.in',
       'https://admin.mspkapps.in',

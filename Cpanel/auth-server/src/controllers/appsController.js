@@ -1,5 +1,7 @@
 const crypto = require('crypto');
 const pool = require('../config/db');
+const { sendMail } = require('../utils/mailer');
+const { Parser } = require('json2csv');
 
 /**
  * Generate a secure API key and secret
@@ -16,16 +18,23 @@ function generateApiCredentials() {
 const createApp = async (req, res) => {
   try {
     const developerId = req.user.developerId;
-    const { app_name, allow_google_signin = false, allow_email_signin = true } = req.body;
+    const { app_name, support_email, allow_google_signin = false, allow_email_signin = true } = req.body;
 
     console.log('Create app request from developer:', developerId);
-    console.log('Form data:', { app_name, allow_google_signin, allow_email_signin });
+    console.log('Form data:', { app_name, support_email, allow_google_signin, allow_email_signin });
 
     // Validation
     if (!app_name) {
       return res.status(400).json({
         success: false,
         message: 'App name is required'
+      });
+    }
+
+    if (!support_email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Support email is required'
       });
     }
 
@@ -108,29 +117,52 @@ const createApp = async (req, res) => {
 
     console.log('Creating app with credentials...');
 
-    // Create app with hashed secret
+    // Create app with hashed secret and email pending verification
     const result = await pool.query(`
       INSERT INTO dev_apps (
-        developer_id, app_name, api_key, api_secret_hash,
-        allow_google_signin, allow_email_signin,
+        developer_id, app_name, support_email, api_key, api_secret_hash,
+        allow_google_signin, allow_email_signin, support_email_verified,
         created_at, updated_at
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, NOW(), NOW()
+        $1, $2, $3, $4, $5, $6, $7, false, NOW(), NOW()
       )
-      RETURNING id, app_name, api_key, allow_google_signin, allow_email_signin, created_at
-    `, [developerId, app_name, apiKey, hashedSecret, allow_google_signin, allow_email_signin]);
+      RETURNING id, app_name, support_email, api_key, allow_google_signin, allow_email_signin, support_email_verified, created_at
+    `, [developerId, app_name, support_email, apiKey, hashedSecret, allow_google_signin, allow_email_signin]);
 
     const app = result.rows[0];
     console.log('App created successfully:', app.id);
 
-    // Return response with plaintext secret (only time it's shown)
+    // Generate verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    await pool.query(`
+      INSERT INTO dev_email_verifications (dev_id, token, expires_at, verify_type, created_at)
+      VALUES ($1, $2, NOW() + INTERVAL '24 hours', 'App Support Email', NOW())
+    `, [developerId, verificationToken]);
+
+    // Send verification email
+    const verificationUrl = `${process.env.BACKEND_URL}/api/developer/apps/verify-app-email/${verificationToken}`;
+    sendMail({
+      to: support_email,
+      subject: `Verify Your App Support Email - ${app_name}`,
+      html: `
+        <h2>Verify Your App Support Email</h2>
+        <p>Hi Developer,</p>
+        <p>Please verify the support email for your application <strong>${app_name}</strong> by clicking the link below:</p>
+        <a href="${verificationUrl}">Verify Email</a>
+        <p>This link will expire in 24 hours.</p>
+        <p>If you didn't create this app, you can ignore this email.</p>
+      `
+    }).catch(err => console.error('Send verification email error:', err));
+
+    // Return response with plaintext secret and pending verification status
     res.status(201).json({
       success: true,
-      message: 'App created successfully',
+      message: 'App created! A verification email has been sent to your support email.',
       data: {
         ...app,
         api_secret: apiSecret, // Only shown once at creation
-        warning: 'Save your API secret securely. It will not be shown again!'
+        support_email_verification_pending: true,
+        warning: 'Save your API secret securely. It will not be shown again! You need to verify your support email before using the API.'
       }
     });
 
@@ -649,6 +681,322 @@ const getAppUsage = async (req, res) => {
   }
 };
 
+/**
+ * Get dashboard statistics
+ */
+const getDashboard = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+
+    // Get total apps count
+    const appsResult = await pool.query(
+      'SELECT COUNT(*) as count FROM dev_apps WHERE developer_id = $1',
+      [developerId]
+    );
+    const totalApps = parseInt(appsResult.rows[0].count);
+
+    // Get recent apps (last 3)
+    const recentAppsResult = await pool.query(`
+      SELECT 
+        id,
+        app_name as name,
+        created_at,
+        allow_google_signin,
+        allow_email_signin,
+        api_key
+      FROM dev_apps 
+      WHERE developer_id = $1 
+      ORDER BY created_at DESC 
+      LIMIT 3
+    `, [developerId]);
+
+    // Get total users across all apps
+    const usersResult = await pool.query(`
+      SELECT COUNT(DISTINCT u.id) as count
+      FROM users u
+      JOIN dev_apps a ON u.app_id = a.id
+      WHERE a.developer_id = $1
+    `, [developerId]);
+    const totalUsers = parseInt(usersResult.rows[0].count);
+
+    // Get today's API calls
+    const todayCallsResult = await pool.query(`
+      SELECT COUNT(*) as count
+      FROM dev_api_calls
+      WHERE developer_id = $1 
+      AND DATE(created_at) = CURRENT_DATE
+    `, [developerId]);
+    const todayApiCalls = parseInt(todayCallsResult.rows[0].count);
+
+    // Get this month's API calls
+    const monthCallsResult = await pool.query(`
+      SELECT COUNT(*) as count
+      FROM dev_api_calls
+      WHERE developer_id = $1 
+      AND DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE)
+    `, [developerId]);
+    const monthApiCalls = parseInt(monthCallsResult.rows[0].count);
+
+    // Get plan info
+    const planResult = await pool.query(`
+      SELECT 
+        p.name as plan_name,
+        p.features,
+        dpr.is_active,
+        dpr.start_date,
+        dpr.end_date
+      FROM developer_plan_registrations dpr
+      JOIN dev_plans p ON dpr.plan_id = p.id
+      WHERE dpr.developer_id = $1 AND dpr.is_active = true
+      LIMIT 1
+    `, [developerId]);
+
+    const planInfo = planResult.rows.length > 0 ? {
+      name: planResult.rows[0].plan_name,
+      features: planResult.rows[0].features,
+      isActive: planResult.rows[0].is_active,
+      startDate: planResult.rows[0].start_date,
+      endDate: planResult.rows[0].end_date
+    } : null;
+
+    // Format recent apps with status
+    const recentApps = recentAppsResult.rows.map(app => ({
+      id: app.id,
+      name: app.name,
+      created_at: app.created_at,
+      status: 'active', // All apps are active by default
+      allow_google_signin: app.allow_google_signin,
+      allow_email_signin: app.allow_email_signin,
+      api_key: app.api_key
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        stats: {
+          totalApps,
+          totalUsers,
+          todayApiCalls,
+          monthApiCalls
+        },
+        recentApps,
+        planInfo
+      }
+    });
+
+  } catch (error) {
+    console.error('Get dashboard error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch dashboard data'
+    });
+  }
+};
+
+/**
+ * Verify app support email
+ */
+const verifyAppEmail = async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    console.log('Verifying app email with token:', token);
+
+    // Find the verification record
+    const tokenResult = await pool.query(
+      `SELECT dev_id, expires_at FROM dev_email_verifications 
+       WHERE token = $1 AND used = false AND verify_type = 'App Support Email'`,
+      [token]
+    );
+
+    if (tokenResult.rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or already verified token'
+      });
+    }
+
+    const { dev_id, expires_at } = tokenResult.rows[0];
+
+    // Check if token is expired
+    if (new Date(expires_at) < new Date()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Verification link has expired. Please create a new app.'
+      });
+    }
+
+    // Update the verification record
+    await pool.query(
+      `UPDATE dev_email_verifications 
+       SET used = true, updated_at = NOW()
+       WHERE token = $1`,
+      [token]
+    );
+
+    // Update the app as verified
+    await pool.query(
+      `UPDATE dev_apps 
+       SET support_email_verified = true, updated_at = NOW()
+       WHERE developer_id = $1`,
+      [dev_id]
+    );
+
+    res.json({
+      success: true,
+      message: 'Email verified successfully! Your API credentials are now active.',
+      devId: dev_id
+    });
+
+  } catch (error) {
+    console.error('Verify app email error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to verify email',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Update app support email
+ */
+const updateAppSupportEmail = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { appId } = req.params;
+    const { support_email } = req.body;
+
+    if (!support_email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Support email is required'
+      });
+    }
+
+    // Verify app belongs to developer
+    const appCheck = await pool.query(
+      'SELECT * FROM dev_apps WHERE id = $1 AND developer_id = $2',
+      [appId, developerId]
+    );
+
+    if (appCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'App not found'
+      });
+    }
+
+    const app = appCheck.rows[0];
+
+    // Update the email
+    await pool.query(
+      `UPDATE dev_apps 
+       SET support_email = $1, support_email_verified = false, updated_at = NOW()
+       WHERE id = $2`,
+      [support_email, appId]
+    );
+
+    // Generate new verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    await pool.query(`
+      INSERT INTO dev_email_verifications (dev_id, token, expires_at, verify_type, created_at)
+      VALUES ($1, $2, NOW() + INTERVAL '24 hours', 'App Support Email', NOW())
+    `, [developerId, verificationToken]);
+
+    // Send verification email
+    const verificationUrl = `${process.env.BACKEND_URL}/api/developer/apps/verify-app-email/${verificationToken}`;
+    sendMail({
+      to: support_email,
+      subject: `Verify Updated Support Email - ${app.app_name}`,
+      html: `
+        <h2>Verify Updated Support Email</h2>
+        <p>Hi Developer,</p>
+        <p>You've updated the support email for your application <strong>${app.app_name}</strong>. Please verify this new email by clicking the link below:</p>
+        <a href="${verificationUrl}">Verify Email</a>
+        <p>This link will expire in 24 hours.</p>
+      `
+    }).catch(err => console.error('Send verification email error:', err));
+
+    res.json({
+      success: true,
+      message: 'Support email updated! A verification email has been sent to the new email address.'
+    });
+
+  } catch (error) {
+    console.error('Update support email error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update support email',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Export app users as CSV
+ */
+const exportUsersCSV = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { appId } = req.params;
+
+    // Verify app belongs to developer
+    const appCheck = await pool.query(
+      'SELECT app_name FROM dev_apps WHERE id = $1 AND developer_id = $2',
+      [appId, developerId]
+    );
+
+    if (appCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'App not found'
+      });
+    }
+
+    const appName = appCheck.rows[0].app_name;
+
+    // Get all users for this app (exclude password_hash)
+    const usersResult = await pool.query(`
+      SELECT 
+        id, email, first_name, last_name, phone, 
+        account_status, auth_method, is_email_verified,
+        created_at, updated_at
+      FROM public_users
+      WHERE app_id = $1
+      ORDER BY created_at DESC
+    `, [appId]);
+
+    if (usersResult.rows.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No users to export',
+        data: []
+      });
+    }
+
+    // Convert to CSV
+    const parser = new Parser({
+      fields: ['id', 'email', 'first_name', 'last_name', 'phone', 'account_status', 'auth_method', 'is_email_verified', 'created_at', 'updated_at']
+    });
+
+    const csv = parser.parse(usersResult.rows);
+
+    // Set response headers for CSV download
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="users_${appName}_${new Date().toISOString().split('T')[0]}.csv"`);
+    res.send(csv);
+
+  } catch (error) {
+    console.error('Export users CSV error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to export users',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   createApp,
   getMyApps,
@@ -661,5 +1009,9 @@ module.exports = {
   getUserLoginHistory,
   createAppUser,
   setUserBlocked,
-  getAppUsage
+  getAppUsage,
+  getDashboard,
+  verifyAppEmail,
+  updateAppSupportEmail,
+  exportUsersCSV
 };

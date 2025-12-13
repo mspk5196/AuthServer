@@ -3,6 +3,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { api } from '../../../services/api';
 import { tokenService } from '../../../services/tokenService';
 import '../AppHome/Apps.css';
+import app from '../../../../../auth-server/src/app';
 
 const Apps = () => {
   const { developer } = useAuth();
@@ -14,6 +15,7 @@ const Apps = () => {
   const [newAppCredentials, setNewAppCredentials] = useState(null);
   const [formData, setFormData] = useState({
     app_name: '',
+    support_email: '',
     allow_google_signin: false,
     allow_email_signin: true
   });
@@ -57,6 +59,7 @@ const Apps = () => {
       const token = tokenService.get();
       const payload = {
         app_name: formData.app_name,
+        support_email: formData.support_email,
         allow_google_signin: formData.allow_google_signin,
         allow_email_signin: formData.allow_email_signin
       };
@@ -70,6 +73,7 @@ const Apps = () => {
         // Reset form
         setFormData({
           app_name: '',
+          support_email: '',
           allow_google_signin: false,
           allow_email_signin: true
         });
@@ -233,6 +237,16 @@ const Apps = () => {
                   required
                 />
               </div>
+              <div className="form-group">
+                <label>Support Email *</label>
+                <input
+                  type="email"
+                  placeholder="support@example.com"
+                  value={formData.support_email}
+                  onChange={(e) => setFormData({...formData, support_email: e.target.value})}
+                  required
+                />
+              </div>
 
               <div className="form-group-checkbox">
                 <label>
@@ -285,6 +299,13 @@ const Apps = () => {
             <div className="modal-header">
               <h2>🎉 App Created Successfully!</h2>
             </div>
+
+            {newAppCredentials.support_email_verification_pending && (
+              <div className="credentials-warning email-verification">
+                <span className="warning-icon">📧</span>
+                <p><strong>Email Verification Required:</strong> Check your support email for a verification link. You must verify the email before using these API credentials.</p>
+              </div>
+            )}
 
             <div className="credentials-warning">
               <span className="warning-icon">⚠️</span>

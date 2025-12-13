@@ -411,6 +411,104 @@
 
 
 
+/* Support Email Section */
+.support-email-section {
+    background: white;
+    border-radius: 1rem;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.email-display {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 2rem;
+}
+
+.email-info {
+    flex: 1;
+}
+
+.email-label {
+    color: #64748b;
+    font-size: 0.875rem;
+    margin: 0 0 0.5rem;
+    font-weight: 600;
+}
+
+.email-value {
+    color: #1e293b;
+    font-size: 1.125rem;
+    margin: 0.5rem 0;
+    font-weight: 600;
+}
+
+.email-info .status-badge {
+    display: inline-block;
+    margin-top: 0.75rem;
+}
+
+.btn-edit-email {
+    padding: 0.75rem 1.5rem;
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    color: white;
+    border: none;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-edit-email:hover {
+    background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(124, 58, 237, 0.3);
+}
+
+/* Export Section */
+.export-section {
+    background: white;
+    border-radius: 1rem;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.export-description {
+    color: #64748b;
+    font-size: 0.9375rem;
+    margin: 0 0 1rem;
+}
+
+.btn-export-csv {
+    padding: 0.75rem 1.5rem;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    border: none;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-export-csv:hover {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(16, 185, 129, 0.3);
+}
+
+.details-success {
+    padding: 1rem;
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #6ee7b7;
+    border-radius: 0.5rem;
+    margin-bottom: 1.5rem;
+    font-weight: 500;
+}
+
 /* Modal Styles */
 .modal-backdrop {
     position: fixed;
@@ -449,6 +547,16 @@
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
+}
+
+.modal-info {
+    font-size: 0.875rem;
+    color: #64748b;
+    margin: 0;
+    padding: 0.75rem 1rem;
+    background: #f0f9ff;
+    border-left: 3px solid #0284c7;
+    border-radius: 0.25rem;
 }
 
 .form-group {

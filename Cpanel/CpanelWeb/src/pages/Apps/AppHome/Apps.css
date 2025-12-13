@@ -429,6 +429,15 @@
   border-radius: 8px;
 }
 
+.credentials-warning.email-verification {
+  background: #dbeafe;
+  border-color: #0284c7;
+}
+
+.credentials-warning.email-verification p {
+  color: #0c4a6e;
+}
+
 .warning-icon {
   font-size: 1.25rem;
 }

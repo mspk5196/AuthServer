@@ -12,9 +12,16 @@ const {
   getUserLoginHistory,
   createAppUser,
   setUserBlocked,
-  getAppUsage
+  getAppUsage,
+  getDashboard,
+  verifyAppEmail,
+  updateAppSupportEmail,
+  exportUsersCSV
 } = require('../controllers/appsController'); // Fixed: was appController
 const { authenticateToken } = require('../middleware/auth');
+
+// Dashboard route
+router.get('/dashboard', authenticateToken, getDashboard);
 
 // App management routes
 router.post('/createApp', authenticateToken, createApp);
@@ -26,10 +33,15 @@ router.post('/regenerateApiKey/:appId', authenticateToken, regenerateApiKey);
 
 // New routes for app details, users and usage
 router.get('/summary/:appId', authenticateToken, getAppSummary);
+router.get('/users/:appId/export-csv', authenticateToken, exportUsersCSV);
 router.get('/users/:appId', authenticateToken, listAppUsers);
 router.get('/users/:appId/:userId/logins', authenticateToken, getUserLoginHistory);
 router.post('/users/:appId', authenticateToken, createAppUser);
 router.put('/users/:appId/:userId/block', authenticateToken, setUserBlocked);
 router.get('/usage/:appId', authenticateToken, getAppUsage);
+
+// Email verification and support email routes
+router.get('/verify-app-email/:token', verifyAppEmail);
+router.put('/support-email/:appId', authenticateToken, updateAppSupportEmail);
 
 module.exports = router;

@@ -1,33 +1,38 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { api } from '../../services/api';
+import { tokenService } from '../../services/tokenService';
 import './Home.css';
 
 const Home = () => {
   const navigate = useNavigate();
   const { developer } = useAuth();
-  const [apps, setApps] = useState([]);
+  const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Simulate fetching apps - replace with actual API call later
-    const fetchApps = async () => {
-      try {
-        // TODO: Replace with actual API call
-        // const response = await api.get('/apps', tokenService.get());
-        // setApps(response.data.apps || []);
-        
-        // Mock data for now
-        setApps([]);
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching apps:', error);
-        setLoading(false);
-      }
-    };
-
-    fetchApps();
+    fetchDashboard();
   }, []);
+
+  const fetchDashboard = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const token = tokenService.get();
+      const response = await api.get('/apps/dashboard', token);
+      
+      if (response.success) {
+        setDashboardData(response.data);
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard:', error);
+      setError('Failed to load dashboard data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleCreateApp = () => {
     navigate('/apps/create');
@@ -44,11 +49,32 @@ const Home = () => {
     );
   }
 
+  if (error) {
+    return (
+      <div className="home-page">
+        <div className="page-header">
+          <h1 className="page-title">Dashboard</h1>
+          <p className="page-subtitle error-text">{error}</p>
+          <button className="btn btn-primary" onClick={fetchDashboard}>Retry</button>
+        </div>
+      </div>
+    );
+  }
+
+  const stats = dashboardData?.stats || {};
+  const apps = dashboardData?.recentApps || [];
+  const planInfo = dashboardData?.planInfo;
+
   return (
     <div className="home-page">
       <div className="welcome-banner">
         <h2>Welcome back, {developer?.name || developer?.username || 'Developer'}!</h2>
         <p>Manage your applications and monitor your account from your dashboard.</p>
+        {planInfo && (
+          <div className="plan-badge">
+            <span className="plan-name">{planInfo.name}</span>
+          </div>
+        )}
       </div>
 
       <div className="stats-grid">
@@ -63,19 +89,22 @@ const Home = () => {
           </div>
           <div className="stat-content">
             <div className="stat-label">Total Apps</div>
-            <div className="stat-value">{apps.length}</div>
+            <div className="stat-value">{stats.totalApps || 0}</div>
           </div>
         </div>
 
         <div className="stat-card">
           <div className="stat-icon success">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
             </svg>
           </div>
           <div className="stat-content">
-            <div className="stat-label">Active Apps</div>
-            <div className="stat-value">{apps.filter(app => app.status === 'active').length}</div>
+            <div className="stat-label">Total Users</div>
+            <div className="stat-value">{stats.totalUsers || 0}</div>
           </div>
         </div>
 
@@ -88,7 +117,19 @@ const Home = () => {
           </div>
           <div className="stat-content">
             <div className="stat-label">API Calls (Today)</div>
-            <div className="stat-value">0</div>
+            <div className="stat-value">{stats.todayApiCalls || 0}</div>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon info">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+          </div>
+          <div className="stat-content">
+            <div className="stat-label">API Calls (This Month)</div>
+            <div className="stat-value">{stats.monthApiCalls || 0}</div>
           </div>
         </div>
       </div>

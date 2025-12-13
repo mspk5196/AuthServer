@@ -357,6 +357,10 @@ const requestPasswordChange = async (req, res) => {
       { expiresIn: '1h' }
     );
 
+    await pool.query(
+      `UPDATE dev_password_change_tokens SET used = true WHERE dev_id = $1`,
+      [developer.id]
+    );
     // Save token to database
     await pool.query(
       `INSERT INTO dev_password_change_tokens (dev_id, token, expires_at, used, created_at)
@@ -693,6 +697,8 @@ const changePasswordWithToken = async (req, res) => {
           <div id="message" class="message"></div>
           
           <form id="changePasswordForm">
+            <input type="hidden" id="token" value="${token}">
+            
             <div class="form-group">
               <label for="currentPassword">Current Password</label>
               <input 
@@ -741,6 +747,7 @@ const changePasswordWithToken = async (req, res) => {
           form.addEventListener('submit', async (e) => {
             e.preventDefault();
             
+            const token = document.getElementById('token').value;
             const currentPassword = document.getElementById('currentPassword').value;
             const newPassword = document.getElementById('newPassword').value;
             const confirmPassword = document.getElementById('confirmPassword').value;
@@ -765,7 +772,7 @@ const changePasswordWithToken = async (req, res) => {
                 headers: {
                   'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ currentPassword, newPassword }),
+                body: JSON.stringify({ token, currentPassword, newPassword }),
               });
 
               const data = await response.json();
@@ -1154,6 +1161,8 @@ const resetPasswordWithToken = async (req, res) => {
           <div id="message" class="message"></div>
           
           <form id="resetPasswordForm">
+            <input type="hidden" id="token" value="${token}">
+            
             <div class="form-group">
               <label for="newPassword">New Password</label>
               <input 
@@ -1209,12 +1218,13 @@ const resetPasswordWithToken = async (req, res) => {
             submitBtn.textContent = 'Resetting...';
 
             try {
+              const token = document.getElementById('token').value;
               const response = await fetch(window.location.href, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ newPassword }),
+                body: JSON.stringify({ token, newPassword }),
               });
 
               const data = await response.json();

@@ -487,7 +487,7 @@ const getAppSummary = async (req, res) => {
     if (!owner.rows.length) return res.status(404).json({ success: false, message: 'App not found' });
 
     const q = await pool.query(`
-      SELECT a.id, a.app_name, a.allow_google_signin, a.allow_email_signin,
+      SELECT a.id, a.app_name, a.allow_google_signin, a.allow_email_signin, a.support_email, a.support_email_verified,
         COUNT(u.id) FILTER (WHERE u.id IS NOT NULL) AS total_users,
         COUNT(u.id) FILTER (WHERE u.created_at >= NOW() - INTERVAL '30 days') AS new_users_30d
       FROM dev_apps a

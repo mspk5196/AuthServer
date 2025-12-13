@@ -19,6 +19,10 @@ router.post('/forgot-password', authController.requestPasswordReset);
 router.get('/reset-password', authController.resetPasswordWithToken);
 router.post('/reset-password', authController.resetPasswordWithToken);
 
+// Password change via email link - public (token-based)
+router.get('/change-password', authController.changePasswordWithToken);
+router.post('/change-password', authController.changePasswordWithToken);
+
 // Google OAuth routes - public
 router.get('/auth/google', authController.googleLogin);
 router.get('/auth/google/callback', authController.googleCallback);
@@ -39,8 +43,6 @@ router.put('/profile', profileController.updateProfile);
 
 // Password change request (authenticated) - sends email with link
 router.post('/request-password-change', authController.requestPasswordChange);
-router.get('/change-password', authController.changePasswordWithToken);
-router.post('/change-password', authController.changePasswordWithToken);
 
 // Plan management (authenticated)
 router.get('/my-plan', planController.getDeveloperPlan);

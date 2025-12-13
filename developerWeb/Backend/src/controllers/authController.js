@@ -47,8 +47,8 @@ const register = async (req, res) => {
       { expiresIn: "5m" }
     );
 
-    const verifyLink = `http://localhost:5000/api/developer/verify?token=${token}`;
-    // const verifyLink = `https://authservices.mspkapps.in/api/developer/verify?token=${token}`;
+    // const verifyLink = `http://localhost:5000/api/developer/verify?token=${token}`;
+    const verifyLink = `${process.env.BACKEND_URL}/api/developer/verify?token=${token}`;
 
     // Send verification email
      const emailHTML = `
@@ -76,7 +76,7 @@ const register = async (req, res) => {
 
     // console.log("Verification email sent:", email);
     await pool.query(
-      `INSERT INTO dev_email_verifications (dev_id, token, expires_at, used, created_at, verifiy_type)
+      `INSERT INTO dev_email_verifications (dev_id, token, expires_at, used, created_at, verify_type)
        VALUES ($1, $2, $3, $4, $5, NOW(), $6) RETURNING id`,
       [userId, token, new Date(Date.now() + 5 * 60 * 1000), false, 'New Account']
     );

@@ -74,6 +74,11 @@ const register = async (req, res) => {
       });
     }
 
+    await pool.query(
+      `UPDATE dev_email_verifications SET used = true WHERE id = $1`,
+      [userId]
+    );
+
     // console.log("Verification email sent:", email);
     await pool.query(
       `INSERT INTO dev_email_verifications (dev_id, token, expires_at, used, created_at, verify_type)

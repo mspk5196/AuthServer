@@ -2402,7 +2402,7 @@ const verifyChangePassword = async (req, res) => {
 
     const result = await pool.query(`
       SELECT * FROM user_email_verifications
-      WHERE token = $1 AND expires_at > NOW() AND used = false AND verify_type = 'Password Change'
+      WHERE token = $1 AND expires_at > NOW() AND used = false AND verify_type = 'Password change'
     `, [token]);
 
     if (result.rows.length === 0) {

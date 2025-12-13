@@ -77,7 +77,7 @@ const register = async (req, res) => {
     // console.log("Verification email sent:", email);
     await pool.query(
       `INSERT INTO dev_email_verifications (dev_id, token, expires_at, used, created_at, verify_type)
-       VALUES ($1, $2, $3, $4, $5, NOW(), $6) RETURNING id`,
+       VALUES ($1, $2, $3, $4, NOW(), $5) RETURNING id`,
       [userId, token, new Date(Date.now() + 5 * 60 * 1000), false, 'New Account']
     );
 

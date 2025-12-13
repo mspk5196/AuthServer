@@ -37,7 +37,7 @@ export default function AppDetails(){
       if (resp.success) {
         setApp(resp.data);
         setNewSupportEmail(resp.data.app?.support_email || '');
-        console.log(resp.data);
+        // console.log(resp.data);
         
       }
     } catch (err) {

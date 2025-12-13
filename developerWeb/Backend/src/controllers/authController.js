@@ -529,9 +529,14 @@ const changePasswordWithToken = async (req, res) => {
 
     // Handle POST request to change password
     if (req.method === 'POST') {
-      const { currentPassword, newPassword } = req.body;
+      console.log('POST request received for change password');
+      console.log('req.body:', req.body);
+      console.log('req.headers:', req.headers);
+      
+      const { currentPassword, newPassword } = req.body || {};
 
       if (!currentPassword || !newPassword) {
+        console.log('Missing passwords. currentPassword:', currentPassword, 'newPassword:', newPassword);
         return res.status(400).json({
           success: false,
           message: 'Current password and new password are required',
@@ -753,6 +758,10 @@ const changePasswordWithToken = async (req, res) => {
             const currentPassword = document.getElementById('currentPassword').value;
             const newPassword = document.getElementById('newPassword').value;
             const confirmPassword = document.getElementById('confirmPassword').value;
+            
+            console.log('Form values - currentPassword:', currentPassword ? 'present' : 'missing', 
+                        'newPassword:', newPassword ? 'present' : 'missing',
+                        'confirmPassword:', confirmPassword ? 'present' : 'missing');
 
             // Validate passwords match
             if (newPassword !== confirmPassword) {
@@ -769,12 +778,16 @@ const changePasswordWithToken = async (req, res) => {
             submitBtn.textContent = 'Changing...';
 
             try {
+              console.log('About to fetch POST to:', window.location.pathname);
+              const body = { token, currentPassword, newPassword };
+              console.log('Request body keys:', Object.keys(body));
+              
               const response = await fetch(window.location.pathname, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ token, currentPassword, newPassword }),
+                body: JSON.stringify(body),
               });
 
               console.log('Response status:', response.status);
@@ -1019,7 +1032,7 @@ const resetPasswordWithToken = async (req, res) => {
 
     // Handle POST request to reset password
     if (req.method === 'POST') {
-      const { newPassword } = req.body;
+      const { newPassword } = req.body || {};
 
       if (!newPassword) {
         return res.status(400).json({

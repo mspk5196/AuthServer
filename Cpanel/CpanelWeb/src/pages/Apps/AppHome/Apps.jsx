@@ -3,7 +3,6 @@ import { useAuth } from '../../../context/AuthContext';
 import { api } from '../../../services/api';
 import { tokenService } from '../../../services/tokenService';
 import '../AppHome/Apps.css';
-import app from '../../../../../auth-server/src/app';
 
 const Apps = () => {
   const { developer } = useAuth();

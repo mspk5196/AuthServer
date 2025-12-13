@@ -11,7 +11,7 @@ import AppSettings from './pages/Apps/AppSettings/AppSettings';
 import Settings from './pages/Settings/Settings';
 import Documentation from './pages/Documentation/Documentation';
 import './App.css';
-// import VerifyAppEmail from './pages/Apps/VerifyAppEmail/VerifyAppEmail';
+import VerifyAppEmail from './pages/Apps/VerifyAppEmail/VerifyAppEmail';
 
 // use shared api service imported above
 
@@ -117,7 +117,7 @@ function App() {
         <Route path="documentation" element={<Documentation />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
-      {/* <Route path="/verify-app-email/:token" element={<VerifyAppEmail />} /> */}
+      <Route path="/verify-app-email/:token" element={<VerifyAppEmail />} />
     </Routes>
   );
 }

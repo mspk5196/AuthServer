@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../utils/api';
+import { authService } from '../../services/authService';
 import './Settings.scss';
 
 const Settings = () => {
@@ -115,6 +116,26 @@ const Settings = () => {
     }
   };
 
+  const handleRequestPasswordChange = async () => {
+    setLoading(true);
+    setMessage({ type: '', text: '' });
+
+    try {
+      const response = await authService.requestPasswordChange();
+      setMessage({ 
+        type: 'success', 
+        text: 'Password change link sent to your email. Please check your inbox.' 
+      });
+    } catch (error) {
+      setMessage({ 
+        type: 'error', 
+        text: error.message || 'Failed to send password change link' 
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleUpgradePlan = () => {
     // TODO: Navigate to plan selection/upgrade page
     alert('Plan upgrade feature coming soon!');
@@ -222,48 +243,69 @@ const Settings = () => {
         {activeTab === 'password' && (
           <div className="settings-content">
             <h2>Change Password</h2>
-            <form onSubmit={handlePasswordChange}>
-              <div className="form-group">
-                <label htmlFor="currentPassword">Current Password</label>
-                <input
-                  type="password"
-                  id="currentPassword"
-                  value={passwordForm.currentPassword}
-                  onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
-                  required
-                />
+            
+            <div className="password-options">
+              <div className="option-card">
+                <h3>Change Password via Email</h3>
+                <p>We'll send you a secure link to your registered email address. Click the link to change your password.</p>
+                <button 
+                  type="button"
+                  className="btn btn-primary" 
+                  onClick={handleRequestPasswordChange}
+                  disabled={loading}
+                >
+                  {loading ? 'Sending...' : 'Send Password Change Link'}
+                </button>
               </div>
 
-              <div className="form-group">
-                <label htmlFor="newPassword">New Password</label>
-                <input
-                  type="password"
-                  id="newPassword"
-                  value={passwordForm.newPassword}
-                  onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
-                  required
-                  minLength={8}
-                />
-                <small className="form-hint">
-                  Password must be at least 8 characters long
-                </small>
-              </div>
+              <div className="divider-text">OR</div>
 
-              <div className="form-group">
-                <label htmlFor="confirmPassword">Confirm New Password</label>
-                <input
-                  type="password"
-                  id="confirmPassword"
-                  value={passwordForm.confirmPassword}
-                  onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
-                  required
-                />
-              </div>
+              <div className="option-card">
+                <h3>Change Password Here</h3>
+                <form onSubmit={handlePasswordChange}>
+                  <div className="form-group">
+                    <label htmlFor="currentPassword">Current Password</label>
+                    <input
+                      type="password"
+                      id="currentPassword"
+                      value={passwordForm.currentPassword}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                      required
+                    />
+                  </div>
 
-              <button type="submit" className="btn btn-primary" disabled={loading}>
-                {loading ? 'Changing...' : 'Change Password'}
-              </button>
-            </form>
+                  <div className="form-group">
+                    <label htmlFor="newPassword">New Password</label>
+                    <input
+                      type="password"
+                      id="newPassword"
+                      value={passwordForm.newPassword}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                      required
+                      minLength={8}
+                    />
+                    <small className="form-hint">
+                      Password must be at least 8 characters long
+                    </small>
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="confirmPassword">Confirm New Password</label>
+                    <input
+                      type="password"
+                      id="confirmPassword"
+                      value={passwordForm.confirmPassword}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <button type="submit" className="btn btn-primary" disabled={loading}>
+                    {loading ? 'Changing...' : 'Change Password'}
+                  </button>
+                </form>
+              </div>
+            </div>
           </div>
         )}
 

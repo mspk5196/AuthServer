@@ -112,4 +112,16 @@ export const authService = {
     // Check if token is expired
     return !tokenService.isTokenExpired(token);
   },
+
+  // Request password reset (forgot password)
+  forgotPassword: async (email) => {
+    const response = await api.post('/developer/forgot-password', { email });
+    return response;
+  },
+
+  // Request password change (authenticated user)
+  requestPasswordChange: async () => {
+    const response = await api.post('/developer/request-password-change');
+    return response;
+  },
 };

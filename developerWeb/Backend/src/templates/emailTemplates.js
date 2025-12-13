@@ -40,9 +40,35 @@ const buildPlanSelectionEmail = ({ name, changedAt }) => `
   <p>Best regards,<br />MSPK Auth Platform Support</p>
 `;
 
+const buildPasswordChangeRequestEmail = ({ name, changeUrl }) => `
+  <h2>Password Change Request</h2>
+  <p>Hello ${name},</p>
+  <p>You requested to change your password. Click the link below to proceed:</p>
+  <a href="${changeUrl}" target="_blank" style="color:#1a73e8;">Change Password</a>
+  <br /><br />
+  <p>This link will expire in 1 hour.</p>
+  <p>If you didn't request this, please ignore this email.</p>
+  <br />
+  <p>Best regards,<br />MSPK Auth Platform Support</p>
+`;
+
+const buildPasswordResetEmail = ({ name, resetUrl }) => `
+  <h2>Reset Your Password</h2>
+  <p>Hello ${name},</p>
+  <p>You requested to reset your password. Click the link below to proceed:</p>
+  <a href="${resetUrl}" target="_blank" style="color:#1a73e8;">Reset Password</a>
+  <br /><br />
+  <p>This link will expire in 1 hour.</p>
+  <p>If you didn't request this, please ignore this email.</p>
+  <br />
+  <p>Best regards,<br />MSPK Auth Platform Support</p>
+`;
+
 module.exports = {
   buildVerifyAccountEmail,
   buildEmailUpdateVerificationEmail,
   buildPasswordChangedEmail,
   buildPlanSelectionEmail,
+  buildPasswordChangeRequestEmail,
+  buildPasswordResetEmail,
 };

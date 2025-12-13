@@ -6,6 +6,7 @@ import Login from '../../pages/Login';
 import Register from '../../pages/Register';
 import Dashboard from '../../pages/Dashboard';
 import Settings from '../../pages/Settings';
+import ForgotPassword from '../../pages/ForgotPassword';
 
 const AppLayout = () => {
   return (
@@ -16,6 +17,7 @@ const AppLayout = () => {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route
             path="/dashboard"
             element={

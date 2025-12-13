@@ -889,7 +889,8 @@ const requestPasswordReset = async (req, res) => {
  */
 const resetPasswordWithToken = async (req, res) => {
   try {
-    const { token } = req.query;
+    // Support token from query, body, or header to handle proxy quirks
+    const token = req.query?.token || req.body?.token || req.headers['x-token'];
 
     if (!token) {
       return res.status(400).send(`

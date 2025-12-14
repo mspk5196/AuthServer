@@ -142,6 +142,23 @@ const Dashboard = () => {
               <p className="stat-label">Current Status</p>
             </div>
           </div>
+
+          <footer className="dashboard-footer">
+            <div className="footer-links">
+              <Link to="/policies">Policies</Link>
+              <span>•</span>
+              <Link to="/terms">Terms</Link>
+              <span>•</span>
+              <Link to="/privacy">Privacy</Link>
+              <span>•</span>
+              <Link to="/refund">Refund</Link>
+              <span>•</span>
+              <Link to="/contact">Contact</Link>
+            </div>
+            <p className="footer-copyright">
+              &copy; {new Date().getFullYear()} MSPK Apps. All rights reserved.
+            </p>
+          </footer>
         </div>
       </div>
     </div>

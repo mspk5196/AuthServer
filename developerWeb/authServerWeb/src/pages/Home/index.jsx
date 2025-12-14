@@ -53,9 +53,6 @@ const Home = () => {
               <Link to="/pricing" className="btn btn-secondary btn-lg">
                 View Pricing
               </Link>
-              <Link to="/policies" className="btn btn-text btn-lg">
-                View Policies
-              </Link>
             </div>
           </div>
         </div>
@@ -160,6 +157,36 @@ const Home = () => {
           </Link>
         </div>
       </section>
+
+      <footer className="home-footer">
+        <div className="container">
+          <div className="footer-content">
+            <div className="footer-section">
+              <h4>MSPK Auth Platform</h4>
+              <p>Complete authentication solution for developers</p>
+            </div>
+            <div className="footer-section">
+              <h4>Legal</h4>
+              <ul>
+                <li><Link to="/policies">All Policies</Link></li>
+                <li><Link to="/terms">Terms & Conditions</Link></li>
+                <li><Link to="/privacy">Privacy Policy</Link></li>
+                <li><Link to="/refund">Refund Policy</Link></li>
+              </ul>
+            </div>
+            <div className="footer-section">
+              <h4>Support</h4>
+              <ul>
+                <li><Link to="/contact">Contact Us</Link></li>
+                <li><a href="mailto:support@mspkapps.in">support@mspkapps.in</a></li>
+              </ul>
+            </div>
+          </div>
+          <div className="footer-bottom">
+            <p>&copy; {new Date().getFullYear()} MSPK Apps. All rights reserved.</p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };

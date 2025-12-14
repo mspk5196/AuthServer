@@ -1,0 +1,22 @@
+@use '../../styles/variables' as *;
+
+.legal-page {
+  padding: 3rem 0 4rem;
+
+  h1 {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+  }
+
+  h2 {
+    font-size: 1.25rem;
+    margin-top: 1.75rem;
+    margin-bottom: 0.5rem;
+  }
+
+  p {
+    color: $text-secondary;
+    font-size: 0.9375rem;
+    margin-bottom: 0.75rem;
+  }
+}

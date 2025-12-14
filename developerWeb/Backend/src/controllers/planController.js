@@ -1,6 +1,6 @@
 const pool = require('../config/db');
 const { sendMail } = require('../utils/mailer');
-const { buildPlanSelectionEmail } = require('../templates/emailTemplates');
+const { buildPlanChangeEmail, buildPlanCancelledEmail } = require('../templates/emailTemplates');
 
 /**
  * Get all active plans
@@ -115,7 +115,7 @@ const selectPlan = async (req, res) => {
 
     // Check if plan exists and is active
     const planResult = await client.query(
-      'SELECT id, duration_days, price FROM dev_plans WHERE id = $1 AND is_active = true',
+      'SELECT id, name, duration_days, price FROM dev_plans WHERE id = $1 AND is_active = true',
       [planId]
     );
 
@@ -131,36 +131,70 @@ const selectPlan = async (req, res) => {
 
     // Check if developer already has an active plan
     const existingPlanResult = await client.query(
-      'SELECT id, plan_id FROM developer_plan_registrations WHERE developer_id = $1 AND is_active = true',
+      'SELECT id, plan_id, start_date, end_date, renewal_count FROM developer_plan_registrations WHERE developer_id = $1 AND is_active = true',
       [developerId]
     );
 
-    let oldPlanId = null;
+    const existingPlan = existingPlanResult.rows[0];
+    let oldPlanId = existingPlan ? existingPlan.plan_id : null;
+    let action = 'initial_selection';
+    let registrationRow;
 
-    // If there's an existing plan, deactivate it
-    if (existingPlanResult.rows.length > 0) {
-      oldPlanId = existingPlanResult.rows[0].plan_id;
-      await client.query(
-        'UPDATE developer_plan_registrations SET is_active = false, updated_at = NOW() WHERE developer_id = $1 AND is_active = true',
-        [developerId]
+    if (existingPlan) {
+      const isRenewal = existingPlan.plan_id === planId && plan.duration_days;
+
+      if (isRenewal) {
+        action = 'renewal';
+
+        const updated = await client.query(
+          `UPDATE developer_plan_registrations
+             SET end_date = COALESCE(end_date, NOW()) + INTERVAL '${plan.duration_days} days',
+                 renewal_count = renewal_count + 1,
+                 updated_at = NOW()
+           WHERE id = $1
+           RETURNING id, start_date, end_date;`,
+          [existingPlan.id]
+        );
+
+        registrationRow = updated.rows[0];
+      } else {
+        action = 'upgrade';
+
+        await client.query(
+          'UPDATE developer_plan_registrations SET is_active = false, updated_at = NOW() WHERE developer_id = $1 AND is_active = true',
+          [developerId]
+        );
+
+        const endDate = plan.duration_days 
+          ? `NOW() + INTERVAL '${plan.duration_days} days'`
+          : 'NULL';
+
+        const inserted = await client.query(
+          `INSERT INTO developer_plan_registrations 
+            (developer_id, plan_id, start_date, end_date, is_active, renewal_count, auto_renew, created_at, updated_at)
+           VALUES ($1, $2, NOW(), ${endDate}, true, 0, false, NOW(), NOW())
+           RETURNING id, start_date, end_date`,
+          [developerId, planId]
+        );
+
+        registrationRow = inserted.rows[0];
+      }
+    } else {
+      const endDate = plan.duration_days 
+        ? `NOW() + INTERVAL '${plan.duration_days} days'`
+        : 'NULL';
+
+      const inserted = await client.query(
+        `INSERT INTO developer_plan_registrations 
+          (developer_id, plan_id, start_date, end_date, is_active, renewal_count, auto_renew, created_at, updated_at)
+         VALUES ($1, $2, NOW(), ${endDate}, true, 0, false, NOW(), NOW())
+         RETURNING id, start_date, end_date`,
+        [developerId, planId]
       );
+
+      registrationRow = inserted.rows[0];
     }
 
-    // Calculate end date based on duration_days
-    const endDate = plan.duration_days 
-      ? `NOW() + INTERVAL '${plan.duration_days} days'`
-      : 'NULL';
-
-    // Insert new plan registration
-    const registrationResult = await client.query(
-      `INSERT INTO developer_plan_registrations 
-        (developer_id, plan_id, start_date, end_date, is_active, renewal_count, auto_renew, created_at, updated_at)
-       VALUES ($1, $2, NOW(), ${endDate}, true, 0, false, NOW(), NOW())
-       RETURNING id, start_date, end_date`,
-      [developerId, planId]
-    );
-
-    // Record plan change in history
     await client.query(
       `INSERT INTO dev_plan_change_history 
         (developer_id, old_plan_id, new_plan_id, changed_at, change_reason, remarks)
@@ -169,23 +203,36 @@ const selectPlan = async (req, res) => {
         developerId,
         oldPlanId,
         planId,
-        oldPlanId ? 'upgrade' : 'initial_selection',
-        oldPlanId ? 'User upgraded plan' : 'Initial plan selection'
+        action,
+        `Plan ${action.replace('_', ' ')}`
       ]
     );
 
     await client.query('COMMIT');
 
+    const subjectMap = {
+      initial_selection: 'Plan Selected - Auth Platform',
+      upgrade: 'Plan Upgraded - Auth Platform',
+      renewal: 'Plan Renewed - Auth Platform'
+    };
+
     try {
       await sendMail({
         to: devRes.rows[0].email,
-        subject: 'Plan Selected - Auth Platform',
-        html: buildPlanSelectionEmail({ name: devRes.rows[0].name, changedAt: new Date().toLocaleString() }),
+        subject: subjectMap[action] || 'Plan Updated - Auth Platform',
+        html: buildPlanChangeEmail({
+          name: devRes.rows[0].name,
+          planName: plan.name,
+          action,
+          startDate: registrationRow.start_date,
+          endDate: registrationRow.end_date,
+          changedAt: new Date().toLocaleString()
+        }),
       });
 
-      console.log('Plan selection notification sent to:', devRes.rows[0].email);
+      console.log('Plan change notification sent to:', devRes.rows[0].email);
     } catch (emailError) {
-      console.error('Failed to send plan selection notification:', emailError);
+      console.error('Failed to send plan change notification:', emailError);
       // Don't fail the plan selection, just log the error
     }
 
@@ -193,7 +240,8 @@ const selectPlan = async (req, res) => {
       success: true,
       message: 'Plan registered successfully',
       data: {
-        registration: registrationResult.rows[0],
+        action,
+        registration: registrationRow,
         plan: plan
       }
     });
@@ -204,6 +252,119 @@ const selectPlan = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to register plan',
+      error: error.message
+    });
+  } finally {
+    client.release();
+  }
+};
+
+/**
+ * Cancel developer's current plan
+ */
+const cancelPlan = async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const developerId = req.user.userId;
+
+    await client.query('BEGIN');
+
+    const devRes = await client.query(
+      'SELECT id, email, name FROM developers WHERE id = $1',
+      [developerId]
+    );
+
+    if (devRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        success: false,
+        message: 'Developer not found'
+      });
+    }
+
+    const registrationResult = await client.query(
+      `SELECT 
+         dpr.id,
+         dpr.plan_id,
+         dpr.start_date,
+         dpr.end_date,
+         dp.name as plan_name
+       FROM developer_plan_registrations dpr
+       JOIN dev_plans dp ON dp.id = dpr.plan_id
+       WHERE dpr.developer_id = $1 AND dpr.is_active = true
+       ORDER BY dpr.created_at DESC
+       LIMIT 1`,
+      [developerId]
+    );
+
+    if (registrationResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        message: 'No active plan to cancel'
+      });
+    }
+
+    const registration = registrationResult.rows[0];
+
+    const updateResult = await client.query(
+      `UPDATE developer_plan_registrations
+         SET is_active = false,
+             end_date = COALESCE(end_date, NOW()),
+             updated_at = NOW()
+       WHERE id = $1
+       RETURNING end_date`,
+      [registration.id]
+    );
+
+    const effectiveEndDate = updateResult.rows[0].end_date;
+
+    await client.query(
+      `INSERT INTO dev_plan_change_history 
+        (developer_id, old_plan_id, new_plan_id, changed_at, change_reason, remarks)
+       VALUES ($1, $2, $3, NOW(), $4, $5)`,
+      [
+        developerId,
+        registration.plan_id,
+        null,
+        'cancel',
+        'Plan cancelled by developer'
+      ]
+    );
+
+    await client.query('COMMIT');
+
+    try {
+      await sendMail({
+        to: devRes.rows[0].email,
+        subject: 'Plan Cancelled - Auth Platform',
+        html: buildPlanCancelledEmail({
+          name: devRes.rows[0].name,
+          planName: registration.plan_name,
+          cancelledAt: new Date().toLocaleString(),
+          endDate: effectiveEndDate
+        })
+      });
+    } catch (emailError) {
+      console.error('Failed to send plan cancellation email:', emailError);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Plan cancelled successfully',
+      data: {
+        cancelledPlanId: registration.plan_id,
+        effectiveEndDate
+      }
+    });
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Cancel plan error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to cancel plan',
       error: error.message
     });
   } finally {
@@ -223,5 +384,6 @@ module.exports = {
   getPlans,
   getDeveloperPlan,
   selectPlan,
-  upgradePlan
+  upgradePlan,
+  cancelPlan
 };

@@ -137,6 +137,40 @@ const Settings = () => {
     }
   };
 
+  const handleCancelPlan = async () => {
+    if (!currentPlan) return;
+
+    const confirmCancel = window.confirm('Are you sure you want to cancel your current plan?');
+    if (!confirmCancel) return;
+
+    setLoading(true);
+    setMessage({ type: '', text: '' });
+
+    try {
+      const response = await api.post('/developer/cancel-plan', {});
+
+      if (response.success) {
+        setMessage({
+          type: 'success',
+          text: response.message || 'Plan cancelled successfully'
+        });
+        setCurrentPlan(null);
+      } else {
+        setMessage({
+          type: 'error',
+          text: response.message || 'Failed to cancel plan'
+        });
+      }
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: error.response?.data?.message || 'Failed to cancel plan'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleUpgradePlan = () => {
     // TODO: Navigate to plan selection/upgrade page
     alert('Plan upgrade feature coming soon!');
@@ -320,6 +354,13 @@ const Settings = () => {
                 <div className="plan-info-footer">
                   <button className="btn btn-primary" onClick={handleUpgradePlan}>
                     Upgrade Plan
+                  </button>
+                  <button
+                    className="btn btn-danger"
+                    onClick={handleCancelPlan}
+                    disabled={loading}
+                  >
+                    Cancel Plan
                   </button>
                 </div>
               </div>

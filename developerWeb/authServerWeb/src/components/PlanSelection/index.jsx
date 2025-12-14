@@ -113,6 +113,13 @@ const PlanSelection = ({ onPlanSelected }) => {
     );
   }
 
+  const normalizeFeatures = (raw) => {
+    if (Array.isArray(raw)) return raw.filter(Boolean);
+    if (raw && typeof raw === 'object') return Object.values(raw).filter(Boolean);
+    if (typeof raw === 'string') return [raw];
+    return [];
+  };
+
   return (
     <div className="plan-selection">
       <div className="plan-selection-container">
@@ -128,12 +135,8 @@ const PlanSelection = ({ onPlanSelected }) => {
         )}
 
         <div className="plans-grid">
-          {plans.map((plan) => {
-            const features = Array.isArray(plan.features) 
-              ? plan.features 
-              : (plan.features && typeof plan.features === 'object' 
-                  ? Object.values(plan.features) 
-                  : []);
+          {(plans || []).map((plan) => {
+            const features = normalizeFeatures(plan?.features);
 
             const isSelecting = selecting && selectedPlanId === plan.id;
             const isFree = !plan.price || plan.price === 0;

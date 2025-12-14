@@ -58,6 +58,12 @@ const Navbar = () => {
           </div>
         ) : (
           <div className="navbar-menu">
+            <Link 
+              to="/pricing" 
+              className={`nav-link ${isActive('/pricing') ? 'active' : ''}`}
+            >
+              Pricing
+            </Link>
             <Link to="/login" className="nav-link">
               Login
             </Link>

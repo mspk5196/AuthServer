@@ -30,7 +30,7 @@ const buildChangePasswordLinkEmail = ({ appName, name, verificationUrl }) => `
 const buildPasswordChangedEmail = ({ appName, changedAt }) => `
   <h2>Your account password was changed on ${appName} at ${changedAt}!</h2>
   <p>If you did not initiate this change, please contact support immediately.</p>
-  <p>Authentication system powered by MSPK Apps.</p>
+  <p>Authentication system powered by MSPK APPS (mspkapps.in).</p>
 `;
 
 // Email verification (general)
@@ -57,7 +57,7 @@ const buildDeleteAccountEmail = ({ appName, verificationUrl }) => `
 const buildAccountDeletedEmail = ({ appName, deletedAt }) => `
   <h2>Your account was deleted on ${appName} at ${deletedAt}!</h2>
   <p>All data associated with your account has been permanently deleted.</p>
-  <p>Authentication system powered by MSPK Apps.</p>
+  <p>Authentication system powered by MSPK APPS (mspkapps.in).</p>
 `;
 
 // Google user welcome email
@@ -67,7 +67,7 @@ const buildGoogleUserWelcomeEmail = ({ appName, email, verificationUrl }) => `
   <p>To enable traditional email/password login, you can optionally set a password:</p>
   <a href="${verificationUrl}">${verificationUrl}</a>
   <p>This link will expire in 24 hours.</p>
-  <p>Authentication system powered by MSPK Apps.</p>
+  <p>Authentication system powered by MSPK APPS (mspkapps.in).</p>
 `;
 
 // Set password for Google user
@@ -78,14 +78,14 @@ const buildSetPasswordGoogleUserEmail = ({ appName, name, verificationUrl }) => 
   <a href="${verificationUrl}">${verificationUrl}</a>
   <p>This link will expire in 24 hours.</p>
   <p>Purpose: Set Password - Google User</p>
-  <p>Authentication system powered by MSPK Apps.</p>
+  <p>Authentication system powered by MSPK APPS (mspkapps.in).</p>
 `;
 
 // Password set confirmation for Google user
 const buildPasswordSetConfirmationEmail = ({ changedAt }) => `
   <h2>Your password was set on ${changedAt}!</h2>
   <p>You can now login with your email and password.</p>
-  <p>Authentication system powered by MSPK Apps.</p>
+  <p>Authentication system powered by MSPK APPS (mspkapps.in).</p>
 `;
 
 // App support email verification

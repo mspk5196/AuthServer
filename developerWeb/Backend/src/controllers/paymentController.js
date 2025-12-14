@@ -1,6 +1,8 @@
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
 const pool = require('../config/db');
+const { sendMail } = require('../utils/mailer');
+const { buildPlanChangeEmail } = require('../templates/emailTemplates');
 
 // Initialize Razorpay instance
 const razorpay = new Razorpay({
@@ -194,40 +196,66 @@ const verifyPayment = async (req, res) => {
 
     // Get plan details
     const planResult = await client.query(
-      'SELECT id, duration_days FROM dev_plans WHERE id = $1',
+      'SELECT id, name, duration_days, price FROM dev_plans WHERE id = $1',
       [order.plan_id]
     );
 
     const plan = planResult.rows[0];
 
-    // Deactivate existing active plans
-    const existingPlanResult = await client.query(
-      'SELECT id, plan_id FROM developer_plan_registrations WHERE developer_id = $1 AND is_active = true',
+    // Developer details for email
+    const devRes = await client.query(
+      'SELECT id, email, name FROM developers WHERE id = $1',
       [developerId]
     );
 
-    let oldPlanId = null;
-    if (existingPlanResult.rows.length > 0) {
-      oldPlanId = existingPlanResult.rows[0].plan_id;
-      await client.query(
-        'UPDATE developer_plan_registrations SET is_active = false, updated_at = NOW() WHERE developer_id = $1 AND is_active = true',
-        [developerId]
-      );
-    }
-
-    // Calculate end date
-    const endDate = plan.duration_days 
-      ? `NOW() + INTERVAL '${plan.duration_days} days'`
-      : 'NULL';
-
-    // Create new plan registration
-    const registrationResult = await client.query(
-      `INSERT INTO developer_plan_registrations 
-        (developer_id, plan_id, start_date, end_date, is_active, renewal_count, auto_renew, created_at, updated_at)
-       VALUES ($1, $2, NOW(), ${endDate}, true, 0, false, NOW(), NOW())
-       RETURNING id, start_date, end_date`,
-      [developerId, order.plan_id]
+    // Active plan (if any)
+    const existingPlanResult = await client.query(
+      'SELECT id, plan_id, start_date, end_date, renewal_count FROM developer_plan_registrations WHERE developer_id = $1 AND is_active = true',
+      [developerId]
     );
+
+    const existingPlan = existingPlanResult.rows[0];
+    let oldPlanId = existingPlan ? existingPlan.plan_id : null;
+    let action = 'initial_purchase';
+    let registrationRow;
+
+    const isRenewal = existingPlan && existingPlan.plan_id === order.plan_id && plan.duration_days;
+
+    if (isRenewal) {
+      action = 'renewal';
+      const updated = await client.query(
+        `UPDATE developer_plan_registrations
+           SET end_date = COALESCE(end_date, NOW()) + INTERVAL '${plan.duration_days} days',
+               renewal_count = renewal_count + 1,
+               updated_at = NOW()
+         WHERE id = $1
+         RETURNING id, start_date, end_date`,
+        [existingPlan.id]
+      );
+      registrationRow = updated.rows[0];
+    } else {
+      if (existingPlan) {
+        action = 'upgrade';
+        await client.query(
+          'UPDATE developer_plan_registrations SET is_active = false, updated_at = NOW() WHERE developer_id = $1 AND is_active = true',
+          [developerId]
+        );
+      }
+
+      const endDate = plan.duration_days 
+        ? `NOW() + INTERVAL '${plan.duration_days} days'`
+        : 'NULL';
+
+      const inserted = await client.query(
+        `INSERT INTO developer_plan_registrations 
+          (developer_id, plan_id, start_date, end_date, is_active, renewal_count, auto_renew, created_at, updated_at)
+         VALUES ($1, $2, NOW(), ${endDate}, true, 0, false, NOW(), NOW())
+         RETURNING id, start_date, end_date`,
+        [developerId, order.plan_id]
+      );
+
+      registrationRow = inserted.rows[0];
+    }
 
     // Record plan change in history
     await client.query(
@@ -238,20 +266,44 @@ const verifyPayment = async (req, res) => {
         developerId,
         oldPlanId,
         order.plan_id,
-        oldPlanId ? 'upgrade' : 'initial_purchase',
+        action,
         `Paid ₹${order.amount} via ${payment.method}`
       ]
     );
 
     await client.query('COMMIT');
 
+    const subjectMap = {
+      initial_purchase: 'Plan Purchased - Auth Platform',
+      upgrade: 'Plan Upgraded - Auth Platform',
+      renewal: 'Plan Renewed - Auth Platform'
+    };
+
+    try {
+      await sendMail({
+        to: devRes.rows[0].email,
+        subject: subjectMap[action] || 'Plan Updated - Auth Platform',
+        html: buildPlanChangeEmail({
+          name: devRes.rows[0].name,
+          planName: plan.name,
+          action,
+          startDate: registrationRow.start_date,
+          endDate: registrationRow.end_date,
+          changedAt: new Date().toLocaleString()
+        }),
+      });
+    } catch (emailError) {
+      console.error('Failed to send plan change notification:', emailError);
+    }
+
     res.status(200).json({
       success: true,
       message: 'Payment verified and plan activated successfully',
       data: {
+        action,
         paymentId: razorpay_payment_id,
         orderId: razorpay_order_id,
-        registration: registrationResult.rows[0]
+        registration: registrationRow
       }
     });
 

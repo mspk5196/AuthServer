@@ -30,6 +30,11 @@ const Home = () => {
 
   return (
     <div className="home-page">
+      <div className="region-banner">
+        <div className="container">
+          <p>This developer platform is currently available only in India.</p>
+        </div>
+      </div>
       <section className="hero">
         <div className="container">
           <div className="hero-content">
@@ -44,6 +49,9 @@ const Home = () => {
               </Link>
               <Link to="/login" className="btn btn-outline btn-lg">
                 Sign In
+              </Link>
+              <Link to="/pricing" className="btn btn-secondary btn-lg">
+                View Pricing
               </Link>
             </div>
           </div>

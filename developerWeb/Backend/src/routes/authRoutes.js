@@ -49,6 +49,7 @@ router.post('/request-password-change', authController.requestPasswordChange);
 router.get('/my-plan', planController.getDeveloperPlan);
 router.post('/select-plan', planController.selectPlan);
 router.post('/upgrade-plan', planController.upgradePlan);
+router.post('/cancel-plan', planController.cancelPlan);
 
 // Payment routes (authenticated)
 router.post('/payment/create-order', paymentController.createOrder);

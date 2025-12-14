@@ -27,14 +27,21 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
     }
   };
 
+  const isFreePrice = (price) => {
+    if (price === null || price === undefined) return true;
+    const numeric = Number(price);
+    if (Number.isNaN(numeric)) return false;
+    return numeric === 0;
+  };
+
   const handleSelectPlan = async (planId, planPrice) => {
     try {
       setSelecting(true);
       setSelectedPlanId(planId);
       setError('');
 
-      // If plan is free, select directly
-      if (!planPrice || planPrice === 0) {
+      // If plan is free, select directly (no Razorpay)
+      if (isFreePrice(planPrice)) {
         const response = await api.post('/developer/select-plan', { planId });
         
         if (response.success) {
@@ -92,8 +99,10 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
   };
 
   const formatPrice = (price) => {
-    if (!price || price === 0) return 'Free';
-    return `₹${parseFloat(price).toFixed(2)}`;
+    if (isFreePrice(price)) return 'Free';
+    const numeric = Number(price);
+    if (Number.isNaN(numeric)) return '₹0.00';
+    return `₹${numeric.toFixed(2)}`;
   };
 
   const formatDuration = (days) => {
@@ -113,11 +122,69 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
     );
   }
 
-  const normalizeFeatures = (raw) => {
-    if (Array.isArray(raw)) return raw.filter(Boolean);
-    if (raw && typeof raw === 'object') return Object.values(raw).filter(Boolean);
-    if (typeof raw === 'string') return [raw];
-    return [];
+  const normalizeFeatures = (plan) => {
+    if (!plan) return [];
+
+    const source =
+      (plan.features_desc && typeof plan.features_desc === 'object' && plan.features_desc) ||
+      (plan.features && typeof plan.features === 'object' && plan.features) ||
+      null;
+
+    const features = [];
+
+    if (!source) {
+      if (Array.isArray(plan.features)) return plan.features.filter(Boolean);
+      if (typeof plan.features === 'string') return [plan.features];
+      return [];
+    }
+
+    const {
+      support,
+      visible,
+      max_apps,
+      google_login,
+      max_api_calls,
+      ...rest
+    } = source;
+
+    if (support) {
+      features.push(typeof support === 'string' ? support : `Support: ${support}`);
+    }
+
+    if (max_apps) {
+      if (typeof max_apps === 'number') {
+        features.push(`Up to ${max_apps} apps`);
+      } else {
+        features.push(String(max_apps));
+      }
+    }
+
+    if (google_login !== undefined) {
+      if (google_login) {
+        features.push('Google login integration included');
+      }
+    }
+
+    if (max_api_calls) {
+      if (typeof max_api_calls === 'number') {
+        features.push(`Up to ${max_api_calls.toLocaleString()} API calls per month`);
+      } else {
+        features.push(String(max_api_calls));
+      }
+    }
+
+    Object.entries(rest).forEach(([key, value]) => {
+      if (!value || key === 'visible') return;
+      if (typeof value === 'boolean') {
+        if (value) {
+          features.push(key.replace(/_/g, ' '));
+        }
+      } else {
+        features.push(String(value));
+      }
+    });
+
+    return features.filter(Boolean);
   };
 
   return (
@@ -139,10 +206,10 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
 
         <div className="plans-grid">
           {(plans || []).map((plan) => {
-            const features = normalizeFeatures(plan?.features);
+            const features = normalizeFeatures(plan);
 
             const isSelecting = selecting && selectedPlanId === plan.id;
-            const isFree = !plan.price || plan.price === 0;
+            const isFree = isFreePrice(plan.price);
             const isCurrent = currentPlanId && currentPlanId === plan.id;
 
             return (
@@ -154,7 +221,7 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
                   )}
                   <div className="plan-price">
                     <span className="price-amount">{formatPrice(plan.price)}</span>
-                    {plan.price > 0 && (
+                    {!isFreePrice(plan.price) && (
                       <span className="price-duration">{formatDuration(plan.duration_days)}</span>
                     )}
                   </div>

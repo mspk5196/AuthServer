@@ -14,7 +14,8 @@ const getPlans = async (req, res) => {
   description, 
   price, 
   duration_days, 
-  features, 
+  features,
+  features_desc,
   is_active
 FROM dev_plans
 WHERE 

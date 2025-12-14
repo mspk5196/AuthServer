@@ -19,8 +19,7 @@ const Login = () => {
   const [unverifiedEmail, setUnverifiedEmail] = useState(null);
   const [resendingEmail, setResendingEmail] = useState(false);
   const [pendingPolicies, setPendingPolicies] = useState(null);
-        policy_not_accepted: 'Please review and accept the latest policies before continuing. You can sign in with email/password to see and accept them, or open the Policies page.',
-        session_expired: 'Your session has expired. Please sign in again to continue.',
+        
   const [acceptingPolicies, setAcceptingPolicies] = useState(false);
   const [showOAuthPolicyModal, setShowOAuthPolicyModal] = useState(false);
   const [oauthPolicyToken, setOauthPolicyToken] = useState(null);

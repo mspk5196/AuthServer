@@ -29,7 +29,7 @@ const paymentService = {
    * Initialize Razorpay checkout
    */
   initiatePayment: (orderData, onSuccess, onError) => {
-    if (!window.Razorpay) {
+    if (!window.Razorpay) { 
       onError(new Error('Razorpay SDK not loaded'));
       return;
     }

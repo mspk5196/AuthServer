@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../utils/api';
 import PlanSelection from '../../components/PlanSelection';
@@ -111,6 +112,9 @@ const Dashboard = () => {
             >
               {openingCpanel ? 'Opening cPanel…' : 'Open cPanel'}
             </button>
+            <Link to="/policies" className="btn btn-outline btn-large" style={{ marginLeft: '1rem' }}>
+              View Policies
+            </Link>
           </div>
 
           {cpanelError && (

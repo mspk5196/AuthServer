@@ -86,18 +86,8 @@ const Register = () => {
         ...formData,
         acceptPolicies: true,
       });
-      // console.log('Registration response:', response);
-      
-      setRegistrationSuccess(true);
-      setRegisteredEmail(formData.email);
-      setMessage({
-        type: 'success',
-        text: 'Registration successful! Verification email sent to your inbox (valid for 5 minutes).',
-      });
-      
-      // setTimeout(() => {
-      //   navigate('/login');
-      // }, 2000);
+      // After successful registration, navigate to login screen
+      navigate('/login');
     } catch (error) {
       console.error('Registration error:', error);
       setMessage({

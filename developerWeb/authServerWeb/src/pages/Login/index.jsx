@@ -38,6 +38,7 @@ const Login = () => {
         no_email: 'Authentication failed: No email provided by Google',
         blocked: 'This account has been blocked. Please contact support.',
         auth_failed: 'Google authentication failed. Please try again.',
+        policy_not_accepted: 'Please review and accept the latest policies before continuing. You can sign in with email/password to see and accept them, or open the Policies page.',
       };
       setMessage({
         type: 'error',
@@ -281,6 +282,15 @@ const Login = () => {
                 <h3>Policy Update</h3>
                 <p className="policy-intro">
                   To continue, please review and accept the following policies. You can also read them any time on the public pages.
+                </p>
+                <p className="policy-intro" style={{ marginTop: '0.25rem' }}>
+                  You can open the full documents here:
+                  {' '}
+                  <Link to="/policies">All Policies</Link>,{' '}
+                  <Link to="/terms">Terms</Link>,{' '}
+                  <Link to="/privacy">Privacy</Link>,{' '}
+                  <Link to="/refund">Refund Policy</Link>
+                  .
                 </p>
                 <div className="policy-list">
                   {pendingPolicies.map((policy) => (

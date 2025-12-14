@@ -919,6 +919,50 @@ const changePasswordWithToken = async (req, res) => {
   }
 };
 
+/**
+ * Shared helper to enforce policy acceptance for a developer.
+ * Returns { blocked: true, redirectTo } if policies are not accepted.
+ */
+const checkDeveloperPoliciesForOAuth = async (developer) => {
+  try {
+    const policiesResult = await pool.query(
+      `SELECT id, key, title, content, version
+       FROM dev_policies
+       WHERE is_active = true
+       ORDER BY id ASC`
+    );
+
+    const activePolicies = policiesResult.rows;
+
+    if (!activePolicies.length) {
+      return { blocked: false };
+    }
+
+    const policyIds = activePolicies.map((p) => p.id);
+
+    const acceptedResult = await pool.query(
+      `SELECT policy_id
+       FROM dev_policy_acceptances
+       WHERE developer_id = $1 AND policy_id = ANY($2::int[])`,
+      [developer.id, policyIds]
+    );
+
+    const acceptedIds = new Set(acceptedResult.rows.map((row) => row.policy_id));
+    const unacceptedPolicyIds = policyIds.filter((id) => !acceptedIds.has(id));
+
+    if (unacceptedPolicyIds.length > 0) {
+      // Redirect back to login with a specific error so frontend can show guidance
+      const redirectTo = `${process.env.FRONTEND_URL}/login?error=policy_not_accepted`;
+      return { blocked: true, redirectTo };
+    }
+  } catch (err) {
+    console.error('Policy acceptance check during Google OAuth failed:', err);
+    // Do not block login on policy-check failure
+  }
+
+  return { blocked: false };
+};
+
 
 /**
  * Request password reset (forgot password)
@@ -1471,6 +1515,12 @@ const googleCallback = async (req, res) => {
     // Check if account is blocked
     if (developer.is_blocked) {
       return res.redirect(`${process.env.FRONTEND_URL}/login?error=blocked`);
+    }
+
+    // Enforce policy acceptance for Google sign-in as well
+    const policyCheck = await checkDeveloperPoliciesForOAuth(developer);
+    if (policyCheck.blocked && policyCheck.redirectTo) {
+      return res.redirect(policyCheck.redirectTo);
     }
 
     // Track login history

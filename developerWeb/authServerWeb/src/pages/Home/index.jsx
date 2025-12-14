@@ -53,6 +53,9 @@ const Home = () => {
               <Link to="/pricing" className="btn btn-secondary btn-lg">
                 View Pricing
               </Link>
+              <Link to="/policies" className="btn btn-text btn-lg">
+                View Policies
+              </Link>
             </div>
           </div>
         </div>

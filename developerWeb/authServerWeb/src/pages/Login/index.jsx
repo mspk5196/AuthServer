@@ -19,7 +19,7 @@ const Login = () => {
   const [unverifiedEmail, setUnverifiedEmail] = useState(null);
   const [resendingEmail, setResendingEmail] = useState(false);
   const [pendingPolicies, setPendingPolicies] = useState(null);
-        
+  const [policyAccepted, setPolicyAccepted] = useState(false);
   const [acceptingPolicies, setAcceptingPolicies] = useState(false);
   const [showOAuthPolicyModal, setShowOAuthPolicyModal] = useState(false);
   const [oauthPolicyToken, setOauthPolicyToken] = useState(null);

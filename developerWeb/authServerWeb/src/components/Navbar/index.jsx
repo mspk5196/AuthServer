@@ -19,7 +19,7 @@ const Navbar = () => {
     <nav className="navbar">
       <div className="container navbar-content">
         <Link to="/" className="navbar-brand">
-          <span className="logo">🔐</span>
+          <span className="logo"><img src="https://mspkapps.in/logo.svg" alt="Logo" /></span>
           <span className="brand-name">Auth Platform</span>
         </Link>
 

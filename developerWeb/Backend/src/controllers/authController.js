@@ -22,7 +22,7 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
  */
 const register = async (req, res) => {
   try {
-    const { name, username, email, password } = req.body;
+    const { name, username, email, password, acceptPolicies } = req.body;
 
     if (!name || !username || !email || !password) {
       return res.status(400).json({
@@ -50,6 +50,31 @@ const register = async (req, res) => {
     );
 
     const userId = result.rows[0].id;
+
+    // If registration indicates that policies were accepted, record acceptance
+    if (acceptPolicies) {
+      try {
+        const policiesResult = await pool.query(
+          `SELECT id FROM dev_policies WHERE is_active = true`
+        );
+
+        const policyIds = policiesResult.rows.map((row) => row.id);
+
+        if (policyIds.length > 0) {
+          await pool.query(
+            `INSERT INTO dev_policy_acceptances (developer_id, policy_id, accepted_at)
+             SELECT $1, id, NOW()
+             FROM dev_policies
+             WHERE id = ANY($2::int[])
+             ON CONFLICT (developer_id, policy_id) DO NOTHING`,
+            [userId, policyIds]
+          );
+        }
+      } catch (policyError) {
+        console.error('Failed to record policy acceptance during registration:', policyError);
+        // Do not fail registration if policy tables are missing or write fails
+      }
+    }
 
     const token = jwt.sign(
       { id: userId, email },
@@ -108,7 +133,7 @@ const register = async (req, res) => {
  */
 const developerLogin = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, acceptPolicies } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({
@@ -181,6 +206,61 @@ const developerLogin = async (req, res) => {
         error: 'EMAIL_NOT_VERIFIED',
         email: developer.email
       });
+    }
+
+    // Check current policy acceptance status against active policies
+    try {
+      const policiesResult = await pool.query(
+        `SELECT id, key, title, content, version
+         FROM dev_policies
+         WHERE is_active = true
+         ORDER BY id ASC`
+      );
+
+      const activePolicies = policiesResult.rows;
+
+      if (activePolicies.length > 0) {
+        const policyIds = activePolicies.map((p) => p.id);
+
+        const acceptedResult = await pool.query(
+          `SELECT policy_id
+           FROM dev_policy_acceptances
+           WHERE developer_id = $1 AND policy_id = ANY($2::int[])`,
+          [developer.id, policyIds]
+        );
+
+        const acceptedIds = new Set(acceptedResult.rows.map((row) => row.policy_id));
+        const unacceptedPolicyIds = policyIds.filter((id) => !acceptedIds.has(id));
+
+        // If there are unaccepted policies and client has not explicitly accepted them,
+        // block login and return the policies so the UI can display them.
+        if (unacceptedPolicyIds.length > 0 && !acceptPolicies) {
+          return res.status(403).json({
+            success: false,
+            message: 'You must review and accept the latest policies before continuing.',
+            error: 'POLICY_NOT_ACCEPTED',
+            data: {
+              policies: activePolicies,
+              unacceptedPolicyIds,
+            },
+          });
+        }
+
+        // If client indicated acceptance and there are unaccepted policies, record them now
+        if (unacceptedPolicyIds.length > 0 && acceptPolicies) {
+          await pool.query(
+            `INSERT INTO dev_policy_acceptances (developer_id, policy_id, accepted_at)
+             SELECT $1, id, NOW()
+             FROM dev_policies
+             WHERE id = ANY($2::int[])
+             ON CONFLICT (developer_id, policy_id) DO NOTHING`,
+            [developer.id, unacceptedPolicyIds]
+          );
+        }
+      }
+    } catch (policyError) {
+      console.error('Policy acceptance check during login failed:', policyError);
+      // If policy tables are missing or another error occurs, do not block login.
     }
 
     // Reset failed login attempts on successful login

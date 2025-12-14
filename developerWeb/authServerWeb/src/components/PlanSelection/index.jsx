@@ -3,7 +3,7 @@ import { api } from '../../utils/api';
 import paymentService from '../../services/paymentService';
 import './PlanSelection.scss';
 
-const PlanSelection = ({ onPlanSelected }) => {
+const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selecting, setSelecting] = useState(false);
@@ -125,7 +125,10 @@ const PlanSelection = ({ onPlanSelected }) => {
       <div className="plan-selection-container">
         <div className="plan-header">
           <h1>Choose Your Plan</h1>
-          <p>Select a plan to get started with your developer account</p>
+          <p>
+            Select a plan to get started, upgrade your current plan, or renew an existing paid plan.
+            Free plans do not require any payment.
+          </p>
         </div>
 
         {error && (
@@ -140,11 +143,15 @@ const PlanSelection = ({ onPlanSelected }) => {
 
             const isSelecting = selecting && selectedPlanId === plan.id;
             const isFree = !plan.price || plan.price === 0;
+            const isCurrent = currentPlanId && currentPlanId === plan.id;
 
             return (
               <div key={plan.id} className={`plan-card ${isFree ? 'plan-free' : ''}`}>
                 <div className="plan-card-header">
                   <h3 className="plan-name">{plan.name}</h3>
+                  {isCurrent && (
+                    <span className="current-plan-badge">Current plan</span>
+                  )}
                   <div className="plan-price">
                     <span className="price-amount">{formatPrice(plan.price)}</span>
                     {plan.price > 0 && (
@@ -178,7 +185,11 @@ const PlanSelection = ({ onPlanSelected }) => {
                     onClick={() => handleSelectPlan(plan.id, plan.price)}
                     disabled={selecting}
                   >
-                    {isSelecting ? 'Processing...' : (isFree ? `Select ${plan.name}` : `Buy ${plan.name}`)}
+                    {isSelecting
+                      ? 'Processing...'
+                      : isFree
+                        ? (isCurrent ? 'Stay on Free plan' : `Select ${plan.name}`)
+                        : (isCurrent ? 'Renew this plan' : `Buy ${plan.name}`)}
                   </button>
                 </div>
               </div>

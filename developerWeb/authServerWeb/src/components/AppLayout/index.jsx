@@ -6,6 +6,7 @@ import Login from '../../pages/Login';
 import Register from '../../pages/Register';
 import Dashboard from '../../pages/Dashboard';
 import Settings from '../../pages/Settings';
+import Plans from '../../pages/Plans';
 import ForgotPassword from '../../pages/ForgotPassword';
 import Pricing from '../../pages/Pricing';
 import Terms from '../../pages/Legal/Terms';
@@ -33,6 +34,14 @@ const AppLayout = () => {
             element={
               <PrivateRoute>
                 <Dashboard />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/plans"
+            element={
+              <PrivateRoute>
+                <Plans />
               </PrivateRoute>
             }
           />

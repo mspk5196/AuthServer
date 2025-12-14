@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../utils/api';
 import { authService } from '../../services/authService';
@@ -6,6 +7,7 @@ import './Settings.scss';
 
 const Settings = () => {
   const { developer, updateDeveloper } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('profile');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
@@ -172,8 +174,7 @@ const Settings = () => {
   };
 
   const handleUpgradePlan = () => {
-    // TODO: Navigate to plan selection/upgrade page
-    alert('Plan upgrade feature coming soon!');
+    navigate('/plans');
   };
 
   const formatDate = (date) => {
@@ -183,6 +184,16 @@ const Settings = () => {
       month: 'long',
       day: 'numeric'
     });
+  };
+
+  const normalizePlanFeatures = (plan) => {
+    if (!plan) return [];
+    const raw = plan.features_desc || plan.features;
+
+    if (Array.isArray(raw)) return raw.filter(Boolean);
+    if (raw && typeof raw === 'object') return Object.values(raw).filter(Boolean);
+    if (typeof raw === 'string') return [raw];
+    return [];
   };
 
   return (
@@ -313,7 +324,7 @@ const Settings = () => {
                   <div className="plan-detail">
                     <span className="label">Price:</span>
                     <span className="value">
-                      {currentPlan.price ? `$${parseFloat(currentPlan.price).toFixed(2)}` : 'Free'}
+                      {currentPlan.price ? `₹${parseFloat(currentPlan.price).toFixed(2)}` : 'Free'}
                     </span>
                   </div>
 
@@ -336,14 +347,11 @@ const Settings = () => {
                     </div>
                   )}
 
-                  {currentPlan.features && (
+                  {normalizePlanFeatures(currentPlan).length > 0 && (
                     <div className="plan-features">
                       <h4>Features:</h4>
                       <ul>
-                        {(Array.isArray(currentPlan.features_desc) 
-                          ? currentPlan.features_desc
-                          : Object.values(currentPlan.features_desc)
-                        ).map((feature, index) => (
+                        {normalizePlanFeatures(currentPlan).map((feature, index) => (
                           <li key={index}> {feature}</li>
                         ))}
                       </ul>

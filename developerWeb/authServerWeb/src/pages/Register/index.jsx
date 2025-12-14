@@ -22,6 +22,7 @@ const Register = () => {
   const [message, setMessage] = useState({ type: '', text: '' });
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState('');
+  const [acceptPolicies, setAcceptPolicies] = useState(false);
 
   const navigate = useNavigate();
 
@@ -65,6 +66,10 @@ const Register = () => {
       newErrors.confirmPassword = 'Passwords do not match';
     }
 
+    if (!acceptPolicies) {
+      newErrors.acceptPolicies = 'You must agree to the terms, privacy and refund policies';
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -77,8 +82,10 @@ const Register = () => {
 
     setLoading(true);
     try {
-      // console.log('Submitting registration with data:', formData);
-      const response = await authService.register(formData);
+      const response = await authService.register({
+        ...formData,
+        acceptPolicies: true,
+      });
       // console.log('Registration response:', response);
       
       setRegistrationSuccess(true);
@@ -208,6 +215,27 @@ const Register = () => {
               />
               {errors.confirmPassword && (
                 <span className="error-message">{errors.confirmPassword}</span>
+              )}
+            </div>
+
+            <div className="form-group">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={acceptPolicies}
+                  onChange={(e) => setAcceptPolicies(e.target.checked)}
+                  style={{ marginRight: '0.5rem' }}
+                />
+                <span>
+                  I agree to the Terms, Privacy Policy and Refund Policy.
+                  {' '}
+                  <Link to="/terms">View Terms</Link>,{' '}
+                  <Link to="/privacy">Privacy</Link>,{' '}
+                  <Link to="/refund">Refund Policy</Link>
+                </span>
+              </label>
+              {errors.acceptPolicies && (
+                <span className="error-message">{errors.acceptPolicies}</span>
               )}
             </div>
 

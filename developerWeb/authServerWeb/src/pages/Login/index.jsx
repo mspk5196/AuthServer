@@ -16,6 +16,9 @@ const Login = () => {
   const [message, setMessage] = useState({ type: '', text: '' });
   const [unverifiedEmail, setUnverifiedEmail] = useState(null);
   const [resendingEmail, setResendingEmail] = useState(false);
+  const [pendingPolicies, setPendingPolicies] = useState(null);
+  const [policyAccepted, setPolicyAccepted] = useState(false);
+  const [acceptingPolicies, setAcceptingPolicies] = useState(false);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -91,12 +94,14 @@ const Login = () => {
     e.preventDefault();
     setMessage({ type: '', text: '' });
     setUnverifiedEmail(null);
+    setPendingPolicies(null);
+    setPolicyAccepted(false);
 
     if (!validate()) return;
 
     setLoading(true);
     try {
-  await login(formData);
+      await login(formData);
       navigate('/dashboard');
     } catch (error) {
       // Handle specific error codes
@@ -116,7 +121,15 @@ const Login = () => {
           type: 'error',
           text: error.message || 'Account is temporarily locked due to multiple failed login attempts.',
         });
-      } else {
+      }  else if (error.error === 'POLICY_NOT_ACCEPTED') {
+        setPendingPolicies(error.data?.policies || []);
+        setPolicyAccepted(false);
+        setMessage({
+          type: 'info',
+          text: 'Please review and accept the latest terms, privacy and refund policies to continue.',
+        });
+      }
+      else {
         setMessage({
           type: 'error',
           text: error.message || 'Login failed. Please check your credentials.',
@@ -124,6 +137,32 @@ const Login = () => {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAcceptPolicies = async () => {
+    if (!pendingPolicies || !policyAccepted) return;
+
+    setAcceptingPolicies(true);
+    setMessage({ type: '', text: '' });
+
+    try {
+      await login({ ...formData, acceptPolicies: true });
+      navigate('/dashboard');
+    } catch (error) {
+      if (error.error === 'POLICY_NOT_ACCEPTED') {
+        setMessage({
+          type: 'error',
+          text: 'Unable to record policy acceptance. Please try again.',
+        });
+      } else {
+        setMessage({
+          type: 'error',
+          text: error.message || 'Login failed while accepting policies.',
+        });
+      }
+    } finally {
+      setAcceptingPolicies(false);
     }
   };
 
@@ -236,6 +275,46 @@ const Login = () => {
             >
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
+
+            {pendingPolicies && (
+              <div className="policy-consent">
+                <h3>Policy Update</h3>
+                <p className="policy-intro">
+                  To continue, please review and accept the following policies. You can also read them any time on the public pages.
+                </p>
+                <div className="policy-list">
+                  {pendingPolicies.map((policy) => (
+                    <div key={policy.id} className="policy-item">
+                      <h4>{policy.title}</h4>
+                      <div className="policy-content">
+                        <p>{policy.content}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="policy-actions">
+                  <label className="policy-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={policyAccepted}
+                      onChange={(e) => setPolicyAccepted(e.target.checked)}
+                    />
+                    <span>
+                      I have read and agree to the Terms, Privacy Policy and Refund Policy.
+                    </span>
+                  </label>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-block btn-lg"
+                    onClick={handleAcceptPolicies}
+                    disabled={!policyAccepted || acceptingPolicies}
+                    style={{ marginTop: '0.75rem' }}
+                  >
+                    {acceptingPolicies ? 'Saving acceptance...' : 'Accept & Continue'}
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="divider">
               <span>OR</span>

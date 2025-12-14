@@ -11,6 +11,7 @@ const Dashboard = () => {
   const [loadingPlan, setLoadingPlan] = useState(true);
   const [hasPlan, setHasPlan] = useState(false);
   const [currentPlan, setCurrentPlan] = useState(null);
+  const [stats, setStats] = useState({ totalApps: 0, monthApiCalls: 0 });
 
   useEffect(() => {
     checkDeveloperPlan();
@@ -23,6 +24,10 @@ const Dashboard = () => {
       
       setHasPlan(response.data.hasPlan);
       setCurrentPlan(response.data.plan);
+
+      if (response.data.hasPlan) {
+        await fetchDashboardStats();
+      }
     } catch (error) {
       console.error('Failed to check plan:', error);
       setHasPlan(false);
@@ -31,9 +36,27 @@ const Dashboard = () => {
     }
   };
 
-  const handlePlanSelected = (planData) => {
+  const fetchDashboardStats = async () => {
+    try {
+      const response = await api.get('/developer/dashboard/stats');
+      if (response.success) {
+        setStats(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch dashboard stats:', error);
+    }
+  };
+
+  const handlePlanSelected = async (planData) => {
     setHasPlan(true);
-    setCurrentPlan(planData.plan);
+    setCurrentPlan(planData.plan || planData);
+
+    // After selecting/upgrading a plan, immediately refresh stats
+    try {
+      await fetchDashboardStats();
+    } catch (err) {
+      console.error('Failed to refresh stats after plan change:', err);
+    }
   };
 
   const handleOpenCpanel = async () => {
@@ -99,13 +122,13 @@ const Dashboard = () => {
           <div className="dashboard-stats">
             <div className="stat-card">
               <h3>Apps</h3>
-              <p className="stat-value">0</p>
+              <p className="stat-value">{stats.totalApps || 0}</p>
               <p className="stat-label">Total Applications</p>
             </div>
 
             <div className="stat-card">
               <h3>API Calls</h3>
-              <p className="stat-value">0</p>
+              <p className="stat-value">{stats.monthApiCalls?.toLocaleString?.() || stats.monthApiCalls || 0}</p>
               <p className="stat-label">This Month</p>
             </div>
 

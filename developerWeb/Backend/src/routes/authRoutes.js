@@ -5,8 +5,10 @@ const { authenticateToken } = require('../middleware/auth');
 const { verifyDeveloper } = require('../controllers/verifyDeveloper.js');
 const authController = require('../controllers/authController');
 const planController = require('../controllers/planController');
+const dashboardController = require('../controllers/dashboardController');
 const profileController = require('../controllers/profileController');
 const paymentController = require('../controllers/paymentController');
+const policyController = require('../controllers/policyController');
 
 // Public routes (no authentication required)
 router.post('/register', authController.register);
@@ -14,6 +16,9 @@ router.post('/login', authController.developerLogin);
 router.post('/resend-verification', authController.resendVerificationEmail);
 router.get('/verify', verifyDeveloper);
 router.get('/verify-email-update', profileController.verifyEmailUpdate);
+
+// Public policies route (DB-backed policies for terms/privacy/refund)
+router.get('/policies', policyController.getActivePolicies);
 
 // Password reset (forgot password) - public
 router.post('/forgot-password', authController.requestPasswordReset);
@@ -50,6 +55,9 @@ router.get('/my-plan', planController.getDeveloperPlan);
 router.post('/select-plan', planController.selectPlan);
 router.post('/upgrade-plan', planController.upgradePlan);
 router.post('/cancel-plan', planController.cancelPlan);
+
+// Dashboard stats (authenticated)
+router.get('/dashboard/stats', dashboardController.getDashboardStats);
 
 // Payment routes (authenticated)
 router.post('/payment/create-order', paymentController.createOrder);

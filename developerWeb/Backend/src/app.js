@@ -4,6 +4,7 @@ const helmet = require('helmet');
 
 const authRoutes = require('./routes/authRoutes.js');
 const cPanelRoutes = require('./routes/cPanelRoutes.js');
+const paymentController = require('./controllers/paymentController.js');
 const { getRedis } = require('./config/redisClient.js');
 // Initialize Redis connection (no-op if fallback is used)
 getRedis().catch(console.error);
@@ -22,6 +23,9 @@ app.use((req, res, next) => {
   console.log(`[${req.method}] ${req.url}`);
   next();
 });
+
+// Razorpay webhook (must be before json parsing for raw body)
+app.post('/api/razorpay/webhook', express.raw({ type: 'application/json' }), paymentController.handleWebhook);
 
 // routes
 app.use('/api/developer', authRoutes);

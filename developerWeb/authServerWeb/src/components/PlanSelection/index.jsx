@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../utils/api';
+import paymentService from '../../services/paymentService';
 import './PlanSelection.scss';
 
 const PlanSelection = ({ onPlanSelected }) => {
@@ -26,29 +27,73 @@ const PlanSelection = ({ onPlanSelected }) => {
     }
   };
 
-  const handleSelectPlan = async (planId) => {
+  const handleSelectPlan = async (planId, planPrice) => {
     try {
       setSelecting(true);
       setSelectedPlanId(planId);
       setError('');
 
-      const response = await api.post('/developer/select-plan', { planId });
-      
-      if (response.success) {
-        onPlanSelected(response.data);
+      // If plan is free, select directly
+      if (!planPrice || planPrice === 0) {
+        const response = await api.post('/developer/select-plan', { planId });
+        
+        if (response.success) {
+          onPlanSelected(response.data);
+        }
+        return;
       }
+
+      // For paid plans, initiate Razorpay payment
+      const orderResponse = await paymentService.createOrder(planId);
+      
+      if (!orderResponse.success) {
+        throw new Error(orderResponse.message || 'Failed to create order');
+      }
+
+      // Open Razorpay checkout
+      paymentService.initiatePayment(
+        orderResponse.data,
+        async (razorpayResponse) => {
+          // Payment successful, verify on backend
+          try {
+            const verifyResponse = await paymentService.verifyPayment({
+              razorpay_order_id: razorpayResponse.razorpay_order_id,
+              razorpay_payment_id: razorpayResponse.razorpay_payment_id,
+              razorpay_signature: razorpayResponse.razorpay_signature
+            });
+
+            if (verifyResponse.success) {
+              onPlanSelected(verifyResponse.data);
+            } else {
+              setError('Payment verification failed. Please contact support.');
+            }
+          } catch (verifyError) {
+            console.error('Payment verification error:', verifyError);
+            setError('Payment verification failed. Please contact support with your payment ID.');
+          } finally {
+            setSelecting(false);
+            setSelectedPlanId(null);
+          }
+        },
+        (error) => {
+          // Payment failed or cancelled
+          console.error('Payment error:', error);
+          setError(error.description || 'Payment failed. Please try again.');
+          setSelecting(false);
+          setSelectedPlanId(null);
+        }
+      );
     } catch (err) {
       console.error('Failed to select plan:', err);
-      setError(err.response?.data?.message || 'Failed to select plan. Please try again.');
+      setError(err.response?.data?.message || err.message || 'Failed to select plan. Please try again.');
       setSelectedPlanId(null);
-    } finally {
       setSelecting(false);
     }
   };
 
   const formatPrice = (price) => {
     if (!price || price === 0) return 'Free';
-    return `$${parseFloat(price).toFixed(2)}`;
+    return `₹${parseFloat(price).toFixed(2)}`;
   };
 
   const formatDuration = (days) => {
@@ -127,10 +172,10 @@ const PlanSelection = ({ onPlanSelected }) => {
                 <div className="plan-card-footer">
                   <button
                     className={`btn ${isFree ? 'btn-primary' : 'btn-secondary'} btn-block`}
-                    onClick={() => handleSelectPlan(plan.id)}
+                    onClick={() => handleSelectPlan(plan.id, plan.price)}
                     disabled={selecting}
                   >
-                    {isSelecting ? 'Selecting...' : `Select ${plan.name}`}
+                    {isSelecting ? 'Processing...' : (isFree ? `Select ${plan.name}` : `Buy ${plan.name}`)}
                   </button>
                 </div>
               </div>

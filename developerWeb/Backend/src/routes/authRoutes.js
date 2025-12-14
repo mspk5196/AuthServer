@@ -6,6 +6,7 @@ const { verifyDeveloper } = require('../controllers/verifyDeveloper.js');
 const authController = require('../controllers/authController');
 const planController = require('../controllers/planController');
 const profileController = require('../controllers/profileController');
+const paymentController = require('../controllers/paymentController');
 
 // Public routes (no authentication required)
 router.post('/register', authController.register);
@@ -48,5 +49,10 @@ router.post('/request-password-change', authController.requestPasswordChange);
 router.get('/my-plan', planController.getDeveloperPlan);
 router.post('/select-plan', planController.selectPlan);
 router.post('/upgrade-plan', planController.upgradePlan);
+
+// Payment routes (authenticated)
+router.post('/payment/create-order', paymentController.createOrder);
+router.post('/payment/verify', paymentController.verifyPayment);
+router.get('/payment/history', paymentController.getPaymentHistory);
 
 module.exports = router;

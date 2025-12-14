@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { api } from '../../../services/api';
+import { api, API_BASE_URL } from '../../../services/api';
 import { tokenService } from '../../../services/tokenService';
 import './appDetailsSty.css';
 
@@ -131,7 +131,7 @@ export default function AppDetails(){
 
   async function handleExportCSV() {
     try {
-      const response = await fetch(`/api/developer/apps/users/${appId}/export-csv`, {
+      const response = await fetch(`${API_BASE_URL}/apps/users/${appId}/export-csv`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`

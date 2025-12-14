@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_CPANEL_API_BASE_URL;
+export const API_BASE_URL = import.meta.env.VITE_CPANEL_API_BASE_URL;
 
 export const api = {
   get: async (path, token) => {

@@ -61,10 +61,13 @@ const createOrder = async (req, res) => {
     const developer = devResult.rows[0];
 
     // Create Razorpay order
+    // Receipt must be max 40 chars
+    const receiptId = `rcpt_${Date.now()}`.slice(0, 40);
+    
     const options = {
       amount: Math.round(plan.price * 100), // Convert to paise
       currency: 'INR',
-      receipt: `receipt_${planId}_${developerId}_${Date.now()}`,
+      receipt: receiptId,
       notes: {
         plan_id: planId,
         plan_name: plan.name,

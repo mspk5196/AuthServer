@@ -77,6 +77,20 @@ const getPlanInfo = async (req, res) => {
     // Format features description array
     const featuresDesc = planInfo.features_desc || [];
 
+    // Derive billing cycle text from plan duration
+    let billingCycle = 'N/A';
+    if (planType === 'free') {
+      billingCycle = 'No Billing (Free plan)';
+    } else if (!planInfo.duration_days) {
+      billingCycle = 'Lifetime (no recurring billing)';
+    } else if (planInfo.duration_days === 30) {
+      billingCycle = 'Every 30 days (monthly)';
+    } else if (planInfo.duration_days === 365) {
+      billingCycle = 'Every 365 days (yearly)';
+    } else {
+      billingCycle = `Every ${planInfo.duration_days} days`;
+    }
+
     // Format the response
     const response = {
       plan_name: planInfo.plan_name,
@@ -100,7 +114,7 @@ const getPlanInfo = async (req, res) => {
       
       // Billing info
       price_monthly: planInfo.price,
-      billing_cycle: planType === 'free' ? 'No Billing' : 'Monthly',
+      billing_cycle: billingCycle,
       duration_days: planInfo.duration_days,
     };
 

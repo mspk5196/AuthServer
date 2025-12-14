@@ -45,6 +45,21 @@ const Settings = () => {
     return '';
   };
 
+  const getBillingCycleLabel = () => {
+    if (!planInfo) return 'N/A';
+    if (planInfo.plan_type === 'free') return 'No Billing (Free plan)';
+
+    const days = planInfo.duration_days;
+    if (!days) return 'Lifetime (no recurring billing)';
+    if (days === 30) return 'Every 30 days (monthly)';
+    if (days === 365) return 'Every 365 days (yearly)';
+    return `Every ${days} days`;
+  };
+
+  const handleUpgradePlanClick = () => {
+    window.open('https://authservices.mspkapps.in/plans', '_blank', 'noopener');
+  };
+
   if (loading) {
     return (
       <div className="settings-page">
@@ -108,11 +123,9 @@ const Settings = () => {
           <div>
             <div className="plan-name">{planInfo?.plan_name || 'Free'} Plan</div>
           </div>
-          {planInfo?.plan_type !== 'free' && (
-            <button className="btn btn-secondary">
-              Upgrade Plan
-            </button>
-          )}
+          <button className="btn btn-secondary" onClick={handleUpgradePlanClick}>
+            {planInfo?.plan_type === 'free' ? 'Upgrade Plan in Developer Portal' : 'Manage Plan in Developer Portal'}
+          </button>
         </div>
         <div className="plan-details">
           {planInfo?.expiry_date ? (
@@ -135,7 +148,17 @@ const Settings = () => {
           <div className="plan-detail">
             <div className="plan-detail-label">Billing Cycle</div>
             <div className="plan-detail-value">
-              {planInfo?.plan_type === 'free' ? 'No Billing' : 'Monthly'}
+              {getBillingCycleLabel()}
+            </div>
+          </div>
+          <div className="plan-detail">
+            <div className="plan-detail-label">Plan Duration</div>
+            <div className="plan-detail-value">
+              {planInfo?.duration_days
+                ? `${planInfo.duration_days} days (billing cycle matches plan duration)`
+                : planInfo?.plan_type === 'free'
+                  ? 'No fixed duration (free plan)'
+                  : 'Lifetime / until cancelled'}
             </div>
           </div>
         </div>

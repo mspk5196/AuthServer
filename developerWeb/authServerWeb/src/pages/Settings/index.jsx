@@ -196,6 +196,19 @@ const Settings = () => {
     return [];
   };
 
+  const getBillingCycleLabel = (plan) => {
+    if (!plan) return 'N/A';
+
+    const isFree = !plan.price || Number(plan.price) === 0;
+    if (isFree) return 'No Billing (Free plan)';
+
+    const days = plan.duration_days;
+    if (!days) return 'Lifetime (no recurring billing)';
+    if (days === 30) return 'Every 30 days (monthly)';
+    if (days === 365) return 'Every 365 days (yearly)';
+    return `Every ${days} days`;
+  };
+
   return (
     <div className="settings-page">
       <div className="settings-container">
@@ -325,6 +338,22 @@ const Settings = () => {
                     <span className="label">Price:</span>
                     <span className="value">
                       {currentPlan.price ? `₹${parseFloat(currentPlan.price).toFixed(2)}` : 'Free'}
+                    </span>
+                  </div>
+
+                  <div className="plan-detail">
+                    <span className="label">Billing Cycle:</span>
+                    <span className="value">{getBillingCycleLabel(currentPlan)}</span>
+                  </div>
+
+                  <div className="plan-detail">
+                    <span className="label">Plan Duration:</span>
+                    <span className="value">
+                      {currentPlan.duration_days
+                        ? `${currentPlan.duration_days} days (billing cycle matches plan duration)`
+                        : (!currentPlan.price || Number(currentPlan.price) === 0)
+                          ? 'No fixed duration (free plan)'
+                          : 'Lifetime / until cancelled'}
                     </span>
                   </div>
 

@@ -950,28 +950,38 @@ const exportUsersCSV = async (req, res) => {
     // Get all users for this app (exclude password_hash)
     const usersResult = await pool.query(`
       SELECT 
-        id, email, first_name, last_name, phone, 
-        account_status, auth_method, is_email_verified,
-        created_at, updated_at
-      FROM public_users
+        id,
+        email,
+        name,
+        username,
+        email_verified,
+        is_blocked,
+        last_login,
+        created_at
+      FROM users
       WHERE app_id = $1
       ORDER BY created_at DESC
     `, [appId]);
 
+    const fields = [
+      'id',
+      'email',
+      'name',
+      'username',
+      'email_verified',
+      'is_blocked',
+      'last_login',
+      'created_at',
+    ];
+
+    let csv;
     if (usersResult.rows.length === 0) {
-      return res.json({
-        success: true,
-        message: 'No users to export',
-        data: []
-      });
+      // No users: send header-only CSV so Excel still opens a valid sheet
+      csv = fields.join(',') + '\n';
+    } else {
+      const parser = new Parser({ fields });
+      csv = parser.parse(usersResult.rows);
     }
-
-    // Convert to CSV
-    const parser = new Parser({
-      fields: ['id', 'email', 'first_name', 'last_name', 'phone', 'account_status', 'auth_method', 'is_email_verified', 'created_at', 'updated_at']
-    });
-
-    const csv = parser.parse(usersResult.rows);
 
     // Set response headers for CSV download
     res.setHeader('Content-Type', 'text/csv');

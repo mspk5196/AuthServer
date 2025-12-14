@@ -184,26 +184,28 @@ const selectPlan = async (req, res) => {
 
         registrationRow = updated.rows[0];
       } else {
+        // Upgrade: reuse the existing registration row to avoid
+        // unique constraint conflicts on (developer_id, is_active).
         action = 'upgrade';
 
-        await client.query(
-          'UPDATE developer_plan_registrations SET is_active = false, updated_at = NOW() WHERE developer_id = $1 AND is_active = true',
-          [developerId]
-        );
-
-        const endDate = plan.duration_days 
+        const endDateExpr = plan.duration_days 
           ? `NOW() + INTERVAL '${plan.duration_days} days'`
           : 'NULL';
 
-        const inserted = await client.query(
-          `INSERT INTO developer_plan_registrations 
-            (developer_id, plan_id, start_date, end_date, is_active, renewal_count, auto_renew, created_at, updated_at)
-           VALUES ($1, $2, NOW(), ${endDate}, true, 0, false, NOW(), NOW())
-           RETURNING id, start_date, end_date`,
-          [developerId, planId]
+        const updated = await client.query(
+          `UPDATE developer_plan_registrations
+             SET plan_id = $2,
+                 start_date = NOW(),
+                 end_date = ${endDateExpr},
+                 renewal_count = 0,
+                 is_active = true,
+                 updated_at = NOW()
+           WHERE id = $1
+           RETURNING id, start_date, end_date;`,
+          [existingPlan.id, planId]
         );
 
-        registrationRow = inserted.rows[0];
+        registrationRow = updated.rows[0];
       }
     } else {
       const endDate = plan.duration_days 

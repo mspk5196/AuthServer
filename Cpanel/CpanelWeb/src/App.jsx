@@ -18,6 +18,7 @@ import VerifyAppEmail from './pages/Apps/VerifyAppEmail/VerifyAppEmail';
 function App() {
   const { developer, setDeveloper, loading, setLoading } = useAuth();
   const consumedOnceRef = useRef(false);
+  const mainPortalUrl = import.meta.env.VITE_MAIN_PORTAL_URL || 'https://authservices.mspkapps.in';
 
   const ticket = useMemo(() => {
     const qsTicket = new URLSearchParams(window.location.search).get('ticket');
@@ -84,6 +85,13 @@ function App() {
     init();
   }, [ticket, setDeveloper, setLoading]);
 
+  // If not authenticated after initialization, redirect back to main developer portal
+  useEffect(() => {
+    if (!loading && !developer) {
+      window.location.href = mainPortalUrl;
+    }
+  }, [loading, developer, mainPortalUrl]);
+
   if (loading) {
     return (
       <div className="container">
@@ -91,16 +99,12 @@ function App() {
       </div>
     );
   }
-
   if (!developer) {
-    useEffect(() => {
-      window.location.href = 'https://authservices.mspkapps.in/';
-    }, []);
     return (
       <div className="container">
-        <h2>Not authenticated</h2>
+        <h2>Redirecting...</h2>
         <p style={{ color: 'var(--danger-color, crimson)' }}>
-          Please return to the main portal and click "Open cPanel" to authenticate.
+          Your session has expired or you are not authenticated. Redirecting to the main portal...
         </p>
       </div>
     );

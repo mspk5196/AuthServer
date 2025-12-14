@@ -19,7 +19,13 @@ const Navbar = () => {
     <nav className="navbar">
       <div className="container navbar-content">
         <Link to="/" className="navbar-brand">
-          <span className="logo"><img src="https://mspkapps.in/logo.svg" alt="Logo" style={{height:'50px',width:'50px', borderRadius:'50px'}}/></span>
+          <span className="logo">
+            <img
+              src="/logo.png"
+              alt="MSPK Apps"
+              style={{ height: '40px', width: '40px', borderRadius: '8px' }}
+            />
+          </span>
           <span className="brand-name">Auth Platform</span>
         </Link>
 

@@ -6,7 +6,7 @@ const paymentService = {
    */
   createOrder: async (planId) => {
     const response = await api.post('/developer/payment/create-order', { planId });
-    return response.data;
+    return response;
   },
 
   /**
@@ -14,7 +14,7 @@ const paymentService = {
    */
   verifyPayment: async (paymentData) => {
     const response = await api.post('/developer/payment/verify', paymentData);
-    return response.data;
+    return response;
   },
 
   /**
@@ -22,7 +22,7 @@ const paymentService = {
    */
   getPaymentHistory: async () => {
     const response = await api.get('/developer/payment/history');
-    return response.data;
+    return response;
   }, 
 
   /**

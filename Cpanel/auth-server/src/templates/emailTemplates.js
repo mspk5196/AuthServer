@@ -130,7 +130,7 @@ const buildAppDeleteConfirmationEmail = ({ appName, developerName, confirmationU
   </p>
   <p style="color:#b91c1c;font-size:13px;">
     Warning: This action is irreversible. If you did not initiate this request,
-    please ignore this email or contact support at support@mspkapps.in.
+    please ignore this email or contact support at <a href="mailto:${process.env.SUPPORT_EMAIL}">${process.env.SUPPORT_EMAIL}</a>.
   </p>
   <p style="margin-top:16px;font-size:12px;color:#6b7280;">
     Authentication system powered by MSPK APPS (mspkapps.in).

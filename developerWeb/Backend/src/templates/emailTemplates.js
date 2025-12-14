@@ -1,3 +1,5 @@
+const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'support.mspk@mspkapps.in';
+
 const buildVerifyAccountEmail = ({ name, verifyLink }) => `
   <img src="https://mspkapps.in/logo.svg" alt="MSPK Apps" style="height:40px;margin-bottom:16px;" />
   <h2>Verify your Developer Account</h2>
@@ -7,7 +9,7 @@ const buildVerifyAccountEmail = ({ name, verifyLink }) => `
   <br /><br />
   <p>If you did not request this, please ignore this email.</p>
   <br />
-  <p>Contact support at <a href="mailto:support.mspk@mspkapps.in">support.mspk@mspkapps.in</a></p>
+  <p>Contact support at <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a></p>
   <p>Powered by MSPK APPS</p>
 `;
 
@@ -20,7 +22,7 @@ const buildEmailUpdateVerificationEmail = ({ name, verifyLink }) => `
   <br /><br />
   <p>If you did not make this change, please contact support immediately.</p>
   <br />
-  <p>Contact support at <a href="mailto:support.mspk@mspkapps.in">support.mspk@mspkapps.in</a></p>
+  <p>Contact support at <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a></p>
   <p>Powered by MSPK APPS</p>
 `;
 
@@ -35,7 +37,7 @@ const buildPasswordChangedEmail = ({ name, changedAt }) => `
   <p>Changed at: ${changedAt}</p>
   <br />
   <p>Best regards,<br />MSPK Auth Platform Support</p>
-  <p>Contact support at <a href="mailto:support.mspk@mspkapps.in">support.mspk@mspkapps.in</a></p>
+  <p>Contact support at <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a></p>
   <p>Powered by MSPK APPS</p>
 `;
 
@@ -50,7 +52,7 @@ const buildPlanSelectionEmail = ({ name, changedAt }) => `
   <p>Changed at: ${changedAt}</p>
   <br />
   <p>Best regards,<br />MSPK Auth Platform Support</p>
-  <p>Contact support at <a href="mailto:support.mspk@mspkapps.in">support.mspk@mspkapps.in</a></p>
+  <p>Contact support at <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a></p>
   <p>Powered by MSPK APPS</p>
 `;
 
@@ -79,7 +81,7 @@ const buildPlanChangeEmail = ({ name, planName, action, startDate, endDate, chan
   <p>Changed at: ${changedAt}</p>
   <br />
   <p>Best regards,<br />MSPK Auth Platform Support</p>
-  <p>Contact support at <a href="mailto:support.mspk@mspkapps.in">support.mspk@mspkapps.in</a></p>
+  <p>Contact support at <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a></p>
   <p>Powered by MSPK APPS</p>
 `;
 };
@@ -101,7 +103,7 @@ const buildPlanCancelledEmail = ({ name, planName, cancelledAt, endDate }) => {
   <p>Cancelled at: ${cancelledAt}</p>
   <br />
   <p>Best regards,<br />MSPK Auth Platform Support</p>
-  <p>Contact support at <a href="mailto:support.mspk@mspkapps.in">support.mspk@mspkapps.in</a></p>
+  <p>Contact support at <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a></p>
   <p>Powered by MSPK APPS</p>
 `;
 };
@@ -120,7 +122,7 @@ const buildPlanExpiredEmail = ({ name, planName, endDate }) => {
   <p>Please log in to renew or upgrade your plan.</p>
   <br />
   <p>Best regards,<br />MSPK Auth Platform Support</p>
-  <p>Contact support at <a href="mailto:support.mspk@mspkapps.in">support.mspk@mspkapps.in</a></p>
+  <p>Contact support at <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a></p>
   <p>Powered by MSPK APPS</p>
 `;
 };
@@ -133,7 +135,7 @@ const buildPlanInactiveEmail = ({ name, planName }) => `
   <p>Please choose another active plan to continue using premium features.</p>
   <br />
   <p>Best regards,<br />MSPK Auth Platform Support</p>
-  <p>Contact support at <a href="mailto:support.mspk@mspkapps.in">support.mspk@mspkapps.in</a></p>
+  <p>Contact support at <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a></p>
   <p>Powered by MSPK APPS</p>
 `;
 
@@ -180,7 +182,7 @@ const buildUsageReminderEmail = ({
   <p>You can upgrade your plan at any time from the developer portal.</p>
   <br />
   <p>Best regards,<br />MSPK Auth Platform Support</p>
-  <p>Contact support at <a href="mailto:support.mspk@mspkapps.in">support.mspk@mspkapps.in</a></p>
+  <p>Contact support at <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a></p>
   <p>Powered by MSPK APPS</p>
 `;
 };
@@ -196,7 +198,7 @@ const buildPasswordChangeRequestEmail = ({ name, changeUrl }) => `
   <p>If you didn't request this, please ignore this email.</p>
   <br />
   <p>Best regards,<br />MSPK Auth Platform Support</p>
-  <p>Contact support at <a href="mailto:support.mspk@mspkapps.in">support.mspk@mspkapps.in</a></p>
+  <p>Contact support at <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a></p>
   <p>Powered by MSPK APPS</p>
 `;
 
@@ -211,7 +213,7 @@ const buildPasswordResetEmail = ({ name, resetUrl }) => `
   <p>If you didn't request this, please ignore this email.</p>
   <br />
   <p>Best regards,<br />MSPK Auth Platform Support</p>
-  <p>Contact support at <a href="mailto:support.mspk@mspkapps.in">support.mspk@mspkapps.in</a></p>
+  <p>Contact support at <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a></p>
   <p>Powered by MSPK APPS</p>
 `;
 

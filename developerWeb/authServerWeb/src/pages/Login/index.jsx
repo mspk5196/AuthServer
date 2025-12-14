@@ -4,6 +4,8 @@ import { authService } from '../../services/authService';
 import { useAuth } from '../../context/AuthContext';
 import { validateEmail, validatePassword } from '../../utils/validators';
 import { tokenService } from '../../services/tokenService';
+import Modal from '../../components/Modal';
+import { API_URL } from '../../utils/api';
 import './Login.scss';
 
 const Login = () => {
@@ -19,6 +21,10 @@ const Login = () => {
   const [pendingPolicies, setPendingPolicies] = useState(null);
   const [policyAccepted, setPolicyAccepted] = useState(false);
   const [acceptingPolicies, setAcceptingPolicies] = useState(false);
+  const [showOAuthPolicyModal, setShowOAuthPolicyModal] = useState(false);
+  const [oauthPolicyToken, setOauthPolicyToken] = useState(null);
+  const [oauthPolicyAccepted, setOauthPolicyAccepted] = useState(false);
+  const [acceptingOAuthPolicies, setAcceptingOAuthPolicies] = useState(false);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -30,15 +36,23 @@ const Login = () => {
     const token = params.get('token');
     const refreshToken = params.get('refreshToken');
     const error = params.get('error');
+    const policyToken = params.get('token');
 
-    if (error) {
+    if (error === 'policy_not_accepted' && policyToken) {
+      // Show modal for policy acceptance
+      setOauthPolicyToken(policyToken);
+      setShowOAuthPolicyModal(true);
+      setOauthPolicyAccepted(false);
+      // Clean up URL
+      window.history.replaceState({}, '', '/login');
+    } else if (error) {
       const errorMessages = {
         no_code: 'Authentication failed: No authorization code received',
         no_token: 'Authentication failed: No token received',
         no_email: 'Authentication failed: No email provided by Google',
         blocked: 'This account has been blocked. Please contact support.',
         auth_failed: 'Google authentication failed. Please try again.',
-        policy_not_accepted: 'Please review and accept the latest policies before continuing. You can sign in with email/password to see and accept them, or open the Policies page.',
+        policy_not_accepted: 'Policy acceptance is required. Please try again.',
       };
       setMessage({
         type: 'error',
@@ -190,8 +204,110 @@ const Login = () => {
     }
   };
 
+  const handleAcceptOAuthPolicies = async () => {
+    if (!oauthPolicyToken || !oauthPolicyAccepted) return;
+
+    setAcceptingOAuthPolicies(true);
+
+    try {
+      const response = await fetch(`${API_URL}/api/developer/accept-policies-oauth`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token: oauthPolicyToken }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Failed to accept policies');
+      }
+
+      // Close modal
+      setShowOAuthPolicyModal(false);
+      setOauthPolicyToken(null);
+      setOauthPolicyAccepted(false);
+
+      // Show success message
+      setMessage({
+        type: 'success',
+        text: 'Policies accepted! Redirecting to Google sign-in...',
+      });
+
+      // Retry Google OAuth after a short delay
+      setTimeout(() => {
+        window.location.href = `${API_URL}/api/developer/auth/google`;
+      }, 1500);
+
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: error.message || 'Failed to accept policies. Please try again.',
+      });
+    } finally {
+      setAcceptingOAuthPolicies(false);
+    }
+  };
+
   return (
     <div className="auth-page">
+      <Modal
+        isOpen={showOAuthPolicyModal}
+        onClose={() => {
+          setShowOAuthPolicyModal(false);
+          setOauthPolicyToken(null);
+          setOauthPolicyAccepted(false);
+        }}
+        title="Policy Acceptance Required"
+      >
+        <div className="oauth-policy-modal">
+          <p style={{ marginBottom: '1rem', lineHeight: '1.6' }}>
+            To continue with Google sign-in, you need to review and accept our latest policies.
+          </p>
+          
+          <div style={{ marginBottom: '1.5rem' }}>
+            <Link 
+              to="/policies" 
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ 
+                color: '#4285F4', 
+                textDecoration: 'underline',
+                fontSize: '0.95rem'
+              }}
+            >
+              View all policies (opens in new tab)
+            </Link>
+          </div>
+
+          <label className="policy-checkbox" style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+            <input
+              type="checkbox"
+              checked={oauthPolicyAccepted}
+              onChange={(e) => setOauthPolicyAccepted(e.target.checked)}
+              style={{ marginTop: '0.25rem' }}
+            />
+            <span style={{ lineHeight: '1.5' }}>
+              I have read and agree to the{' '}
+              <Link to="/terms" target="_blank" rel="noopener noreferrer">Terms</Link>,{' '}
+              <Link to="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</Link>, and{' '}
+              <Link to="/refund" target="_blank" rel="noopener noreferrer">Refund Policy</Link>.
+            </span>
+          </label>
+
+          <button
+            type="button"
+            className="btn btn-primary btn-block btn-lg"
+            onClick={handleAcceptOAuthPolicies}
+            disabled={!oauthPolicyAccepted || acceptingOAuthPolicies}
+            style={{ marginTop: '1.5rem' }}
+          >
+            {acceptingOAuthPolicies ? 'Accepting...' : 'Accept & Continue with Google'}
+          </button>
+        </div>
+      </Modal>
+
       <div className="auth-container">
         <div className="auth-card">
           <div className="auth-header">

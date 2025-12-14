@@ -28,6 +28,7 @@ router.post('/reset-password', authController.resetPasswordWithToken);
 // Google OAuth routes - public
 router.get('/auth/google', authController.googleLogin);
 router.get('/auth/google/callback', authController.googleCallback);
+router.post('/accept-policies-oauth', authController.acceptPoliciesForOAuth);
 
 // Plan routes (public - to view available plans)
 router.get('/plans', planController.getPlans);

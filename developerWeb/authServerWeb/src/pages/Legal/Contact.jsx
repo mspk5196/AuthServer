@@ -11,7 +11,7 @@ const Contact = () => {
         </p>
         <h2>Support Email</h2>
         <p>
-          <a href="mailto:support@mspkapps.in">support@mspkapps.in</a>
+          <a href={`mailto:${process.env.VITE_SUPPORT_EMAIL}`}>{process.env.VITE_SUPPORT_EMAIL}</a>
         </p>
         <h2>Business Hours</h2>
         <p>We typically respond within 1-2 business days.</p>

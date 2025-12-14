@@ -178,7 +178,7 @@ const Home = () => {
               <h4>Support</h4>
               <ul>
                 <li><Link to="/contact">Contact Us</Link></li>
-                <li><a href="mailto:support@mspkapps.in">support@mspkapps.in</a></li>
+                <li><a href={`mailto:${process.env.VITE_SUPPORT_EMAIL}`}>{process.env.VITE_SUPPORT_EMAIL}</a></li>
               </ul>
             </div>
           </div>

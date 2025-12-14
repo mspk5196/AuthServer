@@ -951,8 +951,13 @@ const checkDeveloperPoliciesForOAuth = async (developer) => {
     const unacceptedPolicyIds = policyIds.filter((id) => !acceptedIds.has(id));
 
     if (unacceptedPolicyIds.length > 0) {
-      // Redirect back to login with a specific error so frontend can show guidance
-      const redirectTo = `${process.env.FRONTEND_URL}/login?error=policy_not_accepted`;
+      // Create a temporary token with developer email for policy acceptance
+      const tempToken = jwt.sign(
+        { email: developer.email, developerId: developer.id, purpose: 'policy_acceptance' },
+        process.env.JWT_SECRET,
+        { expiresIn: '10m' }
+      );
+      const redirectTo = `${process.env.FRONTEND_URL}/login?error=policy_not_accepted&token=${tempToken}`;
       return { blocked: true, redirectTo };
     }
   } catch (err) {
@@ -1560,6 +1565,69 @@ const googleCallback = async (req, res) => {
   }
 };
 
+// Accept policies for OAuth users (public endpoint)
+const acceptPoliciesForOAuth = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message: 'Token is required',
+      });
+    }
+
+    // Verify token
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+      if (decoded.purpose !== 'policy_acceptance') {
+        throw new Error('Invalid token purpose');
+      }
+    } catch (err) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired token',
+      });
+    }
+
+    // Get active policies
+    const policiesResult = await pool.query(
+      `SELECT id FROM dev_policies WHERE is_active = true ORDER BY id ASC`
+    );
+
+    const policyIds = policiesResult.rows.map((p) => p.id);
+
+    if (policyIds.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: 'No active policies to accept',
+      });
+    }
+
+    // Accept all active policies for this developer
+    for (const policyId of policyIds) {
+      await pool.query(
+        `INSERT INTO dev_policy_acceptances (developer_id, policy_id, accepted_at)
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (developer_id, policy_id) DO NOTHING`,
+        [decoded.developerId, policyId]
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Policies accepted successfully',
+    });
+  } catch (error) {
+    console.error('Accept policies for OAuth error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to accept policies',
+    });
+  }
+};
+
 
 module.exports = {
   register,
@@ -1571,4 +1639,5 @@ module.exports = {
   resetPasswordWithToken,
   googleLogin,
   googleCallback,
+  acceptPoliciesForOAuth,
 };

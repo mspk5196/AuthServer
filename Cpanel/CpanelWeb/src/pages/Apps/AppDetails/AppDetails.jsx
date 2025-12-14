@@ -157,6 +157,24 @@ export default function AppDetails(){
     }
   }
 
+  async function handleRequestDeleteApp() {
+    if (!window.confirm('Are you sure you want to delete this app? A confirmation link will be emailed to the developer address.')) {
+      return;
+    }
+
+    try {
+      const resp = await api.post(`/apps/deleteApp/${appId}/request`, {}, token);
+      if (resp.success) {
+        alert('Deletion link sent to your registered email. Please confirm from your inbox to complete deletion.');
+      } else {
+        alert(resp.message || 'Failed to initiate app deletion');
+      }
+    } catch (err) {
+      console.error('Request delete app error:', err);
+      alert('Failed to initiate app deletion. Please try again.');
+    }
+  }
+
   if (loading && !app) return <div className="details-loading">Loading...</div>;
 
   return (
@@ -203,6 +221,13 @@ export default function AppDetails(){
             onClick={() => setShowEditEmailModal(true)}
           >
             Edit Email
+          </button>
+          <button
+            className="btn-edit-email"
+            style={{ marginLeft: '0.75rem', backgroundColor: '#b91c1c' }}
+            onClick={handleRequestDeleteApp}
+          >
+            Delete App
           </button>
         </div>
       </div>

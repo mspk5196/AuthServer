@@ -1,10 +1,12 @@
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
 const { sendMail } = require('../utils/mailer');
 const { Parser } = require('json2csv');
 const {
   buildAppSupportEmailVerificationEmail,
   buildAppSupportEmailUpdateEmail,
+  buildAppDeleteConfirmationEmail,
 } = require('../templates/emailTemplates');
 
 /**
@@ -67,35 +69,29 @@ const createApp = async (req, res) => {
     console.log('Plan features:', planFeatures);
 
     // Extract max_apps from features (handle different JSONB structures)
-    let maxApps = 0;
-    
+    let maxApps = null; // null means unlimited
     if (planFeatures) {
-      // Try different possible keys
-      if (planFeatures.apps_limit) {
-        maxApps = parseInt(planFeatures.apps_limit);
-      } else if (planFeatures.max_apps) {
-        // Handle if max_apps is a number
-        if (typeof planFeatures.max_apps === 'number') {
-          maxApps = planFeatures.max_apps;
-        } 
-        // Handle if max_apps is a string like "Maximum 2 apps can be created"
-        else if (typeof planFeatures.max_apps === 'string') {
-          const match = planFeatures.max_apps.match(/(\d+)/);
+      let rawLimit = null;
+
+      if (planFeatures.apps_limit !== undefined && planFeatures.apps_limit !== null) {
+        rawLimit = planFeatures.apps_limit;
+      } else if (planFeatures.max_apps !== undefined && planFeatures.max_apps !== null) {
+        rawLimit = planFeatures.max_apps;
+      }
+
+      if (rawLimit !== null) {
+        if (typeof rawLimit === 'number') {
+          maxApps = rawLimit;
+        } else if (typeof rawLimit === 'string') {
+          const match = rawLimit.match(/(\d+)/);
           if (match) {
-            maxApps = parseInt(match[1]);
+            maxApps = parseInt(match[1], 10);
           }
         }
       }
     }
 
-    console.log('Max apps allowed:', maxApps);
-
-    if (maxApps === 0) {
-      return res.status(403).json({
-        success: false,
-        message: 'Your plan does not allow creating apps. Please upgrade your plan.'
-      });
-    }
+    console.log('Max apps allowed (null = unlimited):', maxApps);
 
     // Count existing apps
     const appCount = await pool.query(
@@ -103,10 +99,10 @@ const createApp = async (req, res) => {
       [developerId]
     );
 
-    const currentAppCount = parseInt(appCount.rows[0].count);
+    const currentAppCount = parseInt(appCount.rows[0].count, 10);
     console.log('Current app count:', currentAppCount);
 
-    if (currentAppCount >= maxApps) {
+    if (maxApps !== null && currentAppCount >= maxApps) {
       return res.status(403).json({
         success: false,
         message: `Plan limit reached. You can create maximum ${maxApps} apps. Please upgrade your plan.`
@@ -382,40 +378,163 @@ const updateApp = async (req, res) => {
 };
 
 /**
- * Delete an app
+ * Delete an app (internal helper used by confirmation flow)
  */
-const deleteApp = async (req, res) => {
+const deleteApp = async (developerId, appId) => {
+  // Verify ownership first
+  const checkOwner = await pool.query(
+    'SELECT id FROM dev_apps WHERE id = $1 AND developer_id = $2',
+    [appId, developerId]
+  );
+
+  if (checkOwner.rows.length === 0) {
+    const error = new Error('App not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  // Delete app (cascade will handle related records if configured)
+  await pool.query('DELETE FROM dev_apps WHERE id = $1', [appId]);
+};
+
+/**
+ * Request app deletion: sends a confirmation link to the developer's email
+ */
+const requestAppDeletion = async (req, res) => {
   try {
     const developerId = req.user.developerId;
     const { appId } = req.params;
 
-    // Verify ownership
-    const checkOwner = await pool.query(
-      'SELECT id FROM dev_apps WHERE id = $1 AND developer_id = $2',
+    // Fetch app and developer email
+    const result = await pool.query(
+      `SELECT a.app_name, d.email, d.name
+       FROM dev_apps a
+       JOIN developers d ON a.developer_id = d.id
+       WHERE a.id = $1 AND a.developer_id = $2`,
       [appId, developerId]
     );
 
-    if (checkOwner.rows.length === 0) {
+    if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'App not found'
+        message: 'App not found',
       });
     }
 
-    // Delete app (cascade will handle related records if set up)
-    await pool.query('DELETE FROM dev_apps WHERE id = $1', [appId]);
+    const { app_name, email, name } = result.rows[0];
 
-    res.json({
+    // Create a short-lived JWT for deletion confirmation
+    const token = jwt.sign(
+      {
+        developerId,
+        appId,
+        action: 'delete-app',
+      },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: '24h',
+        issuer: 'mspk-apps-auth',
+        audience: 'mspk-apps-auth-developers',
+      }
+    );
+
+    const baseUrl = process.env.BACKEND_URL || '';
+    const confirmationUrl = `${baseUrl}/api/developer/apps/confirm-delete/${token}`;
+
+    // Send confirmation email
+    sendMail({
+      to: email,
+      subject: `Confirm deletion of app - ${app_name}`,
+      html: buildAppDeleteConfirmationEmail({
+        appName: app_name,
+        developerName: name,
+        confirmationUrl,
+      }),
+    }).catch((err) => console.error('Send app delete confirmation email error:', err));
+
+    return res.json({
       success: true,
-      message: 'App deleted successfully'
+      message: 'Deletion link sent to your email. Please confirm from your inbox to permanently delete this app.',
     });
   } catch (error) {
-    console.error('Delete app error:', error);
-    res.status(500).json({
+    console.error('Request app deletion error:', error);
+    return res.status(500).json({
       success: false,
-      message: 'Failed to delete app',
-      error: error.message
+      message: 'Failed to initiate app deletion',
+      error: error.message,
     });
+  }
+};
+
+/**
+ * Confirm app deletion via email link
+ * This endpoint is public and does not require authentication.
+ */
+const confirmAppDeletion = async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    if (!token) {
+      return res.status(400).send('Invalid deletion link');
+    }
+
+    let payload;
+    try {
+      payload = jwt.verify(token, process.env.JWT_SECRET, {
+        issuer: 'mspk-apps-auth',
+        audience: 'mspk-apps-auth-developers',
+      });
+    } catch (err) {
+      console.error('Invalid or expired delete token:', err.message);
+      return res.status(400).send('This deletion link is invalid or has expired.');
+    }
+
+    if (!payload || payload.action !== 'delete-app') {
+      return res.status(400).send('Invalid deletion token.');
+    }
+
+    const { developerId, appId } = payload;
+
+    try {
+      await deleteApp(developerId, appId);
+    } catch (err) {
+      if (err.statusCode === 404) {
+        return res.status(404).send('The app was not found or has already been deleted.');
+      }
+      console.error('Error during confirmed app deletion:', err);
+      return res.status(500).send('Failed to delete the app. Please try again later.');
+    }
+
+    return res.send(`
+      <html>
+        <head>
+          <title>App Deleted</title>
+          <style>
+            body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background:#f5f5f7; margin:0; padding:0; }
+            .wrap { max-width:600px; margin:60px auto; background:#fff; border-radius:12px; padding:32px 28px; box-shadow:0 10px 30px rgba(15,23,42,0.08); }
+            h1 { font-size:24px; margin-bottom:12px; color:#111827; }
+            p { margin:8px 0; color:#4b5563; line-height:1.6; }
+            .highlight { color:#b91c1c; font-weight:600; }
+            .footer { margin-top:24px; font-size:13px; color:#9ca3af; }
+            a.button { display:inline-block; margin-top:16px; padding:10px 18px; background:#111827; color:#fff; text-decoration:none; border-radius:999px; font-size:14px; }
+          </style>
+        </head>
+        <body>
+          <div class="wrap">
+            <h1>Application deleted successfully</h1>
+            <p>Your app and its related authentication data have been <span class="highlight">permanently deleted</span>.</p>
+            <p>If you did not perform this action, please contact support immediately at <a href="mailto:support@mspkapps.in">support@mspkapps.in</a>.</p>
+            <a class="button" href="https://authservices.mspkapps.in/">Return to MSPK Auth Portal</a>
+            <div class="footer">
+              MSPK Apps Authentication Platform (mspkapps.in)
+            </div>
+          </div>
+        </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('Confirm app deletion error:', error);
+    return res.status(500).send('Unexpected error while confirming deletion.');
   }
 };
 
@@ -1003,7 +1122,7 @@ module.exports = {
   getMyApps,
   getAppDetails,
   updateApp,
-  deleteApp,
+  // deleteApp is now used internally by the confirmation flow
   regenerateApiKey,
   getAppSummary,
   listAppUsers,
@@ -1014,5 +1133,7 @@ module.exports = {
   getDashboard,
   verifyAppEmail,
   updateAppSupportEmail,
-  exportUsersCSV
+  exportUsersCSV,
+  requestAppDeletion,
+  confirmAppDeletion,
 };

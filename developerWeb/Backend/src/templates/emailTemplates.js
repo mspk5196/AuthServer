@@ -137,6 +137,54 @@ const buildPlanInactiveEmail = ({ name, planName }) => `
   <p>Powered by MSPK APPS</p>
 `;
 
+const buildUsageReminderEmail = ({
+  name,
+  planName,
+  maxApps,
+  appsUsed,
+  appsRemaining,
+  maxApiCalls,
+  apiCallsUsed,
+  apiCallsRemaining,
+}) => {
+  const appsLimitText =
+    maxApps === null || maxApps === undefined || Number.isNaN(maxApps)
+      ? 'Unlimited apps'
+      : `${maxApps} apps`;
+
+  const apiLimitText =
+    maxApiCalls === null || maxApiCalls === undefined || Number.isNaN(maxApiCalls)
+      ? 'Unlimited API calls per month'
+      : `${maxApiCalls.toLocaleString()} API calls per month`;
+
+  const appsRemainingText =
+    appsRemaining === null || appsRemaining === undefined
+      ? 'Unlimited'
+      : `${appsRemaining}`;
+
+  const apiRemainingText =
+    apiCallsRemaining === null || apiCallsRemaining === undefined
+      ? 'Unlimited'
+      : `${apiCallsRemaining.toLocaleString()}`;
+
+  return `
+  <img src="https://mspkapps.in/logo.svg" alt="MSPK Apps" style="height:40px;margin-bottom:16px;" />
+  <h2>Monthly Usage Summary</h2>
+  <p>Hello ${name},</p>
+  <p>Here is your current usage summary for plan <strong>${planName}</strong>:</p>
+  <ul>
+    <li><strong>Apps in use:</strong> ${appsUsed} / ${appsLimitText} (Remaining: ${appsRemainingText})</li>
+    <li><strong>API calls used this month:</strong> ${apiCallsUsed.toLocaleString()} / ${apiLimitText} (Remaining: ${apiRemainingText})</li>
+  </ul>
+  <p>This email is sent to help you track your usage and avoid hitting plan limits.</p>
+  <p>You can upgrade your plan at any time from the developer portal.</p>
+  <br />
+  <p>Best regards,<br />MSPK Auth Platform Support</p>
+  <p>Contact support at <a href="mailto:support.mspk@mspkapps.in">support.mspk@mspkapps.in</a></p>
+  <p>Powered by MSPK APPS</p>
+`;
+};
+
 const buildPasswordChangeRequestEmail = ({ name, changeUrl }) => `
   <img src="https://mspkapps.in/logo.svg" alt="MSPK Apps" style="height:40px;margin-bottom:16px;" />
   <h2>Password Change Request</h2>
@@ -178,4 +226,5 @@ module.exports = {
   buildPasswordChangeRequestEmail,
   buildPasswordResetEmail,
   buildPlanCancelledEmail,
+  buildUsageReminderEmail,
 };

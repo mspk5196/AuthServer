@@ -40,6 +40,18 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
       setSelectedPlanId(planId);
       setError('');
 
+      // Ask for confirmation if switching away from current plan
+      if (currentPlanId && currentPlanId !== planId) {
+        const confirmed = window.confirm(
+          'Are you sure you want to change your plan? Any downgrade to a lower-priced plan will only take effect after your current plan period ends.'
+        );
+        if (!confirmed) {
+          setSelecting(false);
+          setSelectedPlanId(null);
+          return;
+        }
+      }
+
       // If plan is free, select directly (no Razorpay)
       if (isFreePrice(planPrice)) {
         const response = await api.post('/developer/select-plan', { planId });
@@ -151,11 +163,19 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
       features.push(typeof support === 'string' ? support : `Support: ${support}`);
     }
 
-    if (max_apps) {
-      if (typeof max_apps === 'number') {
-        features.push(`Up to ${max_apps} apps`);
+    const parseLimit = (value) => {
+      if (value === null || value === undefined) return null;
+      if (typeof value === 'number') return value;
+      const n = Number(value);
+      return Number.isNaN(n) ? null : n;
+    };
+
+    const maxAppsNumeric = parseLimit(max_apps);
+    if (maxAppsNumeric !== null) {
+      if (maxAppsNumeric === 0) {
+        features.push('Unlimited apps');
       } else {
-        features.push(String(max_apps));
+        features.push(`Up to ${maxAppsNumeric} apps`);
       }
     }
 
@@ -165,11 +185,13 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
       }
     }
 
-    if (max_api_calls) {
-      if (typeof max_api_calls === 'number') {
-        features.push(`Up to ${max_api_calls.toLocaleString()} API calls per month`);
+    const maxApiCallsNumeric = parseLimit(max_api_calls);
+    if (maxApiCallsNumeric !== null) {
+      if (maxApiCallsNumeric === 0) {
+        features.push('Unlimited API calls per month');
       } else {
-        features.push(String(max_api_calls));
+        const formatted = maxApiCallsNumeric.toLocaleString();
+        features.push(`Up to ${formatted} API calls per month`);
       }
     }
 

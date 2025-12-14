@@ -107,6 +107,36 @@ const buildAppSupportEmailUpdateEmail = ({ appName, verificationUrl }) => `
   <p>This link will expire in 24 hours.</p>
 `;
 
+// App deletion confirmation (developer-initiated from cPanel)
+const buildAppDeleteConfirmationEmail = ({ appName, developerName, confirmationUrl }) => `
+  <h2>Confirm deletion of your app "${appName}"</h2>
+  <p>Hi ${developerName || 'Developer'},</p>
+  <p>
+    You requested to <strong>permanently delete</strong> the application
+    <strong>${appName}</strong> from the MSPK Auth Platform.
+  </p>
+  <p>
+    Deleting this app will remove its configuration and may remove associated
+    authentication data for users who sign in through this app. This action
+    cannot be undone.
+  </p>
+  <p>
+    If you are sure you want to proceed, please confirm by clicking the button below:
+  </p>
+  <p>
+    <a href="${confirmationUrl}" style="display:inline-block;padding:10px 18px;border-radius:999px;background:#111827;color:#ffffff;text-decoration:none;font-weight:500;">
+      Yes, delete this app
+    </a>
+  </p>
+  <p style="color:#b91c1c;font-size:13px;">
+    Warning: This action is irreversible. If you did not initiate this request,
+    please ignore this email or contact support at support@mspkapps.in.
+  </p>
+  <p style="margin-top:16px;font-size:12px;color:#6b7280;">
+    Authentication system powered by MSPK APPS (mspkapps.in).
+  </p>
+`;
+
 module.exports = {
   buildWelcomeVerificationEmail,
   buildPasswordResetEmail,
@@ -120,4 +150,5 @@ module.exports = {
   buildPasswordSetConfirmationEmail,
   buildAppSupportEmailVerificationEmail,
   buildAppSupportEmailUpdateEmail,
+  buildAppDeleteConfirmationEmail,
 };

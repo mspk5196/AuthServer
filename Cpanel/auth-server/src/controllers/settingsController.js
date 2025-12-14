@@ -69,13 +69,49 @@ const getPlanInfo = async (req, res) => {
       console.log('API usage tracking error:', error.message);
     }
 
-    // Extract limits from features JSONB
+    // Extract limits from features JSONB (0 means unlimited)
     const features = planInfo.features || {};
-    const appsLimit = features.max_apps || 3;
-    const apiCallsLimit = features.max_api_calls || 10000;
 
-    // Format features description array
-    const featuresDesc = planInfo.features_desc || [];
+    const parseLimit = (value, fallback) => {
+      if (value === null || value === undefined) return fallback;
+      if (typeof value === 'number') return value;
+      const n = Number(value);
+      return Number.isNaN(n) ? fallback : n;
+    };
+
+    let appsLimitRaw = features.max_apps;
+    let apiCallsLimitRaw = features.max_api_calls;
+
+    const appsLimit = parseLimit(appsLimitRaw, null); // null = unlimited
+    const apiCallsLimit = parseLimit(apiCallsLimitRaw, null); // null = unlimited
+
+    // Format features description array (prefer features_desc; fallback to features keys)
+    let featuresDesc = planInfo.features_desc;
+    if (!Array.isArray(featuresDesc) || featuresDesc.length === 0) {
+      featuresDesc = [];
+
+      if (features.support) {
+        featuresDesc.push(
+          typeof features.support === 'string' ? features.support : `Support: ${features.support}`
+        );
+      }
+
+      if (appsLimit !== null) {
+        if (appsLimit === 0) {
+          featuresDesc.push('Unlimited apps');
+        } else {
+          featuresDesc.push(`Up to ${appsLimit} apps`);
+        }
+      }
+
+      if (apiCallsLimit !== null) {
+        if (apiCallsLimit === 0) {
+          featuresDesc.push('Unlimited API calls per month');
+        } else {
+          featuresDesc.push(`Up to ${apiCallsLimit.toLocaleString()} API calls per month`);
+        }
+      }
+    }
 
     // Derive billing cycle text from plan duration
     let billingCycle = 'N/A';
@@ -101,7 +137,7 @@ const getPlanInfo = async (req, res) => {
       auto_renew: planInfo.auto_renew,
       renewal_count: planInfo.renewal_count || 0,
       
-      // Limits from plan features
+      // Limits from plan features (null means unlimited)
       max_apps: appsLimit,
       max_api_calls: apiCallsLimit,
 

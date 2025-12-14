@@ -88,8 +88,12 @@ const Settings = () => {
     );
   }
 
-  const appsPercentage = planInfo ? (planInfo.apps_used / planInfo.max_apps) * 100 : 0;
-  const apiCallsPercentage = planInfo ? (planInfo.api_calls_used / planInfo.max_api_calls) * 100 : 0;
+  const appsPercentage = planInfo && planInfo.max_apps
+    ? (planInfo.apps_used / planInfo.max_apps) * 100
+    : 0;
+  const apiCallsPercentage = planInfo && planInfo.max_api_calls
+    ? (planInfo.api_calls_used / planInfo.max_api_calls) * 100
+    : 0;
 
   // Convert features object to array for display
   const featuresArray = planInfo?.features
@@ -174,7 +178,11 @@ const Settings = () => {
           <div className="usage-stat">
             <div className="usage-stat-label">Apps</div>
             <div className="usage-stat-value">{planInfo?.apps_used || 0}</div>
-            <div className="usage-stat-limit">of {planInfo?.max_apps || 0} apps</div>
+            <div className="usage-stat-limit">
+              {planInfo?.max_apps === null || planInfo?.max_apps === undefined
+                ? 'Unlimited apps'
+                : `of ${planInfo.max_apps} apps`}
+            </div>
             <div className="progress-bar">
               <div
                 className={`progress-bar-fill ${getProgressColor(appsPercentage)}`}
@@ -186,7 +194,11 @@ const Settings = () => {
           <div className="usage-stat">
             <div className="usage-stat-label">API Calls (This Month)</div>
             <div className="usage-stat-value">{(planInfo?.api_calls_used || 0).toLocaleString()}</div>
-            <div className="usage-stat-limit">of {(planInfo?.max_api_calls || 0).toLocaleString()} calls</div>
+            <div className="usage-stat-limit">
+              {planInfo?.max_api_calls === null || planInfo?.max_api_calls === undefined
+                ? 'Unlimited API calls per month'
+                : `of ${planInfo.max_api_calls.toLocaleString()} calls`}
+            </div>
             <div className="progress-bar">
               <div
                 className={`progress-bar-fill ${getProgressColor(apiCallsPercentage)}`}

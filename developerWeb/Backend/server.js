@@ -5,6 +5,7 @@ const http = require('http');
 const app = require('./src/app.js');
 const db = require('./src/config/db.js');
 const { schedulePlanStatusJob } = require('./src/jobs/planStatusJob.js');
+const { scheduleUsageReminderJob } = require('./src/jobs/usageReminderJob.js');
 
 const PORT = process.env.PORT || 5050;
 const server = http.createServer(app);
@@ -17,6 +18,7 @@ app.get('/', (req, res) => {
 
 // Start scheduled jobs
 schedulePlanStatusJob();
+scheduleUsageReminderJob();
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);

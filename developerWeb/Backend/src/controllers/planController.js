@@ -142,6 +142,31 @@ const selectPlan = async (req, res) => {
     let registrationRow;
 
     if (existingPlan) {
+      // Prevent downgrades to cheaper plans while current plan period is still active
+      const currentPlanRes = await client.query(
+        'SELECT id, name, price, duration_days FROM dev_plans WHERE id = $1',
+        [existingPlan.plan_id]
+      );
+
+      if (currentPlanRes.rows.length) {
+        const currentPlan = currentPlanRes.rows[0];
+        const currentPrice = Number(currentPlan.price || 0);
+        const newPrice = Number(plan.price || 0);
+
+        const now = new Date();
+        const endDate = existingPlan.end_date ? new Date(existingPlan.end_date) : null;
+        const isWithinCurrentPeriod = !endDate || endDate > now;
+
+        if (newPrice < currentPrice && isWithinCurrentPeriod) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            success: false,
+            error: 'DOWNGRADE_NOT_ALLOWED',
+            message: 'You can switch to a lower-priced plan only after your current plan period ends.',
+          });
+        }
+      }
+
       const isRenewal = existingPlan.plan_id === planId && plan.duration_days;
 
       if (isRenewal) {

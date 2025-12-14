@@ -23,7 +23,7 @@ const paymentService = {
   getPaymentHistory: async () => {
     const response = await api.get('/developer/payment/history');
     return response.data;
-  },
+  }, 
 
   /**
    * Initialize Razorpay checkout

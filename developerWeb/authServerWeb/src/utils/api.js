@@ -4,9 +4,10 @@
 
 import { tokenService } from '../services/tokenService';
 
+// Base URL that already includes the /api prefix
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-// Re-export base URL for places that need raw API URL (e.g. OAuth redirects)
-export const API_URL = API_BASE_URL;
+// Host-level URL (no /api) for building full absolute links (e.g. OAuth redirects)
+export const API_URL = import.meta.env.VITE_API_URL || API_BASE_URL;
 
 class ApiError extends Error {
   constructor(message, status, data) {

@@ -121,6 +121,22 @@ const Dashboard = () => {
             </p>
           </div>
 
+          <div className="demo-project-card" style={{ marginTop: '1.5rem', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
+            <h3 style={{ marginBottom: '0.5rem' }}>Demo Client Project</h3>
+            <p style={{ marginBottom: '0.75rem', fontSize: '0.9rem', color: '#4b5563' }}>
+              Try our open-source demo client that already integrates with this
+              authentication platform. Use it as a reference or starter for your own apps.
+            </p>
+            <a
+              href="https://github.com/MSPK-APPS/auth-client-demo.git"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-outline btn-small"
+            >
+              View Demo Client on GitHub
+            </a>
+          </div>
+
           {cpanelError && (
             <div className="alert alert-error">
               {cpanelError}

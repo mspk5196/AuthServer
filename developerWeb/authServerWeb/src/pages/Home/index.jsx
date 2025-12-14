@@ -148,6 +148,25 @@ const Home = () => {
         </div>
       </section>
 
+      <section className="demo-project">
+        <div className="container">
+          <h2>Demo Client Project</h2>
+          <p>
+            Explore a ready-made demo client that integrates with this authentication
+            platform. You can clone it, inspect the code, and use it as a starting
+            point for your own apps.
+          </p>
+          <a
+            href="https://github.com/MSPK-APPS/auth-client-demo.git"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-outline btn-lg"
+          >
+            View Demo Client on GitHub
+          </a>
+        </div>
+      </section>
+
       <section className="cta">
         <div className="container">
           <h2>Ready to Get Started?</h2>

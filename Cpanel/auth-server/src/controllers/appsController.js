@@ -69,7 +69,8 @@ const createApp = async (req, res) => {
     console.log('Plan features:', planFeatures);
 
     // Extract max_apps from features (handle different JSONB structures)
-    let maxApps = null; // null means unlimited
+    // 0 means unlimited
+    let maxApps = null; // null or 0 means unlimited
     if (planFeatures) {
       let rawLimit = null;
 
@@ -91,7 +92,7 @@ const createApp = async (req, res) => {
       }
     }
 
-    console.log('Max apps allowed (null = unlimited):', maxApps);
+    console.log('Max apps allowed (0 or null = unlimited):', maxApps);
 
     // Count existing apps
     const appCount = await pool.query(
@@ -102,7 +103,8 @@ const createApp = async (req, res) => {
     const currentAppCount = parseInt(appCount.rows[0].count, 10);
     console.log('Current app count:', currentAppCount);
 
-    if (maxApps !== null && currentAppCount >= maxApps) {
+    // Check if app limit is exceeded (0 or null means unlimited)
+    if (maxApps !== null && maxApps !== 0 && currentAppCount >= maxApps) {
       return res.status(403).json({
         success: false,
         message: `Plan limit reached. You can create maximum ${maxApps} apps. Please upgrade your plan.`

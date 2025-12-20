@@ -82,8 +82,8 @@ const getPlanInfo = async (req, res) => {
     let appsLimitRaw = features.max_apps;
     let apiCallsLimitRaw = features.max_api_calls;
 
-    const appsLimit = parseLimit(appsLimitRaw, null); // null = unlimited
-    const apiCallsLimit = parseLimit(apiCallsLimitRaw, null); // null = unlimited
+    const appsLimit = parseLimit(appsLimitRaw, null); // 0 or null = unlimited
+    const apiCallsLimit = parseLimit(apiCallsLimitRaw, null); // 0 or null = unlimited
 
     // Format features description array (prefer features_desc; fallback to features keys)
     let featuresDesc = planInfo.features_desc;
@@ -96,20 +96,16 @@ const getPlanInfo = async (req, res) => {
         );
       }
 
-      if (appsLimit !== null) {
-        if (appsLimit === 0) {
-          featuresDesc.push('Unlimited apps');
-        } else {
-          featuresDesc.push(`Up to ${appsLimit} apps`);
-        }
+      if (appsLimit !== null && appsLimit !== 0) {
+        featuresDesc.push(`Up to ${appsLimit} apps`);
+      } else if (appsLimit === 0 || appsLimit === null) {
+        featuresDesc.push('Unlimited apps');
       }
 
-      if (apiCallsLimit !== null) {
-        if (apiCallsLimit === 0) {
-          featuresDesc.push('Unlimited API calls per month');
-        } else {
-          featuresDesc.push(`Up to ${apiCallsLimit.toLocaleString()} API calls per month`);
-        }
+      if (apiCallsLimit !== null && apiCallsLimit !== 0) {
+        featuresDesc.push(`Up to ${apiCallsLimit.toLocaleString()} API calls per month`);
+      } else if (apiCallsLimit === 0 || apiCallsLimit === null) {
+        featuresDesc.push('Unlimited API calls per month');
       }
     }
 

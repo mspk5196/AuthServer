@@ -13,6 +13,8 @@ const Pricing = () => {
       try {
         const response = await api.get('/developer/plans');
         setPlans(response.data.plans || []);
+        console.log(response.data.plans);
+        
       } catch (err) {
         console.error('Failed to fetch plans:', err);
         setError('Failed to load plans. Please try again later.');

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../utils/api';
 import { authService } from '../../services/authService';
+import PlanFeatures from '../../components/PlanFeatures/PlanFeatures';
 import './Settings.scss';
 
 const Settings = () => {
@@ -186,16 +187,6 @@ const Settings = () => {
     });
   };
 
-  const normalizePlanFeatures = (plan) => {
-    if (!plan) return [];
-    const raw = plan.features_desc || plan.features;
-
-    if (Array.isArray(raw)) return raw.filter(Boolean);
-    if (raw && typeof raw === 'object') return Object.values(raw).filter(Boolean);
-    if (typeof raw === 'string') return [raw];
-    return [];
-  };
-
   const getBillingCycleLabel = (plan) => {
     if (!plan) return 'N/A';
 
@@ -376,16 +367,13 @@ const Settings = () => {
                     </div>
                   )}
 
-                  {normalizePlanFeatures(currentPlan).length > 0 && (
-                    <div className="plan-features">
-                      <h4>Features:</h4>
-                      <ul>
-                        {normalizePlanFeatures(currentPlan).map((feature, index) => (
-                          <li key={index}> {feature}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+                  <PlanFeatures
+                    features={currentPlan.features}
+                    showTitle
+                    title="Features:"
+                    wrapperClassName="plan-features"
+                    listClassName=""
+                  />
                 </div>
 
                 <div className="plan-info-footer">

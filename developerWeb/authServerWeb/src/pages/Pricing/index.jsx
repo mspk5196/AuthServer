@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../utils/api';
+import PlanFeatures from '../../components/PlanFeatures/PlanFeatures';
 import './Pricing.scss';
 
 const Pricing = () => {
@@ -38,38 +39,6 @@ const Pricing = () => {
     return `for ${days} days`;
   };
 
-  const getFeatureSentences = (features) => {
-    if (!features) return [];
-
-    const sentences = [];
-
-    if (typeof features.max_apps === 'number') {
-      sentences.push(`Up to ${features.max_apps} apps`);
-    }
-
-    if (typeof features.max_api_calls === 'number') {
-      const formattedCalls = features.max_api_calls.toLocaleString();
-      sentences.push(`Up to ${formattedCalls} API calls per month`);
-    }
-
-    if (features.google_login) {
-      sentences.push('Google login supported');
-    }
-
-    if (features.support) {
-      const support = String(features.support).toLowerCase();
-      if (support === 'email') {
-        sentences.push('Email support');
-      } else if (support === 'chat') {
-        sentences.push('Chat support');
-      } else {
-        sentences.push(`${features.support} support`);
-      }
-    }
-
-    return sentences;
-  };
-
   return (
     <div className="pricing-page">
       <div className="container">
@@ -90,7 +59,6 @@ const Pricing = () => {
           <div className="pricing-grid">
             {(plans || []).map((plan) => {
               const isFree = !plan.price || plan.price === 0;
-              const featureSentences = getFeatureSentences(plan.features);
 
               return (
                 <div key={plan.id} className={`pricing-card ${isFree ? 'pricing-card-free' : ''}`}>
@@ -106,13 +74,7 @@ const Pricing = () => {
                   </div>
 
                   <div className="pricing-card-body">
-                    {featureSentences.length > 0 && (
-                      <ul className="feature-list">
-                        {featureSentences.map((feature, idx) => (
-                          <li key={idx}>{feature}</li>
-                        ))}
-                      </ul>
-                    )}
+                    <PlanFeatures features={plan.features} listClassName="feature-list" />
                   </div>
 
                   <div className="pricing-card-footer">

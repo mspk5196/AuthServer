@@ -1,6 +1,6 @@
 import PropTypes from 'prop-types';
 
-const getFeatureSentences = (features) => {
+export const getFeatureSentences = (features) => {
   if (!features) return [];
 
   const sentences = [];

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../utils/api';
 import paymentService from '../../services/paymentService';
+import { getFeatureSentences } from '../PlanFeatures/PlanFeatures';
 import './PlanSelection.scss';
 
 const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
@@ -40,7 +41,6 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
       setSelectedPlanId(planId);
       setError('');
 
-      // Ask for confirmation if switching away from current plan
       if (currentPlanId && currentPlanId !== planId) {
         const confirmed = window.confirm(
           'Are you sure you want to change your plan? Any downgrade to a lower-priced plan will only take effect after your current plan period ends.'
@@ -52,33 +52,31 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
         }
       }
 
-      // If plan is free, select directly (no Razorpay)
       if (isFreePrice(planPrice)) {
         const response = await api.post('/developer/select-plan', { planId });
-        
+
         if (response.success) {
           onPlanSelected(response.data);
         }
+        setSelecting(false);
+        setSelectedPlanId(null);
         return;
       }
 
-      // For paid plans, initiate Razorpay payment
       const orderResponse = await paymentService.createOrder(planId);
-      
+
       if (!orderResponse.success) {
         throw new Error(orderResponse.message || 'Failed to create order');
       }
 
-      // Open Razorpay checkout
       paymentService.initiatePayment(
         orderResponse.data,
         async (razorpayResponse) => {
-          // Payment successful, verify on backend
           try {
             const verifyResponse = await paymentService.verifyPayment({
               razorpay_order_id: razorpayResponse.razorpay_order_id,
               razorpay_payment_id: razorpayResponse.razorpay_payment_id,
-              razorpay_signature: razorpayResponse.razorpay_signature
+              razorpay_signature: razorpayResponse.razorpay_signature,
             });
 
             if (verifyResponse.success) {
@@ -95,7 +93,6 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
           }
         },
         (error) => {
-          // Payment failed or cancelled
           console.error('Payment error:', error);
           setError(error.description || 'Payment failed. Please try again.');
           setSelecting(false);
@@ -134,81 +131,6 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
     );
   }
 
-  const normalizeFeatures = (plan) => {
-    if (!plan) return [];
-
-    const source =
-      (plan.features_desc && typeof plan.features_desc === 'object' && plan.features_desc) ||
-      (plan.features && typeof plan.features === 'object' && plan.features) ||
-      null;
-
-    const features = [];
-
-    if (!source) {
-      if (Array.isArray(plan.features)) return plan.features.filter(Boolean);
-      if (typeof plan.features === 'string') return [plan.features];
-      return [];
-    }
-
-    const {
-      support,
-      visible,
-      max_apps,
-      google_login,
-      max_api_calls,
-      ...rest
-    } = source;
-
-    if (support) {
-      features.push(typeof support === 'string' ? support : `Support: ${support}`);
-    }
-
-    const parseLimit = (value) => {
-      if (value === null || value === undefined) return null;
-      if (typeof value === 'number') return value;
-      const n = Number(value);
-      return Number.isNaN(n) ? null : n;
-    };
-
-    const maxAppsNumeric = parseLimit(max_apps);
-    if (maxAppsNumeric !== null) {
-      if (maxAppsNumeric === 0) {
-        features.push('Unlimited apps');
-      } else {
-        features.push(`Up to ${maxAppsNumeric} apps`);
-      }
-    }
-
-    if (google_login !== undefined) {
-      if (google_login) {
-        features.push('Google login integration included');
-      }
-    }
-
-    const maxApiCallsNumeric = parseLimit(max_api_calls);
-    if (maxApiCallsNumeric !== null) {
-      if (maxApiCallsNumeric === 0) {
-        features.push('Unlimited API calls per month');
-      } else {
-        const formatted = maxApiCallsNumeric.toLocaleString();
-        features.push(`Up to ${formatted} API calls per month`);
-      }
-    }
-
-    Object.entries(rest).forEach(([key, value]) => {
-      if (!value || key === 'visible') return;
-      if (typeof value === 'boolean') {
-        if (value) {
-          features.push(key.replace(/_/g, ' '));
-        }
-      } else {
-        features.push(String(value));
-      }
-    });
-
-    return features.filter(Boolean);
-  };
-
   return (
     <div className="plan-selection">
       <div className="plan-selection-container">
@@ -228,7 +150,7 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
 
         <div className="plans-grid">
           {(plans || []).map((plan) => {
-            const features = normalizeFeatures(plan);
+            const features = getFeatureSentences(plan.features || {});
 
             const isSelecting = selecting && selectedPlanId === plan.id;
             const isFree = isFreePrice(plan.price);

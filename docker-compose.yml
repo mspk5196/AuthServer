@@ -1,55 +1,51 @@
 version: "3.8"
 
 services:
-  #───────────────────────────#
-  # Cpanel Backend
-  #───────────────────────────#
   cpanel-backend:
     build:
       context: ./Cpanel/auth-server
     container_name: cpanel-backend
     ports:
       - "5002:5000"
+    env_file:
+      - /opt/envs/cpanel-backend.env
     networks:
       - webnet
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-  #───────────────────────────#
-  # Cpanel Frontend
-  #───────────────────────────#
   cpanel-frontend:
     build:
       context: ./Cpanel/CpanelWeb
     container_name: cpanel-frontend
     ports:
       - "4002:4000"
+    env_file:
+      - /opt/envs/cpanel-frontend.env
     networks:
       - webnet
 
-  #───────────────────────────#
-  # Developer Backend
-  #───────────────────────────#
   developer-backend:
     build:
       context: ./developerWeb/Backend
     container_name: developer-backend
     ports:
       - "5001:5000"
+    env_file:
+      - /opt/envs/dev-backend.env
     networks:
       - webnet
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-  #───────────────────────────#
-  # Developer Frontend
-  #───────────────────────────#
   developer-frontend:
     build:
       context: ./developerWeb/authServerWeb
     container_name: developer-frontend
     ports:
       - "4001:4000"
+    env_file:
+      - /opt/envs/dev-frontend.env
     networks:
       - webnet
 

@@ -13,6 +13,8 @@ const policyController = require('../controllers/policyController');
 // Public routes (no authentication required)
 router.post('/register', authController.register);
 router.post('/login', authController.developerLogin);
+router.post('/refresh-token', authController.refreshToken);
+router.post('/logout', authController.logout);
 router.post('/resend-verification', authController.resendVerificationEmail);
 router.get('/verify', verifyDeveloper);
 router.get('/verify-email-update', profileController.verifyEmailUpdate);

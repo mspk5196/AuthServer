@@ -15,13 +15,7 @@ const PrivateRoute = ({ children, requireVerification = false }) => {
     );
   }
 
-  // Check JWT token validity
-  if (!authService.isAuthenticated()) {
-    // Redirect to login with return URL
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-
-  // Check if user is authenticated
+  // Check if user is authenticated (backend-driven via session cookie)
   if (!developer) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }

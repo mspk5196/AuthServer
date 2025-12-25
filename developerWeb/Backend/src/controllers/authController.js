@@ -17,6 +17,34 @@ const {
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
+// Helper to parse cookie header into object
+const parseCookies = (cookieHeader) => {
+  if (!cookieHeader) return {};
+  return Object.fromEntries(
+    cookieHeader.split(';').map(c => {
+      const parts = c.trim().split('=');
+      const key = decodeURIComponent(parts.shift());
+      const val = parts.join('=');
+      return [key, decodeURIComponent(val)];
+    })
+  );
+};
+
+const parseExpiryToMs = (str) => {
+  if (!str) return undefined;
+  if (/^\d+$/.test(str)) return parseInt(str, 10) * 1000;
+  const m = str.match(/^(\d+)([smhd])$/);
+  if (!m) return undefined;
+  const n = parseInt(m[1], 10);
+  switch (m[2]) {
+    case 's': return n * 1000;
+    case 'm': return n * 60 * 1000;
+    case 'h': return n * 60 * 60 * 1000;
+    case 'd': return n * 24 * 60 * 60 * 1000;
+    default: return undefined;
+  }
+};
+
 /**
  * User registration (Admin only)
  */
@@ -123,6 +151,96 @@ const register = async (req, res) => {
       message: "Internal server error during registration",
       error: error.message,
     });
+  }
+};
+
+/**
+ * Refresh tokens using httpOnly refresh cookie
+ */
+const refreshToken = async (req, res) => {
+  try {
+    // Preferred: read refresh token from cookie
+    const cookies = parseCookies(req.headers.cookie);
+    const refreshToken = req.body?.refreshToken || cookies['refresh_token'] || cookies['refresh-token'];
+
+    if (!refreshToken) {
+      return res.status(401).json({ success: false, message: 'Refresh token required', error: 'NO_REFRESH_TOKEN' });
+    }
+
+    let decoded;
+    try {
+      decoded = verifyToken(refreshToken, process.env.JWT_REFRESH_SECRET);
+    } catch (err) {
+      return res.status(403).json({ success: false, message: 'Invalid refresh token', error: 'INVALID_REFRESH_TOKEN' });
+    }
+
+    // Check DB for stored refresh token
+    const dbRes = await pool.query('SELECT user_id FROM refresh_tokens WHERE token = $1 AND expires_at > NOW()', [refreshToken]);
+    if (dbRes.rows.length === 0) {
+      return res.status(403).json({ success: false, message: 'Refresh token not found or expired', error: 'INVALID_REFRESH_TOKEN' });
+    }
+
+    const userId = dbRes.rows[0].user_id;
+
+    // Build token payload from decoded
+    const payload = {
+      userId: decoded.userId || decoded.id || decoded.user_id,
+      email: decoded.email,
+      name: decoded.name,
+      username: decoded.username,
+      role: decoded.role || 'developer',
+      iat: Math.floor(Date.now() / 1000)
+    };
+
+    const { accessToken: newAccess, refreshToken: newRefresh } = generateTokens(payload);
+
+    // replace refresh token record in DB
+    await pool.query('BEGIN');
+    await pool.query('DELETE FROM refresh_tokens WHERE token = $1', [refreshToken]);
+    await pool.query('INSERT INTO refresh_tokens (user_id, token, expires_at, created_at) VALUES ($1, $2, NOW() + INTERVAL \'7 days\', NOW())', [userId, newRefresh]);
+    await pool.query('COMMIT');
+
+    // Set cookies
+    const accessMaxAge = parseExpiryToMs(process.env.JWT_EXPIRE || '15m');
+    const refreshMaxAge = parseExpiryToMs(process.env.JWT_REFRESH_EXPIRE || '7d');
+    const cookieOpts = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' };
+    if (accessMaxAge) cookieOpts.maxAge = accessMaxAge;
+    res.cookie('access_token', newAccess, cookieOpts);
+
+    const refreshOpts = { ...cookieOpts };
+    if (refreshMaxAge) refreshOpts.maxAge = refreshMaxAge;
+    res.cookie('refresh_token', newRefresh, refreshOpts);
+
+    return res.status(200).json({ success: true, message: 'Token refreshed' });
+  } catch (error) {
+    console.error('Refresh token error:', error);
+    try { await pool.query('ROLLBACK'); } catch(e){}
+    return res.status(500).json({ success: false, message: 'Failed to refresh token' });
+  }
+};
+
+
+/**
+ * Logout developer - clear refresh token and cookies
+ */
+const logout = async (req, res) => {
+  try {
+    const cookies = parseCookies(req.headers.cookie);
+    const refreshToken = req.body?.refreshToken || cookies['refresh_token'] || cookies['refresh-token'];
+
+    if (refreshToken) {
+      await pool.query('DELETE FROM refresh_tokens WHERE token = $1', [refreshToken]);
+    }
+
+    // Clear cookies
+    const clearOpts = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 0 };
+    res.cookie('access_token', '', clearOpts);
+    res.cookie('refresh_token', '', clearOpts);
+
+    return res.status(200).json({ success: true, message: 'Logged out' });
+  } catch (error) {
+    console.error('Logout error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to logout' });
   }
 };
 
@@ -293,24 +411,53 @@ const developerLogin = async (req, res) => {
       [developer.id, refreshToken]
     );
 
-    res.status(200).json({
-      success: true,
-      message: 'Login successful',
-      data: {
-        user: {
-          id: developer.id,
-          email: developer.email,
-          name: developer.name,
-          username: developer.username,
-          email_verified: developer.email_verified,
-          role: 'developer'
-        },
-        tokens: {
-          accessToken,
-          refreshToken
-        }
-      }
-    });
+        // Set httpOnly cookies for access and refresh tokens
+        const parseExpiryToMs = (str) => {
+          if (!str) return undefined;
+          if (/^\d+$/.test(str)) return parseInt(str, 10) * 1000;
+          const m = str.match(/^(\d+)([smhd])$/);
+          if (!m) return undefined;
+          const n = parseInt(m[1], 10);
+          switch (m[2]) {
+            case 's': return n * 1000;
+            case 'm': return n * 60 * 1000;
+            case 'h': return n * 60 * 60 * 1000;
+            case 'd': return n * 24 * 60 * 60 * 1000;
+            default: return undefined;
+          }
+        };
+
+        const accessMaxAge = parseExpiryToMs(process.env.JWT_EXPIRE || '15m');
+        const refreshMaxAge = parseExpiryToMs(process.env.JWT_REFRESH_EXPIRE || '7d');
+
+        const cookieOpts = {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+        };
+
+        if (accessMaxAge) cookieOpts.maxAge = accessMaxAge;
+        res.cookie('access_token', accessToken, cookieOpts);
+
+        const refreshOpts = { ...cookieOpts };
+        if (refreshMaxAge) refreshOpts.maxAge = refreshMaxAge;
+        res.cookie('refresh_token', refreshToken, refreshOpts);
+
+        // Return user payload only; tokens are stored in httpOnly cookies
+        res.status(200).json({
+          success: true,
+          message: 'Login successful',
+          data: {
+            user: {
+              id: developer.id,
+              email: developer.email,
+              name: developer.name,
+              username: developer.username,
+              email_verified: developer.email_verified,
+              role: 'developer'
+            }
+          }
+        });
 
   } catch (error) {
     console.error('Developer login error:', error);
@@ -1640,4 +1787,6 @@ module.exports = {
   googleLogin,
   googleCallback,
   acceptPoliciesForOAuth,
+  refreshToken,
+  logout,
 };

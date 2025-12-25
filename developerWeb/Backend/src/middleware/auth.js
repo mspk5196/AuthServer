@@ -39,8 +39,15 @@ const verifyToken = (token, secret = process.env.JWT_SECRET) => {
  */
 const authenticateToken = (req, res, next) => {
   try {
+    // Try Authorization header first
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+    let token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+    // If no Authorization header, try access token cookie
+    if (!token && req.headers.cookie) {
+      const cookies = Object.fromEntries(req.headers.cookie.split(';').map(c => c.trim().split('=').map(decodeURIComponent)));
+      token = cookies['access_token'] || cookies['access-token'] || cookies['accessToken'];
+    }
 
     if (!token) {
       return res.status(401).json({
@@ -68,7 +75,12 @@ const authenticateToken = (req, res, next) => {
  */
 const verifyRefreshToken = (req, res, next) => {
   try {
-    const { refreshToken } = req.body;
+    // Accept refresh token either in body or in cookie (cookie preferred)
+    let refreshToken = req.body?.refreshToken;
+    if (!refreshToken && req.headers.cookie) {
+      const cookies = Object.fromEntries(req.headers.cookie.split(';').map(c => c.trim().split('=').map(decodeURIComponent)));
+      refreshToken = cookies['refresh_token'] || cookies['refresh-token'] || cookies['refreshToken'];
+    }
 
     if (!refreshToken) {
       return res.status(401).json({

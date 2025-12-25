@@ -73,7 +73,7 @@ export const AuthProvider = ({ children }) => {
     logout,
     checkAuth,
     updateDeveloper,
-    isAuthenticated: !!developer && authService.isAuthenticated(),
+    isAuthenticated: !!developer,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

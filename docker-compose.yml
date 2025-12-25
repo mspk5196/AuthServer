@@ -8,7 +8,7 @@ services:
     ports:
       - "5002:5000"
     env_file:
-      - /opt/envs/cpanel-backend.env
+      - /envs/cpanel-backend.env
     networks:
       - webnet
     extra_hosts:
@@ -21,7 +21,7 @@ services:
     ports:
       - "4002:4000"
     env_file:
-      - /opt/envs/cpanel-frontend.env
+      - /envs/cpanel-frontend.env
     networks:
       - webnet
 
@@ -32,7 +32,7 @@ services:
     ports:
       - "5001:5000"
     env_file:
-      - /opt/envs/dev-backend.env
+      - /envs/dev-backend.env
     networks:
       - webnet
     extra_hosts:
@@ -45,7 +45,7 @@ services:
     ports:
       - "4001:4000"
     env_file:
-      - /opt/envs/dev-frontend.env
+      - /envs/dev-frontend.env
     networks:
       - webnet
 

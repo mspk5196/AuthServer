@@ -3,7 +3,7 @@ import { api } from '../../utils/api';
 import paymentService from '../../services/paymentService';
 import { getFeatureSentences } from '../PlanFeatures/PlanFeatures';
 import './PlanSelection.scss';
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
 
 const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
   const [plans, setPlans] = useState([]);
@@ -20,7 +20,7 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
   const fetchPlans = async () => {
     try {
       setLoading(true);
-      console.log(API_BASE_URL);
+      
       
       const response = await api.get('/developer/plans');
       const fetched = response.data.plans || [];

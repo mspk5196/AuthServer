@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../../utils/api';
 import PlanFeatures from '../../components/PlanFeatures/PlanFeatures';
 import './Pricing.scss';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 const Pricing = () => {
   const [plans, setPlans] = useState([]);
@@ -11,6 +12,8 @@ const Pricing = () => {
 
   useEffect(() => {
     const fetchPlans = async () => {
+      console.log(API_BASE_URL);
+      
       try {
         const response = await api.get('/developer/plans');
         setPlans(response.data.plans || []);

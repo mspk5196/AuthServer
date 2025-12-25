@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { authService } from '../../services/authService';
+import { api } from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import { validateEmail, validatePassword } from '../../utils/validators';
 import { tokenService } from '../../services/tokenService';
@@ -28,7 +29,7 @@ const Login = () => {
 
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
+  const { login, checkAuth } = useAuth();
 
   // Handle Google OAuth callback
   useEffect(() => {
@@ -61,21 +62,26 @@ const Login = () => {
       // Clean up URL
       window.history.replaceState({}, '', '/login');
     } else if (token && refreshToken) {
-      // Prefer backend-managed auth via httpOnly cookies. If tokens are
-      // present in the URL (legacy OAuth flow), do not store them in
-      // localStorage — instead call backend to establish session and fetch
-      // the developer payload.
-      authService.getCurrentDeveloper()
-        .then(() => {
-          navigate('/dashboard');
-        })
-        .catch((err) => {
-          console.error('Failed to fetch user:', err);
-          setMessage({
-            type: 'error',
-            text: 'Authentication successful but failed to load user data',
-          });
-        });
+      // Send tokens to backend so server sets httpOnly cookies and establishes session
+      (async () => {
+        try {
+          const resp = await api.post('/developer/exchange-tokens', { token, refreshToken });
+          if (resp.success) {
+            // Refresh client-side developer state from backend
+            try { await checkAuth(); } catch(e) {}
+            // Clean up URL and navigate
+            window.history.replaceState({}, '', '/login');
+            navigate('/dashboard');
+          } else {
+            setMessage({ type: 'error', text: resp.message || 'Failed to establish session' });
+            window.history.replaceState({}, '', '/login');
+          }
+        } catch (err) {
+          console.error('Failed to exchange OAuth tokens:', err);
+          setMessage({ type: 'error', text: err.message || 'Authentication failed' });
+          window.history.replaceState({}, '', '/login');
+        }
+      })();
     }
   }, [location, navigate]);
 

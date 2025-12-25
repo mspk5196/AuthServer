@@ -15,6 +15,8 @@ router.post('/register', authController.register);
 router.post('/login', authController.developerLogin);
 router.post('/refresh-token', authController.refreshToken);
 router.post('/logout', authController.logout);
+// Exchange tokens obtained via OAuth redirect (frontend posts tokens here)
+router.post('/exchange-tokens', authController.exchangeOAuthTokens);
 router.post('/resend-verification', authController.resendVerificationEmail);
 router.get('/verify', verifyDeveloper);
 router.get('/verify-email-update', profileController.verifyEmailUpdate);

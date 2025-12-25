@@ -211,7 +211,7 @@ const refreshToken = async (req, res) => {
     const cookieOpts = {
       httpOnly: true,
       secure: cookieSecure,
-      sameSite: 'lax',
+      sameSite: 'none',
       path: '/',
     };
     if (accessMaxAge) cookieOpts.maxAge = accessMaxAge;
@@ -248,7 +248,7 @@ const logout = async (req, res) => {
       try { return new URL(process.env.BACKEND_URL || '').hostname; } catch (e) { return undefined; }
     })();
     const cookieSecure = process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : (process.env.NODE_ENV === 'production');
-    const clearOpts = { httpOnly: true, secure: cookieSecure, sameSite: 'lax', maxAge: 0, path: '/' };
+    const clearOpts = { httpOnly: true, secure: cookieSecure, sameSite: 'none', maxAge: 0, path: '/' };
     if (cookieDomain) clearOpts.domain = cookieDomain;
     res.cookie('access_token', '', clearOpts);
     res.cookie('refresh_token', '', clearOpts);
@@ -257,6 +257,84 @@ const logout = async (req, res) => {
   } catch (error) {
     console.error('Logout error:', error);
     return res.status(500).json({ success: false, message: 'Failed to logout' });
+  }
+};
+
+
+/**
+ * Exchange tokens received from OAuth flow (client-side) and set httpOnly cookies.
+ * This endpoint is used when the OAuth provider redirects back to the frontend
+ * with `token` and `refreshToken` query params. The frontend should POST those
+ * tokens to this endpoint so the server can validate and store the refresh token
+ * and set secure httpOnly cookies for the session.
+ */
+const exchangeOAuthTokens = async (req, res) => {
+  try {
+    const { token: accessToken, refreshToken } = req.body;
+
+    if (!accessToken || !refreshToken) {
+      return res.status(400).json({ success: false, message: 'Both accessToken and refreshToken are required' });
+    }
+
+    // Verify access token; if invalid, try verify refresh token
+    let decoded;
+    try {
+      decoded = verifyToken(accessToken);
+    } catch (err) {
+      try {
+        decoded = verifyToken(refreshToken, process.env.JWT_REFRESH_SECRET);
+      } catch (err2) {
+        return res.status(403).json({ success: false, message: 'Invalid tokens provided', error: 'INVALID_TOKENS' });
+      }
+    }
+
+    const userId = decoded.userId || decoded.id || decoded.user_id;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'Token does not contain user id' });
+    }
+
+    // Ensure developer exists
+    const devRes = await pool.query('SELECT id, email, name, username, email_verified FROM developers WHERE id = $1', [userId]);
+    if (devRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Developer not found' });
+    }
+
+    // Store refresh token in DB (replace any matching token)
+    await pool.query('INSERT INTO refresh_tokens (user_id, token, expires_at, created_at) VALUES ($1, $2, NOW() + INTERVAL \'7 days\', NOW())', [userId, refreshToken]);
+
+    // Set cookies similar to login
+    const parseExpiryToMs = (str) => {
+      if (!str) return undefined;
+      if (/^\d+$/.test(str)) return parseInt(str, 10) * 1000;
+      const m = str.match(/^(\d+)([smhd])$/);
+      if (!m) return undefined;
+      const n = parseInt(m[1], 10);
+      switch (m[2]) {
+        case 's': return n * 1000;
+        case 'm': return n * 60 * 1000;
+        case 'h': return n * 60 * 60 * 1000;
+        case 'd': return n * 24 * 60 * 60 * 1000;
+        default: return undefined;
+      }
+    };
+
+    const accessMaxAge = parseExpiryToMs(process.env.JWT_EXPIRE || '15m');
+    const refreshMaxAge = parseExpiryToMs(process.env.JWT_REFRESH_EXPIRE || '7d');
+    const cookieDomain = (() => { try { return new URL(process.env.BACKEND_URL || '').hostname; } catch(e) { return undefined; } })();
+    const cookieSecure = process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : (process.env.NODE_ENV === 'production');
+    const cookieOpts = { httpOnly: true, secure: cookieSecure, sameSite: 'none', path: '/' };
+    if (cookieDomain) cookieOpts.domain = cookieDomain;
+    if (accessMaxAge) cookieOpts.maxAge = accessMaxAge;
+
+    res.cookie('access_token', accessToken, cookieOpts);
+    const refreshOpts = { ...cookieOpts };
+    if (refreshMaxAge) refreshOpts.maxAge = refreshMaxAge;
+    res.cookie('refresh_token', refreshToken, refreshOpts);
+
+    return res.status(200).json({ success: true, message: 'Session established', data: { user: devRes.rows[0] } });
+  } catch (error) {
+    console.error('Exchange OAuth tokens error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to establish session' });
   }
 };
 
@@ -1805,4 +1883,5 @@ module.exports = {
   acceptPoliciesForOAuth,
   refreshToken,
   logout,
+  exchangeOAuthTokens,
 };

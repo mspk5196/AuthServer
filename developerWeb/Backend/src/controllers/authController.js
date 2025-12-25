@@ -8,11 +8,11 @@ const { OAuth2Client } = require('google-auth-library');
 require('dotenv').config();
 const { passwordEncryptAES } = require('../utils/decryptAES')
 const { sendMail } = require("../utils/mailer.js");
-const { 
-  buildVerifyAccountEmail, 
+const {
+  buildVerifyAccountEmail,
   buildPasswordChangeRequestEmail,
   buildPasswordResetEmail,
-  buildPasswordChangedEmail 
+  buildPasswordChangedEmail
 } = require('../templates/emailTemplates');
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -203,8 +203,19 @@ const refreshToken = async (req, res) => {
     // Set cookies
     const accessMaxAge = parseExpiryToMs(process.env.JWT_EXPIRE || '15m');
     const refreshMaxAge = parseExpiryToMs(process.env.JWT_REFRESH_EXPIRE || '7d');
-    const cookieOpts = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' };
+    // const cookieOpts = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' };
+    const cookieSecure = process.env.COOKIE_SECURE
+      ? process.env.COOKIE_SECURE === 'true'
+      : (process.env.NODE_ENV === 'production');
+
+    const cookieOpts = {
+      httpOnly: true,
+      secure: cookieSecure,
+      sameSite: 'lax',
+      path: '/',
+    };
     if (accessMaxAge) cookieOpts.maxAge = accessMaxAge;
+
     res.cookie('access_token', newAccess, cookieOpts);
 
     const refreshOpts = { ...cookieOpts };
@@ -214,7 +225,7 @@ const refreshToken = async (req, res) => {
     return res.status(200).json({ success: true, message: 'Token refreshed' });
   } catch (error) {
     console.error('Refresh token error:', error);
-    try { await pool.query('ROLLBACK'); } catch(e){}
+    try { await pool.query('ROLLBACK'); } catch (e) { }
     return res.status(500).json({ success: false, message: 'Failed to refresh token' });
   }
 };
@@ -233,7 +244,12 @@ const logout = async (req, res) => {
     }
 
     // Clear cookies
-    const clearOpts = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 0 };
+    const cookieDomain = (() => {
+      try { return new URL(process.env.BACKEND_URL || '').hostname; } catch (e) { return undefined; }
+    })();
+    const cookieSecure = process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : (process.env.NODE_ENV === 'production');
+    const clearOpts = { httpOnly: true, secure: cookieSecure, sameSite: 'lax', maxAge: 0, path: '/' };
+    if (cookieDomain) clearOpts.domain = cookieDomain;
     res.cookie('access_token', '', clearOpts);
     res.cookie('refresh_token', '', clearOpts);
 
@@ -411,53 +427,53 @@ const developerLogin = async (req, res) => {
       [developer.id, refreshToken]
     );
 
-        // Set httpOnly cookies for access and refresh tokens
-        const parseExpiryToMs = (str) => {
-          if (!str) return undefined;
-          if (/^\d+$/.test(str)) return parseInt(str, 10) * 1000;
-          const m = str.match(/^(\d+)([smhd])$/);
-          if (!m) return undefined;
-          const n = parseInt(m[1], 10);
-          switch (m[2]) {
-            case 's': return n * 1000;
-            case 'm': return n * 60 * 1000;
-            case 'h': return n * 60 * 60 * 1000;
-            case 'd': return n * 24 * 60 * 60 * 1000;
-            default: return undefined;
-          }
-        };
+    // Set httpOnly cookies for access and refresh tokens
+    const parseExpiryToMs = (str) => {
+      if (!str) return undefined;
+      if (/^\d+$/.test(str)) return parseInt(str, 10) * 1000;
+      const m = str.match(/^(\d+)([smhd])$/);
+      if (!m) return undefined;
+      const n = parseInt(m[1], 10);
+      switch (m[2]) {
+        case 's': return n * 1000;
+        case 'm': return n * 60 * 1000;
+        case 'h': return n * 60 * 60 * 1000;
+        case 'd': return n * 24 * 60 * 60 * 1000;
+        default: return undefined;
+      }
+    };
 
-        const accessMaxAge = parseExpiryToMs(process.env.JWT_EXPIRE || '15m');
-        const refreshMaxAge = parseExpiryToMs(process.env.JWT_REFRESH_EXPIRE || '7d');
+    const accessMaxAge = parseExpiryToMs(process.env.JWT_EXPIRE || '15m');
+    const refreshMaxAge = parseExpiryToMs(process.env.JWT_REFRESH_EXPIRE || '7d');
 
-        const cookieOpts = {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax',
-        };
+    const cookieOpts = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+    };
 
-        if (accessMaxAge) cookieOpts.maxAge = accessMaxAge;
-        res.cookie('access_token', accessToken, cookieOpts);
+    if (accessMaxAge) cookieOpts.maxAge = accessMaxAge;
+    res.cookie('access_token', accessToken, cookieOpts);
 
-        const refreshOpts = { ...cookieOpts };
-        if (refreshMaxAge) refreshOpts.maxAge = refreshMaxAge;
-        res.cookie('refresh_token', refreshToken, refreshOpts);
+    const refreshOpts = { ...cookieOpts };
+    if (refreshMaxAge) refreshOpts.maxAge = refreshMaxAge;
+    res.cookie('refresh_token', refreshToken, refreshOpts);
 
-        // Return user payload only; tokens are stored in httpOnly cookies
-        res.status(200).json({
-          success: true,
-          message: 'Login successful',
-          data: {
-            user: {
-              id: developer.id,
-              email: developer.email,
-              name: developer.name,
-              username: developer.username,
-              email_verified: developer.email_verified,
-              role: 'developer'
-            }
-          }
-        });
+    // Return user payload only; tokens are stored in httpOnly cookies
+    res.status(200).json({
+      success: true,
+      message: 'Login successful',
+      data: {
+        user: {
+          id: developer.id,
+          email: developer.email,
+          name: developer.name,
+          username: developer.username,
+          email_verified: developer.email_verified,
+          role: 'developer'
+        }
+      }
+    });
 
   } catch (error) {
     console.error('Developer login error:', error);
@@ -759,7 +775,7 @@ const changePasswordWithToken = async (req, res) => {
       console.log('POST request received for change password');
       console.log('req.body:', req.body);
       console.log('req.headers:', req.headers);
-      
+
       const { currentPassword, newPassword } = req.body || {};
 
       if (!currentPassword || !newPassword) {
@@ -809,9 +825,9 @@ const changePasswordWithToken = async (req, res) => {
       await sendMail({
         to: developer.email,
         subject: 'Password Changed Successfully',
-        html: buildPasswordChangedEmail({ 
-          name: developer.name, 
-          changedAt: new Date().toLocaleString() 
+        html: buildPasswordChangedEmail({
+          name: developer.name,
+          changedAt: new Date().toLocaleString()
         }),
       }).catch(err => console.error('Send password changed email error:', err));
 
@@ -1346,9 +1362,9 @@ const resetPasswordWithToken = async (req, res) => {
       await sendMail({
         to: developer.email,
         subject: 'Password Reset Successful',
-        html: buildPasswordChangedEmail({ 
-          name: developer.name, 
-          changedAt: new Date().toLocaleString() 
+        html: buildPasswordChangedEmail({
+          name: developer.name,
+          changedAt: new Date().toLocaleString()
         }),
       }).catch(err => console.error('Send password reset confirmation email error:', err));
 
@@ -1574,7 +1590,7 @@ const resetPasswordWithToken = async (req, res) => {
  */
 const googleLogin = async (req, res) => {
   const redirectUrl = `${process.env.BACKEND_URL}/api/developer/auth/google/callback`;
-  
+
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
     `client_id=${process.env.GOOGLE_CLIENT_ID}&` +
     `redirect_uri=${encodeURIComponent(redirectUrl)}&` +
@@ -1654,7 +1670,7 @@ const googleCallback = async (req, res) => {
     } else {
       // Create new developer with Google account
       const username = email.split('@')[0] + '_' + Math.random().toString(36).substr(2, 5);
-      
+
       const result = await pool.query(
         `INSERT INTO developers (name, username, email, google_id, email_verified, created_at, updated_at)
          VALUES ($1, $2, $3, $4, true, NOW(), NOW()) RETURNING *`,

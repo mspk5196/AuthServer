@@ -6,6 +6,7 @@ import './PlanSelection.scss';
 
 const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
   const [plans, setPlans] = useState([]);
+  const [displayedPlans, setDisplayedPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selecting, setSelecting] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState(null);
@@ -19,7 +20,24 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
     try {
       setLoading(true);
       const response = await api.get('/developer/plans');
-      setPlans(response.data.plans || []);
+      const fetched = response.data.plans || [];
+      setPlans(fetched);
+      // initialize displayedPlans based on whether a currentPlanId was provided
+      if (currentPlanId) {
+        const current = fetched.find((p) => p.id === currentPlanId);
+        if (current) {
+          const currentPrice = Number(current.price || 0);
+          const higher = fetched.filter((p) => {
+            const pPrice = Number(p.price || 0);
+            return pPrice > currentPrice;
+          });
+          setDisplayedPlans(higher);
+        } else {
+          setDisplayedPlans(fetched);
+        }
+      } else {
+        setDisplayedPlans(fetched);
+      }
     } catch (err) {
       console.error('Failed to fetch plans:', err);
       setError('Failed to load plans. Please refresh the page.');
@@ -27,6 +45,25 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
       setLoading(false);
     }
   };
+
+  // Update displayedPlans whenever plans or currentPlanId change
+  useEffect(() => {
+    if (!plans || plans.length === 0) return;
+    if (!currentPlanId) {
+      setDisplayedPlans(plans);
+      return;
+    }
+
+    const current = plans.find((p) => p.id === currentPlanId);
+    if (!current) {
+      setDisplayedPlans(plans);
+      return;
+    }
+
+    const currentPrice = Number(current.price || 0);
+    const higher = plans.filter((p) => Number(p.price || 0) > currentPrice);
+    setDisplayedPlans(higher);
+  }, [plans, currentPlanId]);
 
   const isFreePrice = (price) => {
     if (price === null || price === undefined) return true;
@@ -149,7 +186,7 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
         )}
 
         <div className="plans-grid">
-          {(plans || []).map((plan) => {
+          {(displayedPlans || []).map((plan) => {
             const features = getFeatureSentences(plan.features || {});
 
             const isSelecting = selecting && selectedPlanId === plan.id;

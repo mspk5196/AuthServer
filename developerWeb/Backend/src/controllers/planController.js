@@ -157,13 +157,18 @@ const selectPlan = async (req, res) => {
         const endDate = existingPlan.end_date ? new Date(existingPlan.end_date) : null;
         const isWithinCurrentPeriod = !endDate || endDate > now;
 
-        if (newPrice < currentPrice && isWithinCurrentPeriod) {
-          await client.query('ROLLBACK');
-          return res.status(400).json({
-            success: false,
-            error: 'DOWNGRADE_NOT_ALLOWED',
-            message: 'You can switch to a lower-priced plan only after your current plan period ends.',
-          });
+        // If user is attempting to change to a different plan while current
+        // plan is still active, only allow upgrades to strictly higher-priced plans.
+        const isSwitchingPlan = existingPlan.plan_id !== planId;
+        if (isWithinCurrentPeriod && isSwitchingPlan) {
+          if (newPrice <= currentPrice) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+              success: false,
+              error: 'UPGRADE_ONLY_ALLOWED',
+              message: 'You can only switch to a higher-priced plan while your current plan is active.',
+            });
+          }
         }
       }
 

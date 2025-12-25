@@ -122,3 +122,6 @@ export const api = {
 };
 
 export { ApiError };
+
+// Default export for backward compatibility with older imports
+export default api;

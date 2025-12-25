@@ -10,7 +10,7 @@ RUN npm run build
 
 
 # ---- Production Stage ----
-FROM node:18
+FROM node:22
 WORKDIR /app
 
 # Install a fast static server

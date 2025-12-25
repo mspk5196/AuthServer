@@ -23,15 +23,8 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuth = async () => {
     try {
-      // Check if we have a valid token
-      if (!authService.isAuthenticated()) {
-        setDeveloper(null);
-        setLoading(false);
-        setInitialized(true);
-        return;
-      }
-
-      // Try to get current developer
+      // Try to get current developer from backend. Backend should return
+      // developer data when an httpOnly access cookie is valid.
       const data = await authService.getCurrentDeveloper();
       setDeveloper(data.developer);
     } catch (error) {

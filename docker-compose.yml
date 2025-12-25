@@ -17,6 +17,9 @@ services:
   cpanel-frontend:
     build:
       context: ./Cpanel/CpanelWeb
+      args:
+        - VITE_API_BASE_URL=${VITE_API_BASE_URL}
+        - VITE_MAIN_PORTAL_URL=${VITE_MAIN_PORTAL_URL}
     container_name: cpanel-frontend
     ports:
       - "4002:4000"
@@ -41,6 +44,10 @@ services:
   developer-frontend:
     build:
       context: ./developerWeb/authServerWeb
+      args:
+        - VITE_API_BASE_URL=${VITE_API_BASE_URL}
+        - VITE_API_URL=${VITE_API_URL}
+        - VITE_SUPPORT_EMAIL=${VITE_SUPPORT_EMAIL}
     container_name: developer-frontend
     ports:
       - "4001:4000"

@@ -2,7 +2,6 @@
  * Enhanced API utility with JWT token support
  */
 
-import { tokenService } from '../services/tokenService';
 
 // Base URL that already includes the /api prefix
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
@@ -28,8 +27,8 @@ const handleResponse = async (response) => {
     // Handle unauthorized - clear tokens
     // But don't clear tokens for email not verified or account blocked errors
     if (response.status === 401 && data.error !== 'EMAIL_NOT_VERIFIED') {
-      tokenService.clearTokens();
-      // Optionally redirect to login
+      // If backend returns 401, redirect to login. Token clearing is handled
+      // server-side via cookie revocation when appropriate.
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
@@ -46,18 +45,13 @@ const handleResponse = async (response) => {
 };
 
 const getHeaders = (customHeaders = {}) => {
-  const headers = {
+  // Do NOT attach Authorization headers from frontend-stored tokens.
+  // Backend should authenticate requests using httpOnly cookies when
+  // applicable. Only include provided custom headers and Content-Type.
+  return {
     'Content-Type': 'application/json',
     ...customHeaders,
   };
-
-  // Add JWT token if available
-  const token = tokenService.getToken();
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  return headers;
 };
 
 export const api = {

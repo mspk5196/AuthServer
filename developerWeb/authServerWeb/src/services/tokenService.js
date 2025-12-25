@@ -4,90 +4,26 @@
  * Also manages refresh token logic
  */
 
-const TOKEN_KEY = import.meta.env.VITE_JWT_SECRET;
-const REFRESH_TOKEN_KEY = import.meta.env.VITE_JWT_REFRESH_SECRET;
-
+// The frontend must NOT store or manage signing secrets or refresh tokens.
+// Token lifecycle (access/refresh token issuance, refresh, and revocation)
+// should be handled entirely by the backend using secure httpOnly cookies.
+// This `tokenService` is intentionally a no-op shim to avoid storing tokens
+// in localStorage. Keep methods for compatibility but they do not persist
+// or return sensitive values.
 export const tokenService = {
-  // Get access token
-  getToken: () => {
-    return localStorage.getItem(TOKEN_KEY);
+  getToken: () => null,
+  setToken: (_token) => {
+    // no-op: tokens are managed by backend via httpOnly cookies
   },
-
-  // Set access token
-  setToken: (token) => {
-    if (token) {
-      localStorage.setItem(TOKEN_KEY, token);
-    } else {
-      localStorage.removeItem(TOKEN_KEY);
-    }
+  getRefreshToken: () => null,
+  setRefreshToken: (_token) => {
+    // no-op
   },
-
-  // Get refresh token
-  getRefreshToken: () => {
-    return localStorage.getItem(REFRESH_TOKEN_KEY);
-  },
-
-  // Set refresh token
-  setRefreshToken: (token) => {
-    if (token) {
-      localStorage.setItem(REFRESH_TOKEN_KEY, token);
-    } else {
-      localStorage.removeItem(REFRESH_TOKEN_KEY);
-    }
-  },
-
-  // Remove all tokens
   clearTokens: () => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    // no-op
   },
-
-  // Check if token exists
-  hasToken: () => {
-    return !!localStorage.getItem(TOKEN_KEY);
-  },
-
-  // Decode JWT token (without verification)
-  decodeToken: (token) => {
-    try {
-      const base64Url = token.split('.')[1];
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const jsonPayload = decodeURIComponent(
-        atob(base64)
-          .split('')
-          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-          .join('')
-      );
-      return JSON.parse(jsonPayload);
-    } catch (error) {
-      console.error('Error decoding token:', error);
-      return null;
-    }
-  },
-
-  // Check if token is expired
-  isTokenExpired: (token) => {
-    if (!token) return true;
-    
-    const decoded = tokenService.decodeToken(token);
-    if (!decoded || !decoded.exp) return true;
-    
-    const currentTime = Date.now() / 1000;
-    return decoded.exp < currentTime;
-  },
-
-  // Get user data from token
-  getUserFromToken: (token) => {
-    if (!token) return null;
-    
-    const decoded = tokenService.decodeToken(token);
-    return decoded ? {
-      id: decoded.id || decoded.developerId,
-      email: decoded.email,
-      username: decoded.username,
-      name: decoded.name,
-      exp: decoded.exp,
-      iat: decoded.iat
-    } : null;
-  },
+  hasToken: () => false,
+  decodeToken: (_token) => null,
+  isTokenExpired: (_token) => true,
+  getUserFromToken: (_token) => null,
 };

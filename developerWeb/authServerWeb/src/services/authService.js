@@ -26,18 +26,8 @@ export const authService = {
   login: async (credentials) => {
     const response = await api.post('/developer/login', credentials);
     
-    // Normalize response shape and store tokens
-    const tokens = response?.data?.tokens || {
-      accessToken: response?.token || response?.accessToken,
-      refreshToken: response?.refreshToken,
-    };
-
-    if (tokens?.accessToken) {
-      tokenService.setToken(tokens.accessToken);
-    }
-    if (tokens?.refreshToken) {
-      tokenService.setRefreshToken(tokens.refreshToken);
-    }
+    // Expect backend to set httpOnly cookies for access/refresh tokens.
+    // Do not store tokens in frontend. Normalize developer/user payload below.
 
     // Normalize developer/user payload
     const developer =
@@ -86,36 +76,19 @@ export const authService = {
 
   // Refresh access token
   refreshToken: async () => {
-    const refreshToken = tokenService.getRefreshToken();
-    if (!refreshToken) {
-      throw new Error('No refresh token available');
-    }
-
-    const response = await api.post('/developer/refresh-token', {
-      refreshToken
-    });
-
-    // Support multiple shapes for refreshed token
-    const newAccessToken =
-      response?.data?.token ||
-      response?.data?.accessToken ||
-      response?.token ||
-      response?.accessToken;
-    if (newAccessToken) {
-      tokenService.setToken(newAccessToken);
-    }
-
-    // Optionally return normalized structure
-    return { token: newAccessToken };
+    // Ask backend to refresh tokens using httpOnly refresh cookie. Backend
+    // should set the new access cookie in the response. Frontend should not
+    // persist tokens in localStorage.
+    const response = await api.post('/developer/refresh-token');
+    return response;
   },
 
   // Check if user is authenticated
   isAuthenticated: () => {
-    const token = tokenService.getToken();
-    if (!token) return false;
-    
-    // Check if token is expired
-    return !tokenService.isTokenExpired(token);
+    // Frontend shouldn't rely on local token presence. Use `getCurrentDeveloper`
+    // from the backend to determine authentication state. This method remains
+    // for compatibility and returns false.
+    return false;
   },
 
   // Request password reset (forgot password)

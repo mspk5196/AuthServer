@@ -61,11 +61,10 @@ const Login = () => {
       // Clean up URL
       window.history.replaceState({}, '', '/login');
     } else if (token && refreshToken) {
-      // Store tokens and redirect
-      tokenService.setToken(token);
-      tokenService.setRefreshToken(refreshToken);
-      
-      // Fetch user data and navigate
+      // Prefer backend-managed auth via httpOnly cookies. If tokens are
+      // present in the URL (legacy OAuth flow), do not store them in
+      // localStorage — instead call backend to establish session and fetch
+      // the developer payload.
       authService.getCurrentDeveloper()
         .then(() => {
           navigate('/dashboard');

@@ -56,9 +56,8 @@ const getHeaders = (customHeaders = {}) => {
 
 export const api = {
   get: async (endpoint, options = {}) => {
-    console.log('API POST Request:', {
+    console.log('API GET Request:', {
       url: `${API_BASE_URL}${endpoint}`,
-      body: body,
       headers: getHeaders(options.headers)
     });
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -73,7 +72,6 @@ export const api = {
   post: async (endpoint, body, options = {}) => {
     console.log('API POST Request:', {
       url: `${API_BASE_URL}${endpoint}`,
-      body: body,
       headers: getHeaders(options.headers)
     });
     

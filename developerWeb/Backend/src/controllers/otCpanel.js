@@ -7,7 +7,14 @@ const pool = require('../config/db');
 const createCpanelTicket = async (req, res) => {
   try {
     const authHeader = req.headers.authorization || '';
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    let token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+    // Fallback to access_token cookie if no Authorization header
+    if (!token && req.headers.cookie) {
+      const cookies = Object.fromEntries(req.headers.cookie.split(';').map(c => c.trim().split('=').map(decodeURIComponent)));
+      token = cookies['access_token'] || cookies['access-token'] || cookies['accessToken'] || null;
+    }
+
     if (!token) return res.status(401).json({ success: false, message: 'Missing access token' });
 
     const payload = verifyToken(token);

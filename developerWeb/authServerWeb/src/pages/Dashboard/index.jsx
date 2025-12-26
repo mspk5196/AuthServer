@@ -67,7 +67,14 @@ const Dashboard = () => {
       const res = await api.post('/cpanel/cpanel-ticket', {});
       const url = res?.data?.url || res?.url;
       if (!url) throw new Error('No cPanel URL returned');
-      window.location.href = url;
+      // Open cPanel in a new tab so the dashboard remains active
+      // (prevents instant return/reload and allows inspecting cPanel console)
+      try {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      } catch (e) {
+        // Fallback to same-tab navigation if window.open is blocked
+        window.location.href = url;
+      }
     } catch (err) {
       console.error('Open cPanel failed:', err);
       setCpanelError(err?.message || 'Failed to open cPanel. Please try again.');

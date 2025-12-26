@@ -22,7 +22,9 @@ const consumeTicket = async (req, res) => {
 
   // Redeem the ticket with the main auth server (expects body { token })
   const redeemUrl = `${AUTH_API_BASE_URL}/cpanel/redeem-cpanel-ticket`;
+  console.log('[SSO] Redeem URL:', redeemUrl, 'AUTH_API_BASE_URL:', AUTH_API_BASE_URL);
   const redeemResp = await postJson(redeemUrl, { token: ticket });
+  console.log('[SSO] Redeem response:', JSON.stringify(redeemResp));
 
     if (!redeemResp || !redeemResp.success) {
       return res.status(401).json({

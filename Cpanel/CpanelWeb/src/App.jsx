@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { tokenService } from './services/tokenService';
@@ -18,6 +18,7 @@ import VerifyAppEmail from './pages/Apps/VerifyAppEmail/VerifyAppEmail';
 function App() {
   const { developer, setDeveloper, loading, setLoading } = useAuth();
   const consumedOnceRef = useRef(false);
+  const [ssoDebug, setSsoDebug] = useState(null);
   const mainPortalUrl = import.meta.env.VITE_MAIN_PORTAL_URL || 'https://authservices.mspkapps.in';
 
   const ticket = useMemo(() => {
@@ -49,6 +50,9 @@ function App() {
           
           if (token) tokenService.set(token);
           if (dev) setDeveloper(dev);
+
+          // expose response for debugging in the UI so user can inspect
+          setSsoDebug(resp);
           
           // Clean up URL
           const url = new URL(window.location.href);
@@ -88,12 +92,13 @@ function App() {
   // If not authenticated after initialization, redirect back to main developer portal
   useEffect(() => {
     if (!loading && !developer) {
-      // Delay automatic redirect to main portal so DevTools can be opened
-      // quickly for debugging. After delay, redirect as before.
+      // If we arrived via SSO ticket, give a longer delay so the
+      // on-screen debug panel can be read. Otherwise use a short delay.
       const base = mainPortalUrl || 'https://authservices.mspkapps.in';
+      const delay = ticket ? 10000 : 3000;
       const timer = setTimeout(() => {
         window.location.href = base;
-      }, 10000);
+      }, delay);
       return () => clearTimeout(timer);
     }
   }, [loading, developer, mainPortalUrl]);
@@ -107,15 +112,21 @@ function App() {
   }
   if (!developer) {
     return (
-      <div className="container">
-        <h2>Redirecting...</h2>
-        <p style={{ color: 'var(--danger-color, crimson)' }}>
-          Your session has expired or you are not authenticated. You will be redirected to the main portal shortly.
-        </p>
-        <p style={{ marginTop: '1rem' }}>
-          If you want to stay and inspect DevTools, the redirect will occur in 3 seconds. You can also <a href={mainPortalUrl}>click here</a> to go now.
-        </p>
-      </div>
+        <div className="container">
+          <h2>Redirecting...</h2>
+          <p style={{ color: 'var(--danger-color, crimson)' }}>
+            Your session has expired or you are not authenticated. You will be redirected to the main portal shortly.
+          </p>
+          <p style={{ marginTop: '1rem' }}>
+            If you want to stay and inspect the SSO response, the redirect will occur shortly. You can also <a href={mainPortalUrl}>click here</a> to go now.
+          </p>
+          {ssoDebug && (
+            <div style={{ marginTop: '1rem', padding: '0.75rem', border: '1px solid #ddd', borderRadius: 6, background: '#fff' }}>
+              <h4>SSO Debug Response</h4>
+              <pre style={{ maxHeight: 240, overflow: 'auto', whiteSpace: 'pre-wrap' }}>{JSON.stringify(ssoDebug, null, 2)}</pre>
+            </div>
+          )}
+        </div>
     );
   }
 

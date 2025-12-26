@@ -33,7 +33,7 @@ const createCpanelTicket = async (req, res) => {
 
   const ticket = crypto.randomUUID();
     const key = `cpanel:ticket:${ticket}`;
-    const ttlSeconds = 60;
+    const ttlSeconds = 60; 
 
     // NX ensures no overwrite; EX sets TTL
   const redis = await getRedis();

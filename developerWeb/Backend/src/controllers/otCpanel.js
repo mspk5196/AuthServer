@@ -43,10 +43,12 @@ const createCpanelTicket = async (req, res) => {
     }
 
     const base = (process.env.CPANEL_URL).replace(/\/$/, '');
+    const cpanelUrl = `${base}/sso/${ticket}`;
+    console.log('[cPanelTicket] created URL:', cpanelUrl);
     return res.status(201).json({
       success: true,
       data: {
-        url: `${base}/sso/${ticket}`,
+        url: cpanelUrl,
         expiresIn: ttlSeconds
       }
     });

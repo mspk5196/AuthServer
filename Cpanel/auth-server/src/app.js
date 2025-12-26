@@ -12,42 +12,11 @@ const app = express();
 // Robust CORS setup
 const normalizeOrigin = (o) => (o ? o.replace(/\/$/, '') : o);
 const allowedOrigins = [
+  process.env.FRONTEND_URL,
   'https://authservices.mspkapps.in',
   'https://cpanel.authservices.mspkapps.in',
-  'https://cpanel.backend.mspkapps.in',
+  'https://cpanel.backend.mspkapps.in', // backend domain if front-end may embed assets
 ].filter(Boolean).map(normalizeOrigin);
-
-const allowedHeaders = [
-  'Content-Type',
-  'Authorization',
-  'X-API-Key',
-  'X-API-Secret',
-  'X-Requested-With',
-  'Accept',
-  'Origin',
-  'x-csrf-token'
-];
-
-const corsConfig = {
-  origin: function (origin, callback) {
-    const normalized = normalizeOrigin(origin);
-    if (!origin || allowedOrigins.includes(normalized)) {
-      if (origin) {
-        console.log(`[CORS] allow origin: ${origin}`);
-      } else {
-        console.log('[CORS] allow non-browser/no-origin request');
-      }
-      return callback(null, true);
-    }
-    console.warn(`[CORS] blocked origin: ${origin}`);
-    return callback(new Error('CORS not allowed'), false);
-  },
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders,
-  exposedHeaders: ['x-csrf-token'],
-  credentials: true,
-  maxAge: 600
-};
 
 app.use((req, res, next) => {
   // Preflight debugging
@@ -56,29 +25,12 @@ app.use((req, res, next) => {
   }
   next();
 });
+app.use(cors({
+  origin: "*", // specify exact frontend origin
+  credentials: true,               // allow cookies and credentials
+}));
+// console.log('[CORS] allowed origins:', allowedOrigins);
 
-// Enable CORS for all routes so browser clients can read JSON responses
-app.use(cors(corsConfig));
-console.log('[CORS] allowed origins:', allowedOrigins);
-// Explicit preflight handler reusing same config
-app.options(/.*/, cors(corsConfig));
-// Ensure only a single Access-Control-Allow-Origin header value is sent
-app.use((req, res, next) => {
-  // normalize header if some upstream or middleware accidentally added multiple values
-  const header = res.getHeader && res.getHeader('Access-Control-Allow-Origin');
-  if (header) {
-    try {
-      if (Array.isArray(header) && header.length > 0) {
-        res.setHeader('Access-Control-Allow-Origin', String(header[0]));
-      } else if (typeof header === 'string' && header.indexOf(',') !== -1) {
-        res.setHeader('Access-Control-Allow-Origin', header.split(',')[0].trim());
-      }
-    } catch (e) {
-      // ignore normalization errors
-    }
-  }
-  next();
-});
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(helmet());

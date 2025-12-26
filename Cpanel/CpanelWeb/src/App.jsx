@@ -93,7 +93,7 @@ function App() {
       const base = mainPortalUrl || 'https://authservices.mspkapps.in';
       const timer = setTimeout(() => {
         window.location.href = base;
-      }, 3000);
+      }, 10000);
       return () => clearTimeout(timer);
     }
   }, [loading, developer, mainPortalUrl]);

@@ -18,7 +18,7 @@ services:
     build:
       context: ./Cpanel/CpanelWeb
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+        VITE_CPANEL_API_BASE_URL: ${VITE_CPANEL_API_BASE_URL}
         VITE_MAIN_PORTAL_URL: ${VITE_MAIN_PORTAL_URL}
     container_name: cpanel-frontend
     ports:

@@ -88,7 +88,13 @@ function App() {
   // If not authenticated after initialization, redirect back to main developer portal
   useEffect(() => {
     if (!loading && !developer) {
-      window.location.href = mainPortalUrl;
+      // Delay automatic redirect to main portal so DevTools can be opened
+      // quickly for debugging. After delay, redirect as before.
+      const base = mainPortalUrl || 'https://authservices.mspkapps.in';
+      const timer = setTimeout(() => {
+        window.location.href = base;
+      }, 3000);
+      return () => clearTimeout(timer);
     }
   }, [loading, developer, mainPortalUrl]);
 
@@ -104,7 +110,10 @@ function App() {
       <div className="container">
         <h2>Redirecting...</h2>
         <p style={{ color: 'var(--danger-color, crimson)' }}>
-          Your session has expired or you are not authenticated. Redirecting to the main portal...
+          Your session has expired or you are not authenticated. You will be redirected to the main portal shortly.
+        </p>
+        <p style={{ marginTop: '1rem' }}>
+          If you want to stay and inspect DevTools, the redirect will occur in 3 seconds. You can also <a href={mainPortalUrl}>click here</a> to go now.
         </p>
       </div>
     );

@@ -14,8 +14,7 @@ const normalizeOrigin = (o) => (o ? o.replace(/\/$/, '') : o);
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   'https://authservices.mspkapps.in',
-  'https://cpanel.authservices.mspkapps.in',
-  'https://cpanel.backend.mspkapps.in', // backend domain if front-end may embed assets
+  'https://cpanel.backend.mspkapps.in',
 ].filter(Boolean).map(normalizeOrigin);
 
 const allowedHeaders = [

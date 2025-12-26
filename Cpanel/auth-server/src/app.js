@@ -58,7 +58,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// app.use(cors(corsConfig));
+// Enable CORS for all routes so browser clients can read JSON responses
+app.use(cors(corsConfig));
+console.log('[CORS] allowed origins:', allowedOrigins);
 // Explicit preflight handler reusing same config
 app.options(/.*/, cors(corsConfig));
 app.use(express.json());

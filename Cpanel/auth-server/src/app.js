@@ -9,27 +9,10 @@ const publicApiRoutes = require('./routes/publicApiRoutes.js');
 
 const app = express();
 
-// Robust CORS setup
-const normalizeOrigin = (o) => (o ? o.replace(/\/$/, '') : o);
-const allowedOrigins = [
-  process.env.FRONTEND_URL,
-  'https://authservices.mspkapps.in',
-  'https://cpanel.authservices.mspkapps.in',
-  'https://cpanel.backend.mspkapps.in', // backend domain if front-end may embed assets
-].filter(Boolean).map(normalizeOrigin);
-
-app.use((req, res, next) => {
-  // Preflight debugging
-  if (req.method === 'OPTIONS') {
-    console.log('[CORS][Preflight] Origin:', req.headers.origin, 'Req-Headers:', req.headers['access-control-request-headers']);
-  }
-  next();
-});
 app.use(cors({
-  origin: "*", // specify exact frontend origin
-  credentials: true,               // allow cookies and credentials
+  origin: "*",
+  credentials: true, 
 }));
-// console.log('[CORS] allowed origins:', allowedOrigins);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

@@ -63,6 +63,23 @@ app.use(cors(corsConfig));
 console.log('[CORS] allowed origins:', allowedOrigins);
 // Explicit preflight handler reusing same config
 app.options(/.*/, cors(corsConfig));
+// Ensure only a single Access-Control-Allow-Origin header value is sent
+app.use((req, res, next) => {
+  // normalize header if some upstream or middleware accidentally added multiple values
+  const header = res.getHeader && res.getHeader('Access-Control-Allow-Origin');
+  if (header) {
+    try {
+      if (Array.isArray(header) && header.length > 0) {
+        res.setHeader('Access-Control-Allow-Origin', String(header[0]));
+      } else if (typeof header === 'string' && header.indexOf(',') !== -1) {
+        res.setHeader('Access-Control-Allow-Origin', header.split(',')[0].trim());
+      }
+    } catch (e) {
+      // ignore normalization errors
+    }
+  }
+  next();
+});
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(helmet());

@@ -61,13 +61,43 @@ const consumeTicket = async (req, res) => {
       scope: 'cpanel',
     };
 
-    const { accessToken } = generateTokens(payload);
+    const { accessToken, refreshToken } = generateTokens(payload);
+
+    // Set httpOnly cookies for access and refresh tokens so frontend doesn't store JWT
+    const parseExpiryToMs = (str) => {
+      if (!str) return undefined;
+      if (/^\d+$/.test(str)) return parseInt(str, 10) * 1000;
+      const m = str.match(/^(\d+)([smhd])$/);
+      if (!m) return undefined;
+      const n = parseInt(m[1], 10);
+      switch (m[2]) {
+        case 's': return n * 1000;
+        case 'm': return n * 60 * 1000;
+        case 'h': return n * 60 * 60 * 1000;
+        case 'd': return n * 24 * 60 * 60 * 1000;
+        default: return undefined;
+      }
+    };
+
+    const accessMaxAge = parseExpiryToMs(process.env.JWT_EXPIRE || '15m');
+    const refreshMaxAge = parseExpiryToMs(process.env.JWT_REFRESH_EXPIRE || '7d');
+
+    const cookieOpts = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+    };
+    if (accessMaxAge) cookieOpts.maxAge = accessMaxAge;
+
+    res.cookie('access_token', accessToken, cookieOpts);
+    const refreshOpts = { ...cookieOpts };
+    if (refreshMaxAge) refreshOpts.maxAge = refreshMaxAge;
+    res.cookie('refresh_token', refreshToken, refreshOpts);
 
     return res.json({
       success: true,
       message: 'SSO established',
       data: {
-        token: accessToken,
         developer,
       },
     });

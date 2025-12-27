@@ -121,6 +121,8 @@ const me = async (req, res) => {
   try {
     // req.user populated by authenticateToken
     const user = req.user;
+    console.log('[ME] incoming cookies:', req.headers.cookie);
+    console.log('[ME] req.user:', user);
     if (!user) {
       return res.status(401).json({ success: false, message: 'Unauthorized', error: 'UNAUTHORIZED' });
     }

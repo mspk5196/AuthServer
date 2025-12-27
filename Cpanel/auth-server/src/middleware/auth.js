@@ -39,8 +39,15 @@ const verifyToken = (token, secret = process.env.JWT_SECRET) => {
  */
 const authenticateToken = (req, res, next) => {
   try {
+    // Prefer Authorization header
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+    let token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+    // Fallback to cookie-based tokens (cpanel_access_token or older names)
+    if (!token && req.headers.cookie) {
+      const cookies = Object.fromEntries(req.headers.cookie.split(';').map(c => c.trim().split('=').map(decodeURIComponent)));
+      token = cookies['cpanel_access_token'] || cookies['cpanel-access_token'] || cookies['cpanel_access-token'] || cookies['access_token'] || cookies['access-token'] || null;
+    }
 
     if (!token) {
       return res.status(401).json({

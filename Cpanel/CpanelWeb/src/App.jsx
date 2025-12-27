@@ -44,10 +44,7 @@ function App() {
           consumedOnceRef.current = true;
           
           const resp = await api.post('/sso/consume', { ticket });
-          const token = resp?.data?.token || resp?.token;
           const dev = resp?.data?.developer || resp?.developer;
-          
-          if (token) tokenService.set(token);
           if (dev) setDeveloper(dev);
 
           // expose response for debugging in the UI so user can inspect

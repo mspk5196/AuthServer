@@ -1,13 +1,7 @@
-const tokenKey = 'cpanel_jwt';
-
+// tokenService is intentionally a no-op in the frontend.
+// JWT handling must be done by the backend using httpOnly cookies.
 export const tokenService = {
-  get: () => localStorage.getItem(tokenKey),
-  set: (token) => {
-    if (token) {
-      localStorage.setItem(tokenKey, token);
-    } else {
-      localStorage.removeItem(tokenKey);
-    }
-  },
-  clear: () => localStorage.removeItem(tokenKey),
+  get: () => null,
+  set: () => {},
+  clear: () => {},
 };

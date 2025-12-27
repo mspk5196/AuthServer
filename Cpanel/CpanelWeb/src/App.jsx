@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
-import { tokenService } from './services/tokenService';
 import { api } from './services/api';
 import DashboardLayout from './components/Layout/DashboardLayout';
 import Home from './pages/Home/Home';
@@ -71,16 +70,18 @@ function App() {
           
           window.history.replaceState({}, '', newUrl);
         } else {
-          // Check for existing token
-          const existing = tokenService.get();
-          if (existing) {
-            const me = await api.get('/me', existing);
-            setDeveloper(me.developer);
+          // Check current session via backend (httpOnly cookies)
+          try {
+            const me = await api.get('/me');
+            if (me && (me.developer || me.data?.developer)) {
+              setDeveloper(me.developer || me.data.developer);
+            }
+          } catch (e) {
+            // no session
           }
         }
       } catch (err) {
         console.error('SSO error:', err);
-        tokenService.clear();
         setDeveloper(null);
       } finally {
         setLoading(false);

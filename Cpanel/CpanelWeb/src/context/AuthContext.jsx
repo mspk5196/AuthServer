@@ -10,11 +10,11 @@ export const useAuth = () => {
   return context;
 };
 
-const tokenKey = 'cpanel_jwt';
+// Do not persist JWTs in the frontend. Backend must set httpOnly cookies.
 const tokenService = {
-  get: () => localStorage.getItem(tokenKey),
-  set: (t) => (t ? localStorage.setItem(tokenKey, t) : localStorage.removeItem(tokenKey)),
-  clear: () => localStorage.removeItem(tokenKey),
+  get: () => null,
+  set: () => {},
+  clear: () => {},
 };
 
 export const AuthProvider = ({ children }) => {

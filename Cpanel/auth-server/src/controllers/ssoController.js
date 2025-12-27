@@ -21,7 +21,16 @@ const consumeTicket = async (req, res) => {
     }
 
   // Redeem the ticket with the main auth server (expects body { token })
-  const redeemUrl = `${AUTH_API_BASE_URL}/cpanel/redeem-cpanel-ticket`;
+  // Build a redeem URL that tolerates whether AUTH_API_BASE_URL already contains /api or /api/cpanel
+  const baseAuth = (AUTH_API_BASE_URL || '').replace(/\/$/, '');
+  let redeemUrl;
+  if (baseAuth.match(/\/api\/cpanel$/)) {
+    redeemUrl = `${baseAuth}/redeem-cpanel-ticket`;
+  } else if (baseAuth.endsWith('/api')) {
+    redeemUrl = `${baseAuth}/cpanel/redeem-cpanel-ticket`;
+  } else {
+    redeemUrl = `${baseAuth}/api/cpanel/redeem-cpanel-ticket`;
+  }
   console.log('[SSO] Redeem URL:', redeemUrl, 'AUTH_API_BASE_URL:', AUTH_API_BASE_URL);
   const redeemResp = await postJson(redeemUrl, { token: ticket });
   console.log('[SSO] Redeem response:', JSON.stringify(redeemResp));

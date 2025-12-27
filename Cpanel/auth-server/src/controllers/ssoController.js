@@ -91,10 +91,11 @@ const consumeTicket = async (req, res) => {
     };
     if (accessMaxAge) cookieOpts.maxAge = accessMaxAge;
 
-    res.cookie('access_token', accessToken, cookieOpts);
+    // Use cPanel-scoped cookie names to avoid colliding with main site's cookies
+    res.cookie('cpanel_access_token', accessToken, cookieOpts);
     const refreshOpts = { ...cookieOpts };
     if (refreshMaxAge) refreshOpts.maxAge = refreshMaxAge;
-    res.cookie('refresh_token', refreshToken, refreshOpts);
+    res.cookie('cpanel_refresh_token', refreshToken, refreshOpts);
 
     return res.json({
       success: true,

@@ -32,7 +32,7 @@ const Home = () => {
     <div className="home-page">
       <div className="region-banner">
         <div className="container">
-          <p>This developer platform is currently available only in India🛜.</p>
+          <p>This developer platform is currently available only in India.</p>
         </div>
       </div>
       <section className="hero">

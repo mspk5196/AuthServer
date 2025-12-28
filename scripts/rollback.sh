@@ -1,4 +1,7 @@
 #!/bin/bash
-echo "🔙 Rolling back to previous stable images"
-docker compose -f docker/docker-compose.prod.yml down
-docker compose -f docker/docker-compose.prod.yml up -d
+echo "🔙 Rolling back to stable images"
+
+docker compose \
+  -f docker/docker-compose.base.yml \
+  -f docker/docker-compose.prod.yml \
+  up -d

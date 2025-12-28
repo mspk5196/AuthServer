@@ -1,9 +1,13 @@
 #!/bin/bash
-set -e
+echo "🏷 Tagging images as stable"
 
-TAG=$(date +"%Y.%m.%d-%H%M")
+services=(
+  "mspk/cpanel-backend"
+  "mspk/cpanel-frontend"
+  "mspk/dev-backend"
+  "mspk/dev-frontend"
+)
 
-docker tag auth-server-cpanel-backend:latest auth-server-cpanel-backend:$TAG
-docker tag auth-server-developer-backend:latest auth-server-developer-backend:$TAG
-
-echo "✅ Images tagged: $TAG"
+for svc in "${services[@]}"; do
+  docker tag ${svc}:${IMAGE_TAG} ${svc}:stable
+done

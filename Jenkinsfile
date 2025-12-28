@@ -5,6 +5,7 @@ pipeline {
   environment {
     APP = "auth-server"
     EMAIL = "ci@mspkapps.in"
+    IMAGE_TAG = "${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
   }
 
   stages {
@@ -18,6 +19,7 @@ pipeline {
         script {
           env.ENV = (env.BRANCH_NAME == 'main') ? 'prod' : 'test'
           echo "ENV=${env.ENV}"
+          echo "IMAGE_TAG=${IMAGE_TAG}"
         }
       }
     }
@@ -63,7 +65,12 @@ pipeline {
       mail(
         to: EMAIL,
         subject: "✅ ${APP} deployed (${env.BRANCH_NAME})",
-        body: "Deployment successful"
+        body: """
+        Application: ${APP}
+        Branch: ${env.BRANCH_NAME}
+        Image tag: ${IMAGE_TAG}
+        Status: SUCCESS
+        """
       )
     }
 
@@ -72,7 +79,13 @@ pipeline {
       mail(
         to: EMAIL,
         subject: "❌ ${APP} failed (${env.BRANCH_NAME})",
-        body: "Rollback executed"
+        body: """
+        Application: ${APP}
+        Branch: ${env.BRANCH_NAME}
+        Image tag: ${IMAGE_TAG}
+        Status: FAILED
+        Rollback executed.
+        """
       )
     }
   }

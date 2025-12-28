@@ -41,13 +41,6 @@ pipeline {
       }
     }
 
-    stage('Tag Images (main only)') {
-      when { branch 'main' }
-      steps {
-        sh 'bash scripts/tag-image.sh'
-      }
-    }
-
     stage('Deploy') {
       steps {
         sh """
@@ -58,6 +51,31 @@ pipeline {
         """
       }
     }
+
+    /* ===============================
+       AUTO MERGE test → main
+       =============================== */
+    stage('Auto Merge test → main') {
+      when { branch 'test' }
+      steps {
+        withCredentials([usernamePassword(
+          credentialsId: 'github-ci-token',
+          usernameVariable: 'GIT_USER',
+          passwordVariable: 'GIT_TOKEN'
+        )]) {
+          sh '''
+            git config user.name "Jenkins CI"
+            git config user.email "ci@mspkapps.in"
+
+            git fetch origin
+            git checkout main
+            git merge test --no-ff
+
+            git push https://${GIT_USER}:${GIT_TOKEN}@github.com/MSPK-APPS/auth-server.git main
+          '''
+        }
+      }
+    }
   }
 
   post {
@@ -66,11 +84,11 @@ pipeline {
         to: EMAIL,
         subject: "✅ ${APP} deployed (${env.BRANCH_NAME})",
         body: """
-        Application: ${APP}
-        Branch: ${env.BRANCH_NAME}
-        Image tag: ${IMAGE_TAG}
-        Status: SUCCESS
-        """
+Application: ${APP}
+Branch: ${env.BRANCH_NAME}
+Image tag: ${IMAGE_TAG}
+Status: SUCCESS
+"""
       )
     }
 
@@ -80,12 +98,12 @@ pipeline {
         to: EMAIL,
         subject: "❌ ${APP} failed (${env.BRANCH_NAME})",
         body: """
-        Application: ${APP}
-        Branch: ${env.BRANCH_NAME}
-        Image tag: ${IMAGE_TAG}
-        Status: FAILED
-        Rollback executed.
-        """
+Application: ${APP}
+Branch: ${env.BRANCH_NAME}
+Image tag: ${IMAGE_TAG}
+Status: FAILED
+Rollback executed.
+"""
       )
     }
   }

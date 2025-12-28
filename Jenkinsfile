@@ -5,22 +5,14 @@ pipeline {
   environment {
     APP = "auth-server"
     EMAIL = "ci@mspkapps.in"
-    IMAGE_TAG = "${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
+    IMAGE_TAG = "prod-${BUILD_NUMBER}"
   }
 
   stages {
 
     stage('Checkout') {
-      steps { checkout scm }
-    }
-
-    stage('Detect Env') {
       steps {
-        script {
-          env.ENV = (env.BRANCH_NAME == 'main') ? 'prod' : 'test'
-          echo "ENV=${env.ENV}"
-          echo "IMAGE_TAG=${IMAGE_TAG}"
-        }
+        checkout scm
       }
     }
 
@@ -30,33 +22,18 @@ pipeline {
       }
     }
 
-    stage('Build Images') {
+    stage('Build Images (CI validation)') {
       steps {
-        sh """
+        sh '''
           docker compose \
             -f docker/docker-compose.base.yml \
-            -f docker/docker-compose.${ENV}.yml \
+            -f docker/docker-compose.prod.yml \
             build
-        """
+        '''
       }
     }
 
-    /* ---------------- TEST DEPLOY ---------------- */
-    stage('Deploy TEST') {
-      when { branch 'test' }
-      steps {
-        sh """
-          docker compose -p auth-server-test \
-            -f docker/docker-compose.base.yml \
-            -f docker/docker-compose.test.yml \
-            up -d
-        """
-      }
-    }
-
-    /* ---------------- AUTO MERGE ---------------- */
-    stage('Auto Merge test → main') {
-      when { branch 'test' }
+    stage('Merge test → main') {
       steps {
         withCredentials([usernamePassword(
           credentialsId: 'github-ci-token',
@@ -65,6 +42,7 @@ pipeline {
         )]) {
           sh '''
             set -e
+
             git config user.name "Jenkins CI"
             git config user.email "ci@mspkapps.in"
 
@@ -75,23 +53,21 @@ pipeline {
               +refs/heads/test:refs/remotes/origin/test
 
             git checkout -B main origin/main
-            git merge origin/test --no-ff -m "ci: auto-merge test → main"
+            git merge origin/test --no-ff -m "ci: promote test → prod"
             git push origin main
           '''
         }
       }
     }
 
-    /* ---------------- PROD DEPLOY ---------------- */
     stage('Deploy PROD') {
-      when { branch 'main' }
       steps {
-        sh """
-          docker compose -p auth-server-prod \
+        sh '''
+          docker compose -p auth-server \
             -f docker/docker-compose.base.yml \
             -f docker/docker-compose.prod.yml \
             up -d
-        """
+        '''
       }
     }
   }
@@ -100,34 +76,25 @@ pipeline {
     success {
       mail(
         to: EMAIL,
-        subject: "✅ ${APP} deployed (${env.BRANCH_NAME})",
+        subject: "✅ ${APP} deployed to PRODUCTION",
         body: """
-Application: ${APP}
-Branch: ${env.BRANCH_NAME}
-Image tag: ${IMAGE_TAG}
-Status: SUCCESS
-"""
+        Application: ${APP}
+        Image tag: ${IMAGE_TAG}
+        Status: SUCCESS
+        Source branch: test
+        """
       )
     }
 
     failure {
-      script {
-        if (env.BRANCH_NAME == 'main') {
-          sh 'bash scripts/rollback.sh prod'
-        } else {
-          echo "Skipping rollback for test environment"
-        }
-      }
-
       mail(
         to: EMAIL,
-        subject: "❌ ${APP} failed (${env.BRANCH_NAME})",
+        subject: "❌ ${APP} CI failed (no prod deploy)",
         body: """
-Application: ${APP}
-Branch: ${env.BRANCH_NAME}
-Image tag: ${IMAGE_TAG}
-Status: FAILED
-"""
+        Application: ${APP}
+        Status: FAILED
+        Production was NOT touched
+        """
       )
     }
   }

@@ -1,7 +1,9 @@
 #!/bin/bash
-echo "🔙 Rolling back to stable images"
+ENV=${1:-prod}
 
-docker compose \
+echo "🔙 Rolling back ${ENV}"
+
+docker compose -p auth-server-${ENV} \
   -f docker/docker-compose.base.yml \
-  -f docker/docker-compose.prod.yml \
+  -f docker/docker-compose.${ENV}.yml \
   up -d

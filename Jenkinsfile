@@ -41,21 +41,20 @@ pipeline {
       }
     }
 
-    stage('Deploy') {
-      when {
-        branch 'main'
-      }
+    /* ---------------- TEST DEPLOY ---------------- */
+    stage('Deploy TEST') {
+      when { branch 'test' }
       steps {
         sh """
-          docker compose \
+          docker compose -p auth-server-test \
             -f docker/docker-compose.base.yml \
-            -f docker/docker-compose.prod.yml \
+            -f docker/docker-compose.test.yml \
             up -d
         """
       }
     }
 
-
+    /* ---------------- AUTO MERGE ---------------- */
     stage('Auto Merge test → main') {
       when { branch 'test' }
       steps {
@@ -66,33 +65,35 @@ pipeline {
         )]) {
           sh '''
             set -e
-
             git config user.name "Jenkins CI"
             git config user.email "ci@mspkapps.in"
 
-            # 🔐 authenticated remote
             git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@github.com/MSPK-APPS/auth-server.git
 
-            # ✅ FORCE creation of origin/main & origin/test
             git fetch origin \
               +refs/heads/main:refs/remotes/origin/main \
               +refs/heads/test:refs/remotes/origin/test
 
-            # ✅ create local main from origin/main
             git checkout -B main origin/main
-
-            # ✅ merge test → main
             git merge origin/test --no-ff -m "ci: auto-merge test → main"
-
-            # ✅ push to GitHub
             git push origin main
           '''
         }
       }
     }
 
-
-
+    /* ---------------- PROD DEPLOY ---------------- */
+    stage('Deploy PROD') {
+      when { branch 'main' }
+      steps {
+        sh """
+          docker compose -p auth-server-prod \
+            -f docker/docker-compose.base.yml \
+            -f docker/docker-compose.prod.yml \
+            up -d
+        """
+      }
+    }
   }
 
   post {
@@ -101,11 +102,11 @@ pipeline {
         to: EMAIL,
         subject: "✅ ${APP} deployed (${env.BRANCH_NAME})",
         body: """
-              Application: ${APP}
-              Branch: ${env.BRANCH_NAME}
-              Image tag: ${IMAGE_TAG}
-              Status: SUCCESS
-              """
+Application: ${APP}
+Branch: ${env.BRANCH_NAME}
+Image tag: ${IMAGE_TAG}
+Status: SUCCESS
+"""
       )
     }
 
@@ -122,13 +123,12 @@ pipeline {
         to: EMAIL,
         subject: "❌ ${APP} failed (${env.BRANCH_NAME})",
         body: """
-              Application: ${APP}
-              Branch: ${env.BRANCH_NAME}
-              Image tag: ${IMAGE_TAG}
-              Status: FAILED
-              """
+Application: ${APP}
+Branch: ${env.BRANCH_NAME}
+Image tag: ${IMAGE_TAG}
+Status: FAILED
+"""
       )
     }
   }
-
 }

@@ -42,47 +42,53 @@ pipeline {
     }
 
     stage('Deploy') {
+      when {
+        branch 'main'
+      }
       steps {
         sh """
           docker compose \
             -f docker/docker-compose.base.yml \
-            -f docker/docker-compose.${ENV}.yml \
+            -f docker/docker-compose.prod.yml \
             up -d
         """
       }
     }
 
-    /* ===============================
-       AUTO MERGE test → main
-       =============================== */
+
     stage('Auto Merge test → main') {
       when { branch 'test' }
       steps {
-        catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-          withCredentials([usernamePassword(
-            credentialsId: 'github-ci-token',
-            usernameVariable: 'GIT_USER',
-            passwordVariable: 'GIT_TOKEN'
-          )]) {
-            sh '''
-              set -e
+        withCredentials([usernamePassword(
+          credentialsId: 'github-ci-token',
+          usernameVariable: 'GIT_USER',
+          passwordVariable: 'GIT_TOKEN'
+        )]) {
+          sh '''
+            set -e
 
-              git config user.name "Jenkins CI"
-              git config user.email "ci@mspkapps.in"
+            git config user.name "Jenkins CI"
+            git config user.email "ci@mspkapps.in"
 
-              # 🔐 Override origin with authenticated URL
-              git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@github.com/MSPK-APPS/auth-server.git
+            # 🔐 authenticated remote
+            git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@github.com/MSPK-APPS/auth-server.git
 
-              git fetch origin
-              git checkout main
-              git merge test --no-ff -m "ci: auto-merge test → main"
+            # ✅ fetch BOTH branches explicitly
+            git fetch origin main test
 
-              git push origin main
-            '''
-          }
+            # ✅ create local main tracking branch
+            git checkout -B main origin/main
+
+            # ✅ merge test → main
+            git merge origin/test --no-ff -m "ci: auto-merge test → main"
+
+            # ✅ push to GitHub
+            git push origin main
+          '''
         }
       }
     }
+
 
   }
 

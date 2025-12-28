@@ -47,7 +47,7 @@ pipeline {
           } catch (err) {
             echo "❌ Deployment failed, starting rollback..."
 
-            // Rollback
+            // Rollback to previous running state
             sh '''
               docker compose down
               docker compose up -d
@@ -61,25 +61,48 @@ pipeline {
   }
 
   post {
-    failure {
+
+    success {
       emailext(
-        subject: "❌ DEPLOY FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+        subject: "✅ DEPLOY SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
         to: "mspk@mspkapps.in",
         mimeType: 'text/html',
         body: """
-        <h2>Deployment Failed</h2>
+        <h2>Deployment Successful 🎉</h2>
         <p><b>Project:</b> ${env.JOB_NAME}</p>
         <p><b>Build:</b> #${env.BUILD_NUMBER}</p>
-        <p><b>Status:</b> FAILED (Rollback executed)</p>
-        <p><b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
+        <p><b>Status:</b> SUCCESS</p>
+        <p><b>Build URL:</b>
+          <a href="${env.BUILD_URL}">
+            ${env.BUILD_URL}
+          </a>
+        </p>
         <br/>
-        <p>Please check Jenkins logs for details.</p>
+        <p>All services are up and running.</p>
         """
       )
     }
 
-    success {
-      echo "🎉 Deployment completed successfully"
+    failure {
+      emailext(
+        subject: "❌ DEPLOY FAILED (Rollback Done): ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+        to: "mspk@mspkapps.in",
+        mimeType: 'text/html',
+        body: """
+        <h2>Deployment Failed ❌</h2>
+        <p><b>Project:</b> ${env.JOB_NAME}</p>
+        <p><b>Build:</b> #${env.BUILD_NUMBER}</p>
+        <p><b>Status:</b> FAILED</p>
+        <p><b>Action:</b> Rollback executed</p>
+        <p><b>Build URL:</b>
+          <a href="${env.BUILD_URL}">
+            ${env.BUILD_URL}
+          </a>
+        </p>
+        <br/>
+        <p>Please check Jenkins logs for details.</p>
+        """
+      )
     }
   }
 }

@@ -1,108 +1,134 @@
 pipeline {
   agent any
-
-  options {
-    timestamps()
-  }
+  options { timestamps() }
 
   environment {
-    COMPOSE_PROJECT_NAME = "auth-server"
-    ENV_DIR = "/opt/envs"
+    APP = "auth-server"
+    EMAIL = "ci@mspkapps.in"
+    IMAGE_TAG = "${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
   }
 
   stages {
 
     stage('Checkout') {
+      steps { checkout scm }
+    }
+
+    stage('Detect Env') {
       steps {
-        checkout scm
+        script {
+          env.ENV = (env.BRANCH_NAME == 'main') ? 'prod' : 'test'
+          echo "ENV=${env.ENV}"
+          echo "IMAGE_TAG=${IMAGE_TAG}"
+        }
       }
     }
 
-    stage('Verify Docker') {
+    stage('Load Env') {
       steps {
-        sh '''
-          docker --version
-          docker compose version
-        '''
+        sh 'bash scripts/load-env.sh'
       }
     }
 
     stage('Build Images') {
       steps {
-        sh '''
-          docker compose build
-        '''
+        sh """
+          docker compose \
+            -f docker/docker-compose.base.yml \
+            -f docker/docker-compose.${ENV}.yml \
+            build
+        """
       }
     }
 
-    stage('Deploy Services') {
+    stage('Deploy') {
+      when {
+        branch 'main'
+      }
       steps {
-        script {
-          try {
-            echo "🚀 Deploying new version..."
-            sh '''
-              docker compose up -d
-            '''
-            echo "✅ Deployment successful"
-          } catch (err) {
-            echo "❌ Deployment failed, starting rollback..."
+        sh """
+          docker compose \
+            -f docker/docker-compose.base.yml \
+            -f docker/docker-compose.prod.yml \
+            up -d
+        """
+      }
+    }
 
-            // Rollback to previous running state
-            sh '''
-              docker compose down
-              docker compose up -d
-            '''
 
-            error("Rollback completed due to deployment failure")
-          }
+    stage('Auto Merge test → main') {
+      when { branch 'test' }
+      steps {
+        withCredentials([usernamePassword(
+          credentialsId: 'github-ci-token',
+          usernameVariable: 'GIT_USER',
+          passwordVariable: 'GIT_TOKEN'
+        )]) {
+          sh '''
+            set -e
+
+            git config user.name "Jenkins CI"
+            git config user.email "ci@mspkapps.in"
+
+            # 🔐 authenticated remote
+            git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@github.com/MSPK-APPS/auth-server.git
+
+            # ✅ FORCE creation of origin/main & origin/test
+            git fetch origin \
+              +refs/heads/main:refs/remotes/origin/main \
+              +refs/heads/test:refs/remotes/origin/test
+
+            # ✅ create local main from origin/main
+            git checkout -B main origin/main
+
+            # ✅ merge test → main
+            git merge origin/test --no-ff -m "ci: auto-merge test → main"
+
+            # ✅ push to GitHub
+            git push origin main
+          '''
         }
       }
     }
+
+
+
   }
 
   post {
-
     success {
-      emailext(
-        subject: "✅ DEPLOY SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-        to: "mspk@mspkapps.in",
-        mimeType: 'text/html',
+      mail(
+        to: EMAIL,
+        subject: "✅ ${APP} deployed (${env.BRANCH_NAME})",
         body: """
-        <h2>Deployment Successful 🎉</h2>
-        <p><b>Project:</b> ${env.JOB_NAME}</p>
-        <p><b>Build:</b> #${env.BUILD_NUMBER}</p>
-        <p><b>Status:</b> SUCCESS</p>
-        <p><b>Build URL:</b>
-          <a href="${env.BUILD_URL}">
-            ${env.BUILD_URL}
-          </a>
-        </p>
-        <br/>
-        <p>All services are up and running.</p>
-        """
+              Application: ${APP}
+              Branch: ${env.BRANCH_NAME}
+              Image tag: ${IMAGE_TAG}
+              Status: SUCCESS
+              """
       )
     }
 
     failure {
-      emailext(
-        subject: "❌ DEPLOY FAILED (Rollback Done): ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-        to: "mspk@mspkapps.in",
-        mimeType: 'text/html',
+      script {
+        if (env.BRANCH_NAME == 'main') {
+          sh 'bash scripts/rollback.sh prod'
+        } else {
+          echo "Skipping rollback for test environment"
+        }
+      }
+
+      mail(
+        to: EMAIL,
+        subject: "❌ ${APP} failed (${env.BRANCH_NAME})",
         body: """
-        <h2>Deployment Failed ❌</h2>
-        <p><b>Project:</b> ${env.JOB_NAME}</p>
-        <p><b>Build:</b> #${env.BUILD_NUMBER}</p>
-        <p><b>Status:</b> FAILED</p>
-        <p><b>Action:</b> Rollback executed</p>
-        <p><b>Build URL:</b>
-          <a href="${env.BUILD_URL}">
-            ${env.BUILD_URL}
-          </a>
-        </p>
-        <br/>
-        <p>Please check Jenkins logs for details.</p>
-        """
+              Application: ${APP}
+              Branch: ${env.BRANCH_NAME}
+              Image tag: ${IMAGE_TAG}
+              Status: FAILED
+              """
       )
     }
   }
+
 }

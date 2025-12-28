@@ -1,83 +1,59 @@
 pipeline {
   agent any
-
-  options {
-    timestamps()
-    disableConcurrentBuilds()
-  }
+  options { timestamps() }
 
   environment {
-    IMAGE_TAG = "${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
-  }
-
-  triggers {
-    pollSCM('H/2 * * * *')
+    APP = "auth-server"
+    EMAIL = "ci@mspkapps.in"
   }
 
   stages {
 
     stage('Checkout') {
+      steps { checkout scm }
+    }
+
+    stage('Detect Env') {
       steps {
-        checkout scm
+        script {
+          env.ENV = (env.BRANCH_NAME == 'main') ? 'prod' : 'test'
+          echo "ENV=${env.ENV}"
+        }
       }
     }
 
-    stage('Verify Docker') {
+    stage('Load Env') {
       steps {
-        sh '''
-          docker --version
-          docker compose version
-        '''
+        sh 'bash scripts/load-env.sh'
       }
     }
 
     stage('Build Images') {
       steps {
-        sh '''
-          docker compose build
-        '''
+        sh """
+          docker compose \
+            -f docker/docker-compose.base.yml \
+            -f docker/docker-compose.${ENV}.yml \
+            build
+        """
       }
     }
 
-    stage('Deploy TEST') {
-      when {
-        branch 'test'
-      }
+    stage('Tag Images (main only)') {
+      when { branch 'main' }
       steps {
-        sh '''
-          docker compose -f docker-compose.test.yml down
-          docker compose -f docker-compose.test.yml up -d
-        '''
+        sh 'bash scripts/tag-image.sh'
       }
     }
 
-    stage('Auto Merge test → main') {
-      when {
-        branch 'test'
-      }
+    stage('Deploy') {
       steps {
-        sh '''
-          git config user.name "MSPK CI"
-          git config user.email "ci@mspkapps.in"
-
-          git fetch origin
-          git checkout main
-          git pull origin main
-          git merge test --no-ff
-          git push origin main
-        '''
-      }
-    }
-
-    stage('Deploy PROD') {
-      when {
-        branch 'main'
-      }
-      steps {
-        sh '''
-          docker compose -f docker-compose.prod.yml down
-          docker compose -f docker-compose.prod.yml up -d
-        '''
+        sh """
+          docker compose \
+            -f docker/docker-compose.base.yml \
+            -f docker/docker-compose.${ENV}.yml \
+            up -d
+        """
       }
     }
   }
@@ -85,16 +61,18 @@ pipeline {
   post {
     success {
       mail(
-        to: 'ci@mspkapps.in',
-        subject: "✅ SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-        body: "Deployment succeeded on branch: ${env.BRANCH_NAME}"
+        to: EMAIL,
+        subject: "✅ ${APP} deployed (${env.BRANCH_NAME})",
+        body: "Deployment successful"
       )
     }
+
     failure {
+      sh 'bash scripts/rollback.sh'
       mail(
-        to: 'ci@mspkapps.in',
-        subject: "❌ FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-        body: "Deployment failed on branch: ${env.BRANCH_NAME}"
+        to: EMAIL,
+        subject: "❌ ${APP} failed (${env.BRANCH_NAME})",
+        body: "Rollback executed"
       )
     }
   }

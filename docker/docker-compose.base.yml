@@ -1,16 +1,13 @@
 services:
   cpanel-backend:
-    container_name: cpanel-backend
     build:
       context: ../Cpanel/auth-server
     image: mspk/cpanel-backend:${IMAGE_TAG}
     env_file:
       - /opt/envs/cpanel-backend.env
-    restart: unless-stopped
     networks: [webnet]
 
   cpanel-frontend:
-    container_name: cpanel-frontend
     build:
       context: ../Cpanel/CpanelWeb
       args:
@@ -19,23 +16,17 @@ services:
     image: mspk/cpanel-frontend:${IMAGE_TAG}
     env_file:
       - /opt/envs/cpanel-frontend.env
-    depends_on:
-      - cpanel-backend
-    restart: unless-stopped
     networks: [webnet]
 
   developer-backend:
-    container_name: developer-backend
     build:
       context: ../developerWeb/Backend
     image: mspk/dev-backend:${IMAGE_TAG}
     env_file:
       - /opt/envs/dev-backend.env
-    restart: unless-stopped
     networks: [webnet]
 
   developer-frontend:
-    container_name: developer-frontend
     build:
       context: ../developerWeb/authServerWeb
       args:
@@ -45,9 +36,6 @@ services:
     image: mspk/dev-frontend:${IMAGE_TAG}
     env_file:
       - /opt/envs/dev-frontend.env
-    depends_on:
-      - developer-backend
-    restart: unless-stopped
     networks: [webnet]
 
 networks:

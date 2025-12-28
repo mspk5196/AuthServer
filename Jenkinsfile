@@ -58,24 +58,32 @@ pipeline {
     stage('Auto Merge test → main') {
       when { branch 'test' }
       steps {
-        withCredentials([usernamePassword(
-          credentialsId: 'github-ci-token',
-          usernameVariable: 'GIT_USER',
-          passwordVariable: 'GIT_TOKEN'
-        )]) {
-          sh '''
-            git config user.name "Jenkins CI"
-            git config user.email "ci@mspkapps.in"
+        catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+          withCredentials([usernamePassword(
+            credentialsId: 'github-ci-token',
+            usernameVariable: 'GIT_USER',
+            passwordVariable: 'GIT_TOKEN'
+          )]) {
+            sh '''
+              set -e
 
-            git fetch origin
-            git checkout main
-            git merge test --no-ff
+              git config user.name "Jenkins CI"
+              git config user.email "ci@mspkapps.in"
 
-            git push https://${GIT_USER}:${GIT_TOKEN}@github.com/MSPK-APPS/auth-server.git main
-          '''
+              # 🔐 Override origin with authenticated URL
+              git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@github.com/MSPK-APPS/auth-server.git
+
+              git fetch origin
+              git checkout main
+              git merge test --no-ff -m "ci: auto-merge test → main"
+
+              git push origin main
+            '''
+          }
         }
       }
     }
+
   }
 
   post {

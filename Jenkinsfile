@@ -7,17 +7,11 @@ pipeline {
 
   stages {
 
-    stage('Checkout') {
-      steps {
-        checkout scm
-      }
-    }
-
     stage('Verify Docker') {
       steps {
         sh '''
           docker --version
-          docker compose version || docker-compose version
+          docker compose version
         '''
       }
     }

@@ -73,10 +73,12 @@ pipeline {
             # 🔐 authenticated remote
             git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@github.com/MSPK-APPS/auth-server.git
 
-            # ✅ fetch BOTH branches explicitly
-            git fetch origin main test
+            # ✅ FORCE creation of origin/main & origin/test
+            git fetch origin \
+              +refs/heads/main:refs/remotes/origin/main \
+              +refs/heads/test:refs/remotes/origin/test
 
-            # ✅ create local main tracking branch
+            # ✅ create local main from origin/main
             git checkout -B main origin/main
 
             # ✅ merge test → main
@@ -88,6 +90,7 @@ pipeline {
         }
       }
     }
+
 
 
   }

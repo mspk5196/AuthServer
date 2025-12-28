@@ -3,11 +3,15 @@ pipeline {
 
   options {
     timestamps()
+    disableConcurrentBuilds()
   }
 
   environment {
-    COMPOSE_PROJECT_NAME = "auth-server"
-    ENV_DIR = "/opt/envs"
+    IMAGE_TAG = "${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
+  }
+
+  triggers {
+    pollSCM('H/2 * * * *')
   }
 
   stages {
@@ -35,73 +39,62 @@ pipeline {
       }
     }
 
-    stage('Deploy Services') {
+    stage('Deploy TEST') {
+      when {
+        branch 'test'
+      }
       steps {
-        script {
-          try {
-            echo "🚀 Deploying new version..."
-            sh '''
-              docker compose up -d
-            '''
-            echo "✅ Deployment successful"
-          } catch (err) {
-            echo "❌ Deployment failed, starting rollback..."
+        sh '''
+          docker compose -f docker-compose.test.yml down
+          docker compose -f docker-compose.test.yml up -d
+        '''
+      }
+    }
 
-            // Rollback to previous running state
-            sh '''
-              docker compose down
-              docker compose up -d
-            '''
+    stage('Auto Merge test → main') {
+      when {
+        branch 'test'
+      }
+      steps {
+        sh '''
+          git config user.name "MSPK CI"
+          git config user.email "ci@mspkapps.in"
 
-            error("Rollback completed due to deployment failure")
-          }
-        }
+          git fetch origin
+          git checkout main
+          git pull origin main
+          git merge test --no-ff
+          git push origin main
+        '''
+      }
+    }
+
+    stage('Deploy PROD') {
+      when {
+        branch 'main'
+      }
+      steps {
+        sh '''
+          docker compose -f docker-compose.prod.yml down
+          docker compose -f docker-compose.prod.yml up -d
+        '''
       }
     }
   }
 
   post {
-
     success {
-      emailext(
-        subject: "✅ DEPLOY SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-        to: "mspk@mspkapps.in",
-        mimeType: 'text/html',
-        body: """
-        <h2>Deployment Successful 🎉</h2>
-        <p><b>Project:</b> ${env.JOB_NAME}</p>
-        <p><b>Build:</b> #${env.BUILD_NUMBER}</p>
-        <p><b>Status:</b> SUCCESS</p>
-        <p><b>Build URL:</b>
-          <a href="${env.BUILD_URL}">
-            ${env.BUILD_URL}
-          </a>
-        </p>
-        <br/>
-        <p>All services are up and running.</p>
-        """
+      mail(
+        to: 'ci@mspkapps.in',
+        subject: "✅ SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+        body: "Deployment succeeded on branch: ${env.BRANCH_NAME}"
       )
     }
-
     failure {
-      emailext(
-        subject: "❌ DEPLOY FAILED (Rollback Done): ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-        to: "mspk@mspkapps.in",
-        mimeType: 'text/html',
-        body: """
-        <h2>Deployment Failed ❌</h2>
-        <p><b>Project:</b> ${env.JOB_NAME}</p>
-        <p><b>Build:</b> #${env.BUILD_NUMBER}</p>
-        <p><b>Status:</b> FAILED</p>
-        <p><b>Action:</b> Rollback executed</p>
-        <p><b>Build URL:</b>
-          <a href="${env.BUILD_URL}">
-            ${env.BUILD_URL}
-          </a>
-        </p>
-        <br/>
-        <p>Please check Jenkins logs for details.</p>
-        """
+      mail(
+        to: 'ci@mspkapps.in',
+        subject: "❌ FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+        body: "Deployment failed on branch: ${env.BRANCH_NAME}"
       )
     }
   }

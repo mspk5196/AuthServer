@@ -84,27 +84,34 @@ pipeline {
         to: EMAIL,
         subject: "✅ ${APP} deployed (${env.BRANCH_NAME})",
         body: """
-Application: ${APP}
-Branch: ${env.BRANCH_NAME}
-Image tag: ${IMAGE_TAG}
-Status: SUCCESS
-"""
+              Application: ${APP}
+              Branch: ${env.BRANCH_NAME}
+              Image tag: ${IMAGE_TAG}
+              Status: SUCCESS
+              """
       )
     }
 
     failure {
-      sh 'bash scripts/rollback.sh'
+      script {
+        if (env.BRANCH_NAME == 'main') {
+          sh 'bash scripts/rollback.sh prod'
+        } else {
+          echo "Skipping rollback for test environment"
+        }
+      }
+
       mail(
         to: EMAIL,
         subject: "❌ ${APP} failed (${env.BRANCH_NAME})",
         body: """
-Application: ${APP}
-Branch: ${env.BRANCH_NAME}
-Image tag: ${IMAGE_TAG}
-Status: FAILED
-Rollback executed.
-"""
+              Application: ${APP}
+              Branch: ${env.BRANCH_NAME}
+              Image tag: ${IMAGE_TAG}
+              Status: FAILED
+              """
       )
     }
   }
+
 }

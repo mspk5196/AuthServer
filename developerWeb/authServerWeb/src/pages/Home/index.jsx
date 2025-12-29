@@ -2,11 +2,12 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useEffect } from 'react';
 import './Home.scss';
-
+import { API_URL } from '../../utils/api';
 const Home = () => {
     const { developer, loading } = useAuth();
     const navigate = useNavigate();
-
+    console.log(API_URL);
+    
     // Redirect authenticated users to dashboard
     useEffect(() => {
       if (!loading && developer) {

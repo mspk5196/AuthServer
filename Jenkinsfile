@@ -16,23 +16,6 @@ pipeline {
       }
     }
 
-    stage('Load Env') {
-      steps {
-        sh 'bash scripts/load-env.sh'
-      }
-    }
-
-    stage('Build Images (CI validation)') {
-      steps {
-        sh '''
-          docker compose \
-            -f docker/docker-compose.base.yml \
-            -f docker/docker-compose.prod.yml \
-            build
-        '''
-      }
-    }
-
     stage('Merge test → main') {
       steps {
         withCredentials([usernamePassword(
@@ -42,7 +25,6 @@ pipeline {
         )]) {
           sh '''
             set -e
-
             git config user.name "Jenkins CI"
             git config user.email "ci@mspkapps.in"
 
@@ -60,7 +42,7 @@ pipeline {
       }
     }
 
-    stage('Build & Deploy') {
+    stage('Build & Deploy (PRODUCTION)') {
       steps {
         sh '''
           bash -lc '
@@ -69,10 +51,16 @@ pipeline {
 
             source /opt/envs/frontend.prod.env
             source /opt/envs/cpanel-backend.env
+            source /opt/envs/cpanel-frontend.env
             source /opt/envs/dev-backend.env
             source /opt/envs/dev-frontend.env
 
             set +a
+
+            docker compose \
+              -f docker/docker-compose.base.yml \
+              -f docker/docker-compose.prod.yml \
+              build
 
             docker compose \
               -f docker/docker-compose.base.yml \
@@ -82,8 +70,6 @@ pipeline {
         '''
       }
     }
-
-
   }
 
   post {
@@ -92,11 +78,10 @@ pipeline {
         to: EMAIL,
         subject: "✅ ${APP} deployed to PRODUCTION",
         body: """
-        Application: ${APP}
-        Image tag: ${IMAGE_TAG}
-        Status: SUCCESS
-        Source branch: test
-        """
+Application: ${APP}
+Image tag: ${IMAGE_TAG}
+Status: SUCCESS
+"""
       )
     }
 
@@ -105,10 +90,10 @@ pipeline {
         to: EMAIL,
         subject: "❌ ${APP} CI failed (no prod deploy)",
         body: """
-        Application: ${APP}
-        Status: FAILED
-        Production was NOT touched
-        """
+Application: ${APP}
+Status: FAILED
+Production was NOT touched
+"""
       )
     }
   }

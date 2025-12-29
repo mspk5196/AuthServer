@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { api } from './services/api';
 import { useAuth } from './context/AuthContext';
 import { authService } from './services/authService';
 import DashboardLayout from './components/Layout/DashboardLayout';

@@ -74,27 +74,42 @@ pipeline {
 
   post {
     success {
-      mail(
+      emailext(
         to: EMAIL,
-        subject: "✅ ${APP} deployed to PRODUCTION",
+        subject: "✅ ${APP} deployed to PRODUCTION (Build #${BUILD_NUMBER})",
         body: """
-Application: ${APP}
-Image tag: ${IMAGE_TAG}
-Status: SUCCESS
-"""
+              SUCCESS ✅
+
+              Application : ${APP}
+              Build Number: ${BUILD_NUMBER}
+              Image Tag   : ${IMAGE_TAG}
+              Branch      : main
+
+              See attached Jenkins build log for details.
+              """,
+        attachLog: true,
+        compressLog: true
       )
     }
 
     failure {
-      mail(
+      emailext(
         to: EMAIL,
-        subject: "❌ ${APP} CI failed (no prod deploy)",
+        subject: "❌ ${APP} CI FAILED (Build #${BUILD_NUMBER})",
         body: """
-Application: ${APP}
-Status: FAILED
-Production was NOT touched
-"""
+              FAILURE ❌
+
+              Application : ${APP}
+              Build Number: ${BUILD_NUMBER}
+              Branch      : test → main
+
+              ❌ Production was NOT touched.
+              See attached Jenkins build log for exact error.
+              """,
+        attachLog: true,
+        compressLog: true
       )
     }
   }
+
 }

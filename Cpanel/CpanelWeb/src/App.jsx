@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
-import { api } from './services/api';
+import { authService } from './services/authService';
 import DashboardLayout from './components/Layout/DashboardLayout';
 import Home from './pages/Home/Home';
 import Apps from './pages/Apps/AppHome/Apps';
@@ -66,15 +66,14 @@ function App() {
           }
           
           window.history.replaceState({}, '', newUrl);
-        } else {
+          } else {
           // Check current session via backend (httpOnly cookies)
           try {
-            const me = await api.get('/me');
-            if (me && (me.developer || me.data?.developer)) {
-              setDeveloper(me.developer || me.data.developer);
-            }
+            const dev = await authService.getCurrentDeveloper();
+            if (dev) setDeveloper(dev);
           } catch (e) {
-            // no session
+            // unexpected failure - rethrow so error surfaces
+            console.error('Auth check failed:', e);
           }
         }
       } catch (err) {

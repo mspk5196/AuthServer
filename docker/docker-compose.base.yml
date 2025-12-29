@@ -1,5 +1,6 @@
 services:
   cpanel-backend:
+    container_name: cpanel-backend
     build:
       context: ../Cpanel/auth-server
     image: mspk/cpanel-backend:${IMAGE_TAG}
@@ -8,6 +9,7 @@ services:
     networks: [webnet]
 
   cpanel-frontend:
+    container_name: cpanel-frontend
     build:
       context: ../Cpanel/CpanelWeb
       args:
@@ -19,6 +21,7 @@ services:
     networks: [webnet]
 
   developer-backend:
+    container_name: developer-backend
     build:
       context: ../developerWeb/Backend
     image: mspk/dev-backend:${IMAGE_TAG}
@@ -27,6 +30,7 @@ services:
     networks: [webnet]
 
   developer-frontend:
+    container_name: developer-frontend
     build:
       context: ../developerWeb/authServerWeb
       args:

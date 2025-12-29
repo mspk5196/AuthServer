@@ -52,14 +52,23 @@ export const authService = {
 
   // Get current developer
   getCurrentDeveloper: async () => {
-    const response = await api.get('/developer/me');
-    const developer =
-      response?.developer ||
-      response?.data?.developer ||
-      response?.user ||
-      response?.data?.user ||
-      null;
-    return { developer };
+    try {
+      const response = await api.get('/developer/me');
+      const developer =
+        response?.developer ||
+        response?.data?.developer ||
+        response?.user ||
+        response?.data?.user ||
+        null;
+      return { developer };
+    } catch (err) {
+      const status = err?.status || err?.response?.status;
+      const code = err?.data?.error || err?.response?.data?.error;
+      if (status === 401 || code === 'NO_TOKEN' || code === 'INVALID_TOKEN') {
+        return { developer: null };
+      }
+      throw err;
+    }
   },
 
   // Verify email

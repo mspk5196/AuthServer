@@ -57,12 +57,12 @@ pipeline {
 
             set +a
 
-            docker compose \
+            docker compose -p auth-server \
               -f docker/docker-compose.base.yml \
               -f docker/docker-compose.prod.yml \
               build
 
-            docker compose \
+            docker compose -p auth-server \
               -f docker/docker-compose.base.yml \
               -f docker/docker-compose.prod.yml \
               up -d

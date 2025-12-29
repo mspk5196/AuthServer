@@ -62,25 +62,28 @@ pipeline {
 
     stage('Build & Deploy') {
       steps {
-        sh '''
-          #!/bin/bash
-          set -e
-          set -a
+        sh(
+          script: '''
+            set -e
+            set -a
 
-          source /opt/envs/frontend.prod.env
-          source /opt/envs/cpanel-backend.env
-          source /opt/envs/dev-backend.env
-          source /opt/envs/dev-frontend.env
+            source /opt/envs/frontend.prod.env
+            source /opt/envs/cpanel-backend.env
+            source /opt/envs/dev-backend.env
+            source /opt/envs/dev-frontend.env
 
-          set +a
+            set +a
 
-          docker compose \
-            -f docker/docker-compose.base.yml \
-            -f docker/docker-compose.prod.yml \
-            up -d
-        '''
+            docker compose \
+              -f docker/docker-compose.base.yml \
+              -f docker/docker-compose.prod.yml \
+              up -d
+          ''',
+          shell: '/bin/bash'
+        )
       }
     }
+
   }
 
   post {

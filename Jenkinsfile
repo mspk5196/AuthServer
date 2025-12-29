@@ -62,8 +62,8 @@ pipeline {
 
     stage('Build & Deploy') {
       steps {
-        sh(
-          script: '''
+        sh '''
+          bash -lc '
             set -e
             set -a
 
@@ -78,11 +78,11 @@ pipeline {
               -f docker/docker-compose.base.yml \
               -f docker/docker-compose.prod.yml \
               up -d
-          ''',
-          shell: '/bin/bash'
-        )
+          '
+        '''
       }
     }
+
 
   }
 

@@ -2,7 +2,6 @@
 set -e
 set -a
 
-  source /opt/envs/frontend.prod.env
   
 for f in \
   /opt/envs/cpanel-backend.env \
@@ -14,4 +13,5 @@ do
   source "$f"
 done
 
+  source /opt/envs/frontend.prod.env
 set +a

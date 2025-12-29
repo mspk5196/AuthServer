@@ -53,7 +53,7 @@ export const authService = {
   // Get current developer
   getCurrentDeveloper: async () => {
     try {
-      const response = await api.get('/developer/me');
+      const response = await api.get('/developer/me', { redirectOn401: false });
       const developer =
         response?.developer ||
         response?.data?.developer ||

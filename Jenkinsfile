@@ -63,16 +63,16 @@ pipeline {
     stage('Build & Deploy') {
       steps {
         sh '''
+          #!/bin/bash
+          set -e
           set -a
+
           source /opt/envs/frontend.prod.env
           source /opt/envs/cpanel-backend.env
           source /opt/envs/dev-backend.env
-          set +a
+          source /opt/envs/dev-frontend.env
 
-          docker compose \
-            -f docker/docker-compose.base.yml \
-            -f docker/docker-compose.prod.yml \
-            build
+          set +a
 
           docker compose \
             -f docker/docker-compose.base.yml \
@@ -81,7 +81,6 @@ pipeline {
         '''
       }
     }
-
   }
 
   post {

@@ -178,11 +178,22 @@ const registerUser = async (req, res) => {
     // Prepare allowed extra fields (filter against app.extra_fields metadata)
     const extraMeta = app.extra_fields || [];
     let allowedExtra = {};
+    const coreKeys = new Set(['email', 'password', 'name', 'username', 'extra']);
+    // Accept both `extra: { ... }` and top-level keys matching defined extra fields
     if (extra && typeof extra === 'object') {
       for (const k of Object.keys(extra)) {
+        if (coreKeys.has(k)) continue; // never store core fields in extra
         if (extraMeta.find(f => f.name === k)) {
           allowedExtra[k] = extra[k];
         }
+      }
+    }
+    for (const k of Object.keys(req.body || {})) {
+      if (coreKeys.has(k)) continue;
+      // skip if already captured from `extra` object
+      if (Object.prototype.hasOwnProperty.call(allowedExtra, k)) continue;
+      if (extraMeta.find(f => f.name === k)) {
+        allowedExtra[k] = req.body[k];
       }
     }
 
@@ -237,7 +248,8 @@ const registerUser = async (req, res) => {
           name: user.name,
           username: user.username,
           email_verified: user.email_verified,
-          created_at: user.created_at
+          created_at: user.created_at,
+          extra: user.extra || {}
         },
         access_token: accessToken,
         token_type: 'Bearer',

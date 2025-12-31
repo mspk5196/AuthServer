@@ -16,6 +16,7 @@ export default function AppSettings(){
   const [googleClientId, setGoogleClientId] = useState('');
   const [googleClientSecret, setGoogleClientSecret] = useState('');
   const [extraFields, setExtraFields] = useState([]);
+  const [userEditPermissions, setUserEditPermissions] = useState({ name: true, username: true, email: true });
 
   useEffect(()=>{ fetchSettings(); fetchUsage(); }, [appId]);
 
@@ -28,6 +29,7 @@ export default function AppSettings(){
         setGoogleClientId(appData.google_client_id || '');
         setGoogleClientSecret(appData.google_client_secret || '');
         setExtraFields(appData.extra_fields || []);
+        setUserEditPermissions(appData.user_edit_permissions || { name: true, username: true, email: true });
       }
     } catch (err) {
       console.error(err);
@@ -90,7 +92,7 @@ export default function AppSettings(){
   // ---------- Custom Extra Fields ----------
   function addField() {
     if (extraFields.length >= 10) return alert('Maximum 10 custom fields allowed');
-    setExtraFields(prev => [...prev, { name: '', label: '', type: 'text' }]);
+    setExtraFields(prev => [...prev, { name: '', label: '', type: 'text', editable_by_user: true }]);
   }
 
   function removeField(index) {
@@ -111,8 +113,7 @@ export default function AppSettings(){
         }
         if (!f.type) return alert('Each field must have a type');
       }
-
-      const body = { extra_fields: extraFields };
+      const body = { extra_fields: extraFields, user_edit_permissions: userEditPermissions };
       const resp = await api.put(`/apps/updateApp/${appId}`, body, token);
       if (resp.success) {
         alert('Custom fields saved');
@@ -299,7 +300,7 @@ export default function AppSettings(){
       {/* Custom Fields Card */}
       <div className="custom-fields-card">
         <h3 className="card-title">Custom User Fields (up to 10)</h3>
-        <p className="card-sub">Add extra columns that will be available for users of this app.</p>
+        <p className="card-sub">Add extra columns that will be available for users of this app. You can control whether each field (and core fields) is editable by the user.</p>
 
         {extraFields.length === 0 && (
           <div className="no-custom-fields">No custom fields defined.</div>
@@ -330,9 +331,20 @@ export default function AppSettings(){
               <option value="date">date</option>
               <option value="json">json</option>
             </select>
+            <label className="editable-by-user-label">
+              <input type="checkbox" checked={!!f.editable_by_user} onChange={(e) => updateField(idx, 'editable_by_user', e.target.checked)} />
+              Editable by user
+            </label>
             <button className="btn btn-danger" onClick={() => removeField(idx)}>Remove</button>
           </div>
         ))}
+
+        <div className="core-field-permissions">
+          <h4>Core field permissions</h4>
+          <label><input type="checkbox" checked={!!userEditPermissions.name} onChange={(e)=>setUserEditPermissions(prev=>({...prev, name: e.target.checked}))} /> Name editable by user</label>
+          <label><input type="checkbox" checked={!!userEditPermissions.username} onChange={(e)=>setUserEditPermissions(prev=>({...prev, username: e.target.checked}))} /> Username editable by user</label>
+          <label><input type="checkbox" checked={!!userEditPermissions.email} onChange={(e)=>setUserEditPermissions(prev=>({...prev, email: e.target.checked}))} /> Email editable by user</label>
+        </div>
 
         <div className="custom-fields-actions">
           <button className="btn btn-secondary" onClick={addField} disabled={extraFields.length >= 10}>+ Add field</button>

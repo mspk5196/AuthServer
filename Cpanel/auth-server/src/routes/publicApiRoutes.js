@@ -7,6 +7,8 @@ router.get('/auth/verify-email', publicApis.verifyEmail);
 router.get('/auth/reset-password', publicApis.resetPasswordPage);
 router.post('/auth/reset-password', publicApis.completePasswordReset);
 router.get('/auth/verify-delete-email', publicApis.verifyDeleteEmail);
+// Confirm pending profile updates (token in query)
+router.get('/user/confirm-update', publicApis.confirmUserUpdate);
 // Public GET + POST: user enters password directly on backend-served page
 router.get('/auth/verify-email-set-password-google-user', publicApis.verifyEmailSetPasswordGoogleUser);
 router.post('/auth/verify-email-set-password-google-user', publicApis.verifyEmailSetPasswordGoogleUser);
@@ -29,5 +31,6 @@ router.post('/:apiKey/auth/delete-account', publicApis.deleteAccount);
 
 // User profile (requires Bearer token)
 router.get('/:apiKey/user/profile', publicApis.getUserProfile);
+router.patch('/:apiKey/user/profile', publicApis.patchUserProfile);
 
 module.exports = router;

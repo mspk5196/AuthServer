@@ -146,7 +146,7 @@ const createApp = async (req, res) => {
     sendMail({
       to: support_email,
       subject: `Verify Your App Support Email - ${app_name}`,
-      html: buildAppSupportEmailVerificationEmail({ appName: app_name, verificationUrl }),
+      html: buildAppSupportEmailVerificationEmail({ appName: app_name, verificationUrl, supportEmail: support_email }),
     }).catch(err => console.error('Send verification email error:', err));
 
     // Return response with plaintext secret and pending verification status
@@ -306,6 +306,7 @@ const updateApp = async (req, res) => {
       google_client_secret,
       extra_fields
     } = req.body;
+    const { user_edit_permissions } = req.body;
 
     // Verify ownership
     const checkOwner = await pool.query(
@@ -382,6 +383,20 @@ const updateApp = async (req, res) => {
       values.push(JSON.stringify(extra_fields));
     }
 
+    if (user_edit_permissions !== undefined) {
+      // basic validation: must be an object with boolean values for name, username, email
+      if (typeof user_edit_permissions !== 'object' || Array.isArray(user_edit_permissions) || user_edit_permissions === null) {
+        return res.status(400).json({ success: false, message: 'user_edit_permissions must be an object' });
+      }
+      const allowedKeys = ['name', 'username', 'email'];
+      const sanitized = {};
+      for (const k of allowedKeys) {
+        if (user_edit_permissions[k] !== undefined) sanitized[k] = !!user_edit_permissions[k];
+      }
+      updates.push(`user_edit_permissions = $${paramCount++}::jsonb`);
+      values.push(JSON.stringify(sanitized));
+    }
+
     if (updates.length === 0) {
       return res.status(400).json({
         success: false,
@@ -446,7 +461,7 @@ const requestAppDeletion = async (req, res) => {
 
     // Fetch app and developer email
     const result = await pool.query(
-      `SELECT a.app_name, d.email, d.name
+      `SELECT a.app_name, a.support_email as app_support_email, d.email, d.name
        FROM dev_apps a
        JOIN developers d ON a.developer_id = d.id
        WHERE a.id = $1 AND a.developer_id = $2`,
@@ -460,7 +475,7 @@ const requestAppDeletion = async (req, res) => {
       });
     }
 
-    const { app_name, email, name } = result.rows[0];
+    const { app_name, app_support_email, email, name } = result.rows[0];
 
     // Create a short-lived JWT for deletion confirmation
     const token = jwt.sign(
@@ -488,6 +503,7 @@ const requestAppDeletion = async (req, res) => {
         appName: app_name,
         developerName: name,
         confirmationUrl,
+        supportEmail: app_support_email
       }),
     }).catch((err) => console.error('Send app delete confirmation email error:', err));
 
@@ -1064,7 +1080,7 @@ const updateAppSupportEmail = async (req, res) => {
     sendMail({
       to: support_email,
       subject: `Verify Updated Support Email - ${app.app_name}`,
-      html: buildAppSupportEmailUpdateEmail({ appName: app.app_name, verificationUrl }),
+      html: buildAppSupportEmailUpdateEmail({ appName: app.app_name, verificationUrl, supportEmail: support_email }),
     }).catch(err => console.error('Send verification email error:', err));
 
     res.json({

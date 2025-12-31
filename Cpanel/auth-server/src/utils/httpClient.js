@@ -30,10 +30,26 @@ function postJson(url, data, headers = {}, opts = {}) {
           'Content-Length': Buffer.byteLength(body),
           ...headers,
         },
-        // prefer IPv4 to avoid IPv6 ENETUNREACH on some networks
+        // Lookup helper: prefer IPv4 but fall back to IPv6 and then system default
         lookup: (hostname, lookupOpts, cb) => {
-          // force family=4
-          dns.lookup(hostname, { family: 4 }, cb);
+          const families = [];
+          if (lookupOpts && lookupOpts.family) families.push(lookupOpts.family);
+          // prefer 4 then 6
+          families.push(4, 6);
+
+          let idx = 0;
+          const tryNext = () => {
+            if (idx >= families.length) {
+              return cb(new Error('DNS lookup failed for ' + hostname));
+            }
+            const fam = families[idx++];
+            dns.lookup(hostname, { family: fam }, (err, address, family) => {
+              if (!err && address) return cb(null, address, family);
+              // otherwise try next family
+              tryNext();
+            });
+          };
+          tryNext();
         }
       };
 

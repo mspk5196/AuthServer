@@ -8,6 +8,7 @@ import Home from './pages/Home/Home';
 import Apps from './pages/Apps/AppHome/Apps';
 import AppDetails from './pages/Apps/AppDetails/AppDetails';
 import AppSettings from './pages/Apps/AppSettings/AppSettings';
+import AllUsers from './pages/Apps/AllUsers/AllUsers';
 import Settings from './pages/Settings/Settings';
 import Documentation from './pages/Documentation/Documentation';
 import './App.css';
@@ -135,6 +136,7 @@ function App() {
         <Route path="apps" element={<Apps />} />
         <Route path="apps/:appId" element={<AppDetails />} />
         <Route path="apps/:appId/settings" element={<AppSettings />} />
+        <Route path="apps/all-users" element={<AllUsers />} />
         <Route path="settings" element={<Settings />} />
         <Route path="documentation" element={<Documentation />} />
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -18,6 +18,9 @@ const {
   exportUsersCSV,
   requestAppDeletion,
   confirmAppDeletion,
+  listAllUsersAcrossApps,
+  mergeUsersAcrossApps,
+  setCombineUsersFlag,
 } = require('../controllers/appsController'); // Fixed: was appController
 const { authenticateToken } = require('../middleware/auth');
 
@@ -41,6 +44,13 @@ router.get('/users/:appId/:userId/logins', authenticateToken, getUserLoginHistor
 router.post('/users/:appId', authenticateToken, createAppUser);
 router.put('/users/:appId/:userId/block', authenticateToken, setUserBlocked);
 router.get('/usage/:appId', authenticateToken, getAppUsage);
+
+// Developer-level: list all users across developer's apps
+router.get('/all-users', authenticateToken, listAllUsersAcrossApps);
+// Toggle combine-users flag for developer
+router.put('/combine-users', authenticateToken, setCombineUsersFlag);
+// Apply merge decisions
+router.post('/all-users/merge', authenticateToken, mergeUsersAcrossApps);
 
 // Email verification and support email routes
 router.get('/verify-app-email/:token', verifyAppEmail);

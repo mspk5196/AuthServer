@@ -206,7 +206,7 @@ const registerUser = async (req, res) => {
     sendMail({
       to: email,
       subject: 'Verify Your Email',
-      html: buildWelcomeVerificationEmail({ appName: app.app_name, verificationUrl }),
+      html: buildWelcomeVerificationEmail({ appName: app.app_name, verificationUrl, supportEmail: app.support_email }),
     }).catch(err => console.error('Send verification email error:', err));
 
     // Generate access token
@@ -453,7 +453,7 @@ const getUserProfile = async (req, res) => {
 
     // Get user info
     const result = await pool.query(
-      'SELECT id, email, name, username, email_verified, google_linked, is_blocked, last_login, created_at FROM users WHERE id = $1 AND app_id = $2',
+      'SELECT id, email, name, username, email_verified, google_linked, is_blocked, last_login, created_at, extra FROM users WHERE id = $1 AND app_id = $2',
       [decoded.userId, req.devApp.id]
     );
 
@@ -465,9 +465,23 @@ const getUserProfile = async (req, res) => {
       });
     }
 
+    // Build editable permissions map
+    const app = req.devApp || {};
+    const extraFields = app.extra_fields || [];
+    const editable = {
+      name: (app.user_edit_permissions && app.user_edit_permissions.name) === true,
+      username: (app.user_edit_permissions && app.user_edit_permissions.username) === true,
+      email: (app.user_edit_permissions && app.user_edit_permissions.email) === true,
+      extra: {}
+    };
+    for (const f of extraFields) {
+      editable.extra[f.name] = !!f.editable_by_user;
+    }
+
     res.json({
       success: true,
-      data: result.rows[0]
+      data: result.rows[0],
+      editable
     });
 
   } catch (error) {
@@ -537,7 +551,7 @@ const requestPasswordReset = async (req, res) => {
     sendMail({
       to: email,
       subject: 'Reset Your Password',
-      html: buildPasswordResetEmail({ name: user.name, resetUrl }),
+      html: buildPasswordResetEmail({ name: user.name, resetUrl, supportEmail: app.support_email }),
     }).catch(err => console.error('Send reset email error:', err));
 
     res.json({
@@ -613,7 +627,7 @@ const requestChangePasswordLink = async (req, res) => {
       sendMail({
         to: user.email,
         subject: 'Change your password',
-        html: buildChangePasswordLinkEmail({ appName: app.app_name, name: user.name, verificationUrl }),
+        html: buildChangePasswordLinkEmail({ appName: app.app_name, name: user.name, verificationUrl, supportEmail: app.support_email }),
       }).catch(err => console.error('Send change password link email error:', err));
     
 
@@ -710,7 +724,7 @@ const changePassword = async (req, res) => {
     sendMail({
       to: user.email,
       subject: 'Account password changed successfully',
-      html: buildPasswordChangedEmail({ appName: app.app_name, changedAt: new Date().toLocaleString() }),
+      html: buildPasswordChangedEmail({ appName: app.app_name, changedAt: new Date().toLocaleString(), supportEmail: app.support_email }),
     }).catch(err => console.error('Send verification email error:', err));
 
     res.json({
@@ -801,7 +815,7 @@ const resendVerification = async (req, res) => {
     sendMail({
       to: email,
       subject: 'Verify Your Email',
-      html: buildEmailVerificationEmail({ name: user.name, verificationUrl, verifyPurpose }),
+      html: buildEmailVerificationEmail({ name: user.name, verificationUrl, verifyPurpose, supportEmail: app.support_email }),
     }).catch(err => console.error('Send verification email error:', err));
 
     res.json({
@@ -1199,7 +1213,7 @@ const completePasswordReset = async (req, res) => {
     sendMail({
       to: resetRecord.email,
       subject: 'Account password changed successfully',
-      html: buildPasswordChangedEmail({ appName: app.app_name, changedAt: new Date().toLocaleString() }),
+      html: buildPasswordChangedEmail({ appName: app.app_name, changedAt: new Date().toLocaleString(), supportEmail: app.support_email }),
     }).catch(err => console.error('Send verification email error:', err));
 
     res.json({
@@ -1267,7 +1281,7 @@ const deleteAccount = async (req, res) => {
     sendMail({
       to: email,
       subject: 'Delete Your Account',
-      html: buildDeleteAccountEmail({ appName: app.app_name, verificationUrl }),
+      html: buildDeleteAccountEmail({ appName: app.app_name, verificationUrl, supportEmail: app.support_email }),
     }).catch(err => console.error('Send verification email error:', err));
 
     // Soft delete: mark as deleted (recommended for data retention/compliance)
@@ -1762,7 +1776,7 @@ const verifyDeleteEmail = async (req, res) => {
     sendMail({
       to: user.email,
       subject: 'Account deleted successfully',
-      html: buildAccountDeletedEmail({ appName: app.app_name, deletedAt: new Date().toLocaleString() }),
+      html: buildAccountDeletedEmail({ appName: app.app_name, deletedAt: new Date().toLocaleString(), supportEmail: app.support_email }),
     }).catch(err => console.error('Send deletion confirmation email error:', err));
 
     res.json({
@@ -1892,7 +1906,7 @@ const googleAuth = async (req, res) => {
         sendMail({
           to: googleUser.email?.toLowerCase(),
           subject: 'Welcome to ' + app.app_name,
-          html: buildGoogleUserWelcomeEmail({ appName: app.app_name, name: googleUser.name }),
+          html: buildGoogleUserWelcomeEmail({ appName: app.app_name, email: googleUser.email?.toLowerCase(), name: googleUser.name, supportEmail: app.support_email }),
         }).catch(err => console.error('Send welcome email error:', err));
 
       }
@@ -2029,7 +2043,7 @@ const setPasswordGoogleUser = async (req, res) => {
     sendMail({
       to: email,
       subject: 'Link to set your password',
-      html: buildSetPasswordGoogleUserEmail({ appName: app.app_name, name: user.name, verificationUrl }),
+      html: buildSetPasswordGoogleUserEmail({ appName: app.app_name, name: user.name, verificationUrl, supportEmail: app.support_email }),
     }).catch(err => console.error('Send verification email error:', err));
 
     res.json({
@@ -2149,7 +2163,7 @@ const verifyEmailSetPasswordGoogleUser = async (req, res) => {
       sendMail({
         to: user.email,
         subject: 'Password linked to your account',
-        html: buildPasswordSetConfirmationEmail({ setAt: new Date().toLocaleString() }),
+        html: buildPasswordSetConfirmationEmail({ changedAt: new Date().toLocaleString(), supportEmail: app.support_email }),
       }).catch(err => console.error('Send password setup confirmation email error:', err));
 
       return res.json({
@@ -2469,7 +2483,7 @@ const verifyChangePassword = async (req, res) => {
       sendMail({
         to: user.email,
         subject: 'Password changed successfully',
-        html: buildPasswordChangedEmail({ appName: app.app_name, changedAt: new Date().toLocaleString() }),
+        html: buildPasswordChangedEmail({ appName: app.app_name, changedAt: new Date().toLocaleString(), supportEmail: app.support_email }),
       }).catch(err => console.error('Send change password confirmation email error:', err));
 
       return res.json({ success: true, message: 'Password changed successfully.' });
@@ -2578,6 +2592,7 @@ module.exports = {
   loginUser,
   verifyEmail,
   getUserProfile,
+  patchUserProfile,
   requestPasswordReset,
   requestChangePasswordLink,
   resetPasswordPage,
@@ -2590,5 +2605,152 @@ module.exports = {
   googleAuth,
   setPasswordGoogleUser,
   verifyEmailSetPasswordGoogleUser,
-  verifyChangePassword
+  verifyChangePassword,
+  confirmUserUpdate
 };
+
+/**
+ * Patch user profile (may require verification)
+ * PATCH /:apiKey/user/profile
+ */
+const patchUserProfile = async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ success: false, error: 'Unauthorized', message: 'Access token is required' });
+    }
+
+    const token = authHeader.substring(7);
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (err) {
+      return res.status(401).json({ success: false, error: 'Invalid token', message: 'Access token invalid or expired' });
+    }
+
+    // Ensure app matches
+    if (!req.devApp || req.devApp.id !== decoded.appId) {
+      return res.status(403).json({ success: false, error: 'App mismatch', message: 'Token does not belong to this app' });
+    }
+
+    const userId = decoded.userId;
+    // Load user
+    const userRes = await pool.query('SELECT id, email, name, username, extra FROM users WHERE id = $1 AND app_id = $2', [userId, req.devApp.id]);
+    if (userRes.rows.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
+    const user = userRes.rows[0];
+
+    const body = req.body || {};
+    const app = req.devApp;
+
+    // Build editable map
+    const extraFields = app.extra_fields || [];
+    const editableExtra = {};
+    for (const f of extraFields) editableExtra[f.name] = !!f.editable_by_user;
+    const userEditPerm = app.user_edit_permissions || {};
+
+    // Determine allowed updates
+    const allowed = {};
+    if (body.name !== undefined && userEditPerm.name === true) allowed.name = body.name;
+    if (body.username !== undefined && userEditPerm.username === true) allowed.username = body.username;
+    if (body.email !== undefined && userEditPerm.email === true) allowed.email = body.email;
+    if (body.extra !== undefined && typeof body.extra === 'object') {
+      const filtered = {};
+      for (const k of Object.keys(body.extra)) {
+        if (editableExtra[k]) filtered[k] = body.extra[k];
+      }
+      if (Object.keys(filtered).length > 0) allowed.extra = filtered;
+    }
+
+    if (Object.keys(allowed).length === 0) {
+      return res.status(400).json({ success: false, message: 'No editable fields provided or not permitted' });
+    }
+
+    // If email changed, create pending update and send verification to new email
+    if (allowed.email && allowed.email.toLowerCase() !== user.email.toLowerCase()) {
+      const verificationToken = crypto.randomBytes(32).toString('hex');
+      const payload = allowed;
+      await pool.query(`
+        INSERT INTO pending_user_updates (user_id, app_id, payload, email_target, token, expires_at, created_at)
+        VALUES ($1,$2,$3,$4,$5,NOW() + INTERVAL '24 hours', NOW())
+      `, [userId, app.id, JSON.stringify(payload), allowed.email.toLowerCase(), verificationToken]);
+
+      const verificationUrl = `${process.env.BACKEND_URL}/api/v1/user/confirm-update?token=${verificationToken}`;
+      const changesSummary = Object.keys(allowed).join(', ');
+      sendMail({ to: allowed.email, subject: 'Confirm profile changes', html: buildProfileUpdateVerificationEmail({ name: user.name, verificationUrl, changesSummary, supportEmail: app.support_email }) }).catch(err => console.error('Send profile update verification email error:', err));
+
+      return res.status(202).json({ success: true, verification_required: true, message: 'Verification sent to new email address' });
+    }
+
+    // For non-email updates: apply immediately
+    const updates = [];
+    const params = [];
+    let idx = 1;
+    if (allowed.name !== undefined) { updates.push(`name = $${idx++}`); params.push(allowed.name); }
+    if (allowed.username !== undefined) { updates.push(`username = $${idx++}`); params.push(allowed.username); }
+    if (allowed.extra !== undefined) {
+      // merge into jsonb
+      updates.push(`extra = COALESCE(extra, '{}'::jsonb) || $${idx++}::jsonb`);
+      params.push(JSON.stringify(allowed.extra));
+    }
+    if (updates.length > 0) {
+      params.push(userId);
+      await pool.query(`UPDATE users SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${idx}`, params);
+    }
+
+    res.json({ success: true, message: 'Profile updated' });
+
+  } catch (error) {
+    console.error('Patch user profile error:', error);
+    res.status(500).json({ success: false, message: 'Failed to update profile' });
+  }
+};
+
+/**
+ * Confirm pending user update via token
+ * GET /user/confirm-update?token=...
+ */
+const confirmUserUpdate = async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) return res.status(400).json({ success: false, message: 'Token is required' });
+
+    const q = await pool.query('SELECT * FROM pending_user_updates WHERE token = $1 AND used = false AND expires_at > NOW()', [token]);
+    if (q.rows.length === 0) return res.status(400).json({ success: false, message: 'Invalid or expired token' });
+    const pending = q.rows[0];
+
+    // Apply payload
+    const payload = pending.payload || {};
+    const updates = [];
+    const params = [];
+    let idx = 1;
+    if (payload.name !== undefined) { updates.push(`name = $${idx++}`); params.push(payload.name); }
+    if (payload.username !== undefined) { updates.push(`username = $${idx++}`); params.push(payload.username); }
+    if (payload.email !== undefined) { updates.push(`email = $${idx++}`); params.push(payload.email.toLowerCase()); updates.push(`email_verified = true`); }
+    if (payload.extra !== undefined) { updates.push(`extra = COALESCE(extra, '{}'::jsonb) || $${idx++}::jsonb`); params.push(JSON.stringify(payload.extra)); }
+
+    if (updates.length > 0) {
+      params.push(pending.user_id);
+      await pool.query(`UPDATE users SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${idx}`, params);
+    }
+
+    // mark pending used
+    await pool.query('UPDATE pending_user_updates SET used = true WHERE id = $1', [pending.id]);
+
+    // respond with simple success page
+    res.send(`
+      <html><body>
+      <h2>Profile changes confirmed</h2>
+      <p>Your profile changes have been applied.</p>
+      </body></html>
+    `);
+
+  } catch (error) {
+    console.error('Confirm user update error:', error);
+    res.status(500).json({ success: false, message: 'Failed to confirm update' });
+  }
+};
+
+// Export newly added handlers
+module.exports.patchUserProfile = patchUserProfile;
+module.exports.confirmUserUpdate = confirmUserUpdate;

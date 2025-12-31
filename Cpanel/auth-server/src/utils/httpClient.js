@@ -23,61 +23,43 @@ function postJson(url, data, headers = {}, opts = {}) {
 
     let attempts = 0;
 
-    const attempt = () => {
+    const attempt = async () => {
       attempts++;
+
+      // Resolve hostname first (prefer IPv4 then IPv6), then call request with numeric IP
+      let resolvedAddress = null;
+      let resolvedFamily = null;
+      try {
+        const addrs = await new Promise((res, rej) => dns.lookup(u.hostname, { all: true }, (err, a) => err ? rej(err) : res(a)));
+        if (process.env.DEBUG_HTTPCLIENT) console.debug('[httpClient] dns.lookup(all) addrs for', u.hostname, addrs);
+        const chosen = (addrs && addrs.length) ? (addrs.find(a => a && a.family === 4 && a.address) || addrs.find(a => a && a.family === 6 && a.address) || addrs.find(a => a && a.address)) : null;
+        if (!chosen || !chosen.address) {
+          if (process.env.DEBUG_HTTPCLIENT) console.debug('[httpClient] dns.lookup(all) none chosen, falling back to single lookup for', u.hostname);
+          const fallback = await new Promise((res, rej) => dns.lookup(u.hostname, (err, address, family) => err ? rej(err) : res({ address, family })));
+          resolvedAddress = fallback.address;
+          resolvedFamily = fallback.family;
+        } else {
+          resolvedAddress = chosen.address;
+          resolvedFamily = chosen.family;
+        }
+      } catch (e) {
+        if (process.env.DEBUG_HTTPCLIENT) console.debug('[httpClient] dns.lookup failed for', u.hostname, e);
+        // let the request itself attempt to resolve using system behavior
+      }
 
       const options = {
         method: 'POST',
-        hostname: u.hostname,
+        hostname: resolvedAddress || u.hostname,
         port: u.port || (isHttps ? 443 : 80),
         path: u.pathname + (u.search || ''),
         headers: {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(body),
+          Host: u.hostname,
           ...headers,
         },
-        // Lookup helper: resolve all addresses then pick preferred family
-        lookup: (hostname, lookupOpts, cb) => {
-          try {
-            dns.lookup(hostname, { all: true }, (err, addrs) => {
-              try {
-                if (err) {
-                  if (process.env.DEBUG_HTTPCLIENT) console.debug('[httpClient] dns.lookup(all) error', err);
-                  return cb(err);
-                }
-                if (!addrs || addrs.length === 0) {
-                  if (process.env.DEBUG_HTTPCLIENT) console.debug('[httpClient] dns.lookup(all) no addrs for', hostname);
-                  return cb(new Error('No addresses for ' + hostname));
-                }
-                if (process.env.DEBUG_HTTPCLIENT) console.debug('[httpClient] dns.lookup(all) addrs for', hostname, addrs);
-                // prefer IPv4 then IPv6, but accept whichever is available
-                let chosen = addrs.find(a => a && a.family === 4 && a.address) || addrs.find(a => a && a.family === 6 && a.address) || addrs.find(a => a && a.address) || null;
-                if (!chosen || !chosen.address) {
-                  if (process.env.DEBUG_HTTPCLIENT) console.debug('[httpClient] dns.lookup(all) found addrs but none valid', addrs);
-                  // fallback to single lookup (system default behavior)
-                  return dns.lookup(hostname, (e, address, family) => {
-                    if (e) return cb(e);
-                    if (!address) return cb(new Error('No valid address from fallback lookup for ' + hostname));
-                    if (process.env.DEBUG_HTTPCLIENT) console.debug('[httpClient] fallback dns.lookup returned', address, family);
-                    return cb(null, address, family);
-                  });
-                }
-                if (process.env.DEBUG_HTTPCLIENT) console.debug('[httpClient] dns.lookup selected', chosen);
-                return cb(null, chosen.address, chosen.family);
-              } catch (ex) {
-                if (process.env.DEBUG_HTTPCLIENT) console.debug('[httpClient] dns.lookup callback exception', ex);
-                return cb(ex);
-              }
-            });
-          } catch (ex) {
-            if (process.env.DEBUG_HTTPCLIENT) console.debug('[httpClient] lookup exception', ex);
-            // final fallback
-            return dns.lookup(hostname, (e, address, family) => {
-              if (e) return cb(e);
-              return cb(null, address, family);
-            });
-          }
-        }
+        // if we resolved to an IP and it's HTTPS, set servername for SNI
+        servername: resolvedAddress ? u.hostname : undefined,
       };
 
       let timedOut = false;

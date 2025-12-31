@@ -15,6 +15,7 @@ export default function AppSettings(){
   const [showGoogleConfig, setShowGoogleConfig] = useState(false);
   const [googleClientId, setGoogleClientId] = useState('');
   const [googleClientSecret, setGoogleClientSecret] = useState('');
+  const [extraFields, setExtraFields] = useState([]);
 
   useEffect(()=>{ fetchSettings(); fetchUsage(); }, [appId]);
 
@@ -26,6 +27,7 @@ export default function AppSettings(){
         setApp(appData);
         setGoogleClientId(appData.google_client_id || '');
         setGoogleClientSecret(appData.google_client_secret || '');
+        setExtraFields(appData.extra_fields || []);
       }
     } catch (err) {
       console.error(err);
@@ -80,6 +82,47 @@ export default function AppSettings(){
     } catch (err) {
       console.error(err);
       setError('Failed to save Google credentials');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // ---------- Custom Extra Fields ----------
+  function addField() {
+    if (extraFields.length >= 10) return alert('Maximum 10 custom fields allowed');
+    setExtraFields(prev => [...prev, { name: '', label: '', type: 'text' }]);
+  }
+
+  function removeField(index) {
+    setExtraFields(prev => prev.filter((_, i) => i !== index));
+  }
+
+  function updateField(index, key, value) {
+    setExtraFields(prev => prev.map((f, i) => i === index ? { ...f, [key]: value } : f));
+  }
+
+  async function saveExtraFields() {
+    setSaving(true);
+    try {
+      // Basic validation
+      for (const f of extraFields) {
+        if (!f.name || !/^[a-zA-Z0-9_]+$/.test(f.name)) {
+          return alert('Each field must have a name (letters, numbers, underscore only)');
+        }
+        if (!f.type) return alert('Each field must have a type');
+      }
+
+      const body = { extra_fields: extraFields };
+      const resp = await api.put(`/apps/updateApp/${appId}`, body, token);
+      if (resp.success) {
+        alert('Custom fields saved');
+        await fetchSettings();
+      } else {
+        alert(resp.message || 'Failed to save custom fields');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to save custom fields');
     } finally {
       setSaving(false);
     }
@@ -250,6 +293,50 @@ export default function AppSettings(){
               ))}
             </ul>
           )}
+        </div>
+      </div>
+
+      {/* Custom Fields Card */}
+      <div className="custom-fields-card">
+        <h3 className="card-title">Custom User Fields (up to 10)</h3>
+        <p className="card-sub">Add extra columns that will be available for users of this app.</p>
+
+        {extraFields.length === 0 && (
+          <div className="no-custom-fields">No custom fields defined.</div>
+        )}
+
+        {extraFields.map((f, idx) => (
+          <div className="custom-field-row" key={idx}>
+            <input
+              className="custom-field-input name"
+              placeholder="field_name"
+              value={f.name}
+              onChange={(e) => updateField(idx, 'name', e.target.value)}
+            />
+            <input
+              className="custom-field-input label"
+              placeholder="Label (optional)"
+              value={f.label || ''}
+              onChange={(e) => updateField(idx, 'label', e.target.value)}
+            />
+            <select
+              className="custom-field-select"
+              value={f.type}
+              onChange={(e) => updateField(idx, 'type', e.target.value)}
+            >
+              <option value="text">text</option>
+              <option value="integer">integer</option>
+              <option value="boolean">boolean</option>
+              <option value="date">date</option>
+              <option value="json">json</option>
+            </select>
+            <button className="btn btn-danger" onClick={() => removeField(idx)}>Remove</button>
+          </div>
+        ))}
+
+        <div className="custom-fields-actions">
+          <button className="btn btn-secondary" onClick={addField} disabled={extraFields.length >= 10}>+ Add field</button>
+          <button className="btn btn-primary" onClick={saveExtraFields} disabled={saving}>Save Fields</button>
         </div>
       </div>
 

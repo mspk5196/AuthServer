@@ -303,7 +303,8 @@ const updateApp = async (req, res) => {
       allow_google_signin, 
       allow_email_signin,
       google_client_id,
-      google_client_secret 
+      google_client_secret,
+      extra_fields
     } = req.body;
 
     // Verify ownership
@@ -343,6 +344,42 @@ const updateApp = async (req, res) => {
     if (google_client_secret !== undefined) {
       updates.push(`google_client_secret = $${paramCount++}`);
       values.push(google_client_secret);
+    }
+
+    // Handle extra custom fields configuration (array of { name, label, type })
+    if (extra_fields !== undefined) {
+      // Validate basic shape
+      if (!Array.isArray(extra_fields)) {
+        return res.status(400).json({ success: false, message: 'extra_fields must be an array' });
+      }
+      if (extra_fields.length > 10) {
+        return res.status(400).json({ success: false, message: 'Maximum 10 custom fields allowed' });
+      }
+
+      // Validate each field
+      for (const f of extra_fields) {
+        if (!f || typeof f !== 'object') {
+          return res.status(400).json({ success: false, message: 'Each custom field must be an object' });
+        }
+        if (!f.name || typeof f.name !== 'string') {
+          return res.status(400).json({ success: false, message: 'Each custom field must have a name' });
+        }
+        // name must be alphanumeric + underscores
+        if (!/^[a-zA-Z0-9_]+$/.test(f.name)) {
+          return res.status(400).json({ success: false, message: 'Field name may only contain letters, numbers and underscores' });
+        }
+        if (!f.type || typeof f.type !== 'string') {
+          return res.status(400).json({ success: false, message: 'Each custom field must have a type' });
+        }
+        // Optional label
+        if (f.label !== undefined && typeof f.label !== 'string') {
+          return res.status(400).json({ success: false, message: 'Field label must be a string' });
+        }
+      }
+
+      updates.push(`extra_fields = $${paramCount++}::jsonb`);
+      // store as JSONB (Postgres). Pass stringified JSON to be safe.
+      values.push(JSON.stringify(extra_fields));
     }
 
     if (updates.length === 0) {

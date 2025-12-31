@@ -1292,7 +1292,22 @@ const mergeUsersAcrossApps = async (req, res) => {
 
     for (const m of merges) {
       const { keepUserId, otherUserIds = [], usernameChanges = {} } = m;
+      const copyFromUserId = m.copyFromUserId || null;
       if (!keepUserId) continue;
+
+      // If developer requested copying fields from a particular user record into the kept user, do that first
+      if (copyFromUserId) {
+        // Only allow copying from IDs that were validated earlier as belonging to this developer
+        const copyRes = await client.query(`SELECT id, name, username, extra, password_hash, google_linked, google_id, email_verified, last_login FROM users WHERE id = $1`, [copyFromUserId]);
+        if (copyRes.rows.length) {
+          const src = copyRes.rows[0];
+          // Update kept user with selected fields (merge extras: prefer existing keys on kept user)
+          const keptResNow = await client.query('SELECT extra FROM users WHERE id = $1', [keepUserId]);
+          const keptExtra = (keptResNow.rows[0] && keptResNow.rows[0].extra) || {};
+          const newExtra = Object.assign({}, src.extra || {}, keptExtra);
+          await client.query(`UPDATE users SET name = $1, username = $2, extra = $3::jsonb, password_hash = $4, google_linked = $5, google_id = $6, email_verified = $7, last_login = $8, updated_at = NOW() WHERE id = $9`, [src.name, src.username, JSON.stringify(newExtra), src.password_hash, src.google_linked, src.google_id, src.email_verified, src.last_login, keepUserId]);
+        }
+      }
 
       // Transfer references from otherUserIds to keepUserId
       if (otherUserIds.length) {

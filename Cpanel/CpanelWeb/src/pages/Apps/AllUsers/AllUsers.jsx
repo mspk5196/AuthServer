@@ -12,6 +12,7 @@ export default function AllUsers(){
   const [usernameChanges, setUsernameChanges] = useState({}); // userId -> newUsername
   const [showPreview, setShowPreview] = useState(false);
   const [previewPayload, setPreviewPayload] = useState(null);
+  const [copyFrom, setCopyFrom] = useState({}); // email -> userId to copy details from
 
   useEffect(()=>{ fetchAllUsers(); }, []);
 
@@ -41,6 +42,10 @@ export default function AllUsers(){
     setDecisions(prev => ({ ...prev, [email]: userId }));
   }
 
+  function setCopySource(email, userId){
+    setCopyFrom(prev => ({ ...prev, [email]: userId }));
+  }
+
   function setUsername(userId, val){
     setUsernameChanges(prev=>({ ...prev, [userId]: val }));
   }
@@ -51,7 +56,8 @@ export default function AllUsers(){
       email: g[0].email,
       keepUserId: decisions[g[0].email] || g[0].id,
       otherUserIds: g.filter(u => String(u.id) !== String(decisions[g[0].email] || g[0].id)).map(u => u.id),
-      usernameChanges: {}
+      usernameChanges: {},
+      copyFromUserId: copyFrom[g[0].email] || null
     }));
     for (const [uid, name] of Object.entries(usernameChanges)){
       for (const mg of merges){ if (!mg.usernameChanges) mg.usernameChanges = {}; mg.usernameChanges[uid] = name; }
@@ -103,6 +109,13 @@ export default function AllUsers(){
               <div style={{flex:1}}>{u.app_name} — {u.name} ({u.username}) — created {new Date(u.created_at).toLocaleString()}</div>
             </div>
           ))}
+          <div style={{marginTop:8}}>
+            <label style={{fontSize:13}}>Use details from: </label>
+            <select value={copyFrom[group[0].email] || ''} onChange={(e)=>setCopySource(group[0].email, e.target.value || null)}>
+              <option value=''>(do not copy - keep chosen record's existing data)</option>
+              {group.map(u => <option key={u.id} value={u.id}>{u.app_name} — {u.name} ({u.username})</option>)}
+            </select>
+          </div>
         </div>
       ))}
 

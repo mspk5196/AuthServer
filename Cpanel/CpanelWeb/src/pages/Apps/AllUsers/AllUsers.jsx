@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { tokenService } from '../../../services/tokenService';
 import { api } from '../../../services/api';
-import '../../AppSettings/appSettingsSty.css';
+import '../AppSettings/appSettingsSty.css';
 
 export default function AllUsers(){
   const token = tokenService.get();

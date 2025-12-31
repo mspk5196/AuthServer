@@ -1182,12 +1182,179 @@ const exportUsersCSV = async (req, res) => {
   }
 };
 
+// module.exports moved to bottom after additional functions are defined
+
+/**
+ * List all users across all apps for the authenticated developer.
+ * Returns users, duplicate groups by email, and username conflicts.
+ */
+const listAllUsersAcrossApps = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    // Get app ids for this developer
+    const appsRes = await pool.query('SELECT id, app_name FROM dev_apps WHERE developer_id = $1', [developerId]);
+    const appIds = appsRes.rows.map(r => r.id);
+    if (appIds.length === 0) return res.json({ success: true, data: { users: [], groupsByEmail: [], usernameConflicts: [] } });
+
+    // Fetch users for these apps
+    const usersRes = await pool.query(`
+      SELECT u.id, u.email, u.username, u.name, u.app_id, u.email_verified, u.created_at, a.app_name
+      FROM users u
+      JOIN dev_apps a ON a.id = u.app_id
+      WHERE u.app_id = ANY($1::uuid[])
+      ORDER BY u.email NULLS LAST, u.created_at DESC
+    `, [appIds]);
+
+    const users = usersRes.rows;
+
+    // Group by email to find duplicates
+    const groupsByEmailMap = {};
+    for (const u of users) {
+      const e = (u.email || '').toLowerCase();
+      if (!e) continue;
+      groupsByEmailMap[e] = groupsByEmailMap[e] || [];
+      groupsByEmailMap[e].push(u);
+    }
+    const groupsByEmail = Object.values(groupsByEmailMap).filter(g => g.length > 1);
+
+    // Find username conflicts (same username, different email)
+    const usernameMap = {};
+    for (const u of users) {
+      if (!u.username) continue;
+      const key = u.username.toLowerCase();
+      usernameMap[key] = usernameMap[key] || [];
+      usernameMap[key].push(u);
+    }
+    const usernameConflicts = Object.values(usernameMap).filter(g => {
+      const emails = new Set(g.map(x => (x.email || '').toLowerCase()));
+      return emails.size > 1;
+    });
+
+    // Also include developer-level flag
+    const devRes = await pool.query('SELECT combine_users_across_apps FROM developers WHERE id = $1', [developerId]);
+    const combineFlag = devRes.rows[0] ? devRes.rows[0].combine_users_across_apps : false;
+
+    res.json({ success: true, data: { users, groupsByEmail, usernameConflicts, combineUsersAcrossApps: combineFlag } });
+  } catch (err) {
+    console.error('listAllUsersAcrossApps error', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/**
+ * Toggle developer-level combine users flag
+ */
+const setCombineUsersFlag = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { enabled } = req.body;
+    if (typeof enabled !== 'boolean') return res.status(400).json({ success: false, message: 'enabled must be boolean' });
+    await pool.query('UPDATE developers SET combine_users_across_apps = $1 WHERE id = $2', [enabled, developerId]);
+    res.json({ success: true, message: 'Setting updated' });
+  } catch (err) {
+    console.error('setCombineUsersFlag error', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/**
+ * Merge users across apps according to developer decisions.
+ * Payload: { merges: [ { email, keepUserId, otherUserIds: [...], usernameChanges: { userId: newUsername } } ] }
+ */
+const mergeUsersAcrossApps = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const developerId = req.user.developerId;
+    const { merges } = req.body;
+    if (!Array.isArray(merges)) return res.status(400).json({ success: false, message: 'merges must be an array' });
+
+    // Validate that all referenced user IDs belong to apps owned by this developer
+    const referencedIdsSet = new Set();
+    for (const m of merges) {
+      const { keepUserId, otherUserIds = [], usernameChanges = {} } = m;
+      if (keepUserId) referencedIdsSet.add(keepUserId);
+      for (const oid of otherUserIds || []) if (oid) referencedIdsSet.add(oid);
+      for (const uid of Object.keys(usernameChanges || {})) if (uid) referencedIdsSet.add(uid);
+    }
+    const referencedIds = Array.from(referencedIdsSet);
+    if (referencedIds.length > 0) {
+      const check = await client.query(`
+        SELECT u.id FROM users u
+        JOIN dev_apps a ON a.id = u.app_id
+        WHERE u.id = ANY($1::uuid[]) AND a.developer_id = $2
+      `, [referencedIds, developerId]);
+      if (check.rows.length !== referencedIds.length) {
+        return res.status(400).json({ success: false, message: 'One or more provided user IDs do not belong to your apps' });
+      }
+    }
+
+    await client.query('BEGIN');
+
+    for (const m of merges) {
+      const { keepUserId, otherUserIds = [], usernameChanges = {} } = m;
+      if (!keepUserId) continue;
+
+      // Transfer references from otherUserIds to keepUserId
+      if (otherUserIds.length) {
+        await client.query(`UPDATE user_login_history SET user_id = $1 WHERE user_id = ANY($2::uuid[])`, [keepUserId, otherUserIds]);
+        await client.query(`UPDATE user_email_verifications SET user_id = $1 WHERE user_id = ANY($2::uuid[])`, [keepUserId, otherUserIds]);
+        // Record merges and delete old user rows
+        for (const oldId of otherUserIds) {
+          await client.query(`INSERT INTO user_merges (developer_id, kept_user_id, merged_user_id) VALUES ($1, $2, $3)`, [developerId, keepUserId, oldId]);
+          await client.query(`DELETE FROM users WHERE id = $1`, [oldId]);
+        }
+      }
+
+      // Apply username changes
+      for (const [uid, newUsername] of Object.entries(usernameChanges || {})) {
+        const sanitized = ('' + newUsername).trim();
+        if (!sanitized) continue;
+        // Ensure uniqueness across all users of this developer
+        const exists = await client.query(`
+          SELECT 1 FROM users u JOIN dev_apps a ON a.id = u.app_id WHERE a.developer_id = $1 AND LOWER(u.username) = LOWER($2) LIMIT 1
+        `, [developerId, sanitized]);
+        if (exists.rows.length) {
+          // append suffix
+          const suffix = Math.floor(Math.random() * 9000) + 1000;
+          const newName = `${sanitized}_${suffix}`;
+          await client.query(`UPDATE users SET username = $1 WHERE id = $2`, [newName, uid]);
+          // notify user
+          const userRes = await client.query('SELECT email FROM users WHERE id = $1', [uid]);
+          if (userRes.rows[0] && userRes.rows[0].email) {
+            sendMail({ to: userRes.rows[0].email, subject: 'Your username was updated', html: `<p>Your username has been changed to <strong>${newName}</strong> by the application owner.</p>` }).catch(e => console.error('sendMail error', e));
+          }
+        } else {
+          await client.query(`UPDATE users SET username = $1 WHERE id = $2`, [sanitized, uid]);
+          const userRes = await client.query('SELECT email FROM users WHERE id = $1', [uid]);
+          if (userRes.rows[0] && userRes.rows[0].email) {
+            sendMail({ to: userRes.rows[0].email, subject: 'Your username was updated', html: `<p>Your username has been changed to <strong>${sanitized}</strong> by the application owner.</p>` }).catch(e => console.error('sendMail error', e));
+          }
+        }
+      }
+
+      // Notify kept user about merge
+      const keptRes = await client.query('SELECT email FROM users WHERE id = $1', [keepUserId]);
+      if (keptRes.rows[0] && keptRes.rows[0].email) {
+        sendMail({ to: keptRes.rows[0].email, subject: 'Accounts merged', html: `<p>Your accounts across multiple applications owned by the same developer have been consolidated. If you have questions, contact support.</p>` }).catch(e => console.error('sendMail error', e));
+      }
+    }
+
+    await client.query('COMMIT');
+    res.json({ success: true, message: 'Merges applied' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('mergeUsersAcrossApps error', err);
+    res.status(500).json({ success: false, message: err.message });
+  } finally {
+    client.release();
+  }
+};
+
 module.exports = {
   createApp,
   getMyApps,
   getAppDetails,
   updateApp,
-  // deleteApp is now used internally by the confirmation flow
   regenerateApiKey,
   getAppSummary,
   listAppUsers,
@@ -1201,4 +1368,8 @@ module.exports = {
   exportUsersCSV,
   requestAppDeletion,
   confirmAppDeletion,
+  // new developer-level functions
+  listAllUsersAcrossApps,
+  mergeUsersAcrossApps,
+  setCombineUsersFlag,
 };

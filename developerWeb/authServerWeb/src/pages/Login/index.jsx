@@ -52,12 +52,12 @@ const Login = () => {
         no_token: 'Authentication failed: No token received',
         no_email: 'Authentication failed: No email provided by Google',
         blocked: 'This account has been blocked. Please contact support.',
-        auth_failed: 'Google authentication failed. Please try again.',
+        auth_failed: 'Google authentication failed / Session expired. Please try again.',
         policy_not_accepted: 'Policy acceptance is required. Please try again.',
       };
       setMessage({
         type: 'error',
-        text: errorMessages[error] || 'Google authentication failed',
+        text: errorMessages[error] || 'Google authentication failed / Session expired. Please try again.',
       });
       // Clean up URL
       window.history.replaceState({}, '', '/login');

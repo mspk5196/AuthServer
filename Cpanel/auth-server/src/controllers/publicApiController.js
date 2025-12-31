@@ -2585,30 +2585,6 @@ const verifyChangePassword = async (req, res) => {
   }
 };
 
-
-module.exports = {
-  verifyAppCredentials,
-  registerUser,
-  loginUser,
-  verifyEmail,
-  getUserProfile,
-  patchUserProfile,
-  requestPasswordReset,
-  requestChangePasswordLink,
-  resetPasswordPage,
-  completePasswordReset,
-  changePassword,
-  verifyChangePassword,
-  resendVerification,
-  deleteAccount,
-  verifyDeleteEmail,
-  googleAuth,
-  setPasswordGoogleUser,
-  verifyEmailSetPasswordGoogleUser,
-  verifyChangePassword,
-  confirmUserUpdate
-};
-
 /**
  * Patch user profile (may require verification)
  * PATCH /:apiKey/user/profile
@@ -2751,6 +2727,25 @@ const confirmUserUpdate = async (req, res) => {
   }
 };
 
-// Export newly added handlers
-module.exports.patchUserProfile = patchUserProfile;
-module.exports.confirmUserUpdate = confirmUserUpdate;
+module.exports = {
+  verifyAppCredentials,
+  registerUser,
+  loginUser,
+  verifyEmail,
+  getUserProfile,
+  patchUserProfile,
+  requestPasswordReset,
+  requestChangePasswordLink,
+  resetPasswordPage,
+  completePasswordReset,
+  changePassword,
+  verifyChangePassword,
+  resendVerification,
+  deleteAccount,
+  verifyDeleteEmail,
+  googleAuth,
+  setPasswordGoogleUser,
+  verifyEmailSetPasswordGoogleUser,
+  verifyChangePassword,
+  confirmUserUpdate
+};

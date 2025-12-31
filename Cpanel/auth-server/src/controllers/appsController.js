@@ -397,6 +397,16 @@ const updateApp = async (req, res) => {
       values.push(JSON.stringify(sanitized));
     }
 
+    // Access token TTL (in seconds) per app
+    if (req.body.access_token_expires_seconds !== undefined) {
+      const ttl = parseInt(req.body.access_token_expires_seconds, 10);
+      if (Number.isNaN(ttl) || ttl < 60) {
+        return res.status(400).json({ success: false, message: 'access_token_expires_seconds must be a number (seconds), minimum 60' });
+      }
+      updates.push(`access_token_expires_seconds = $${paramCount++}`);
+      values.push(ttl);
+    }
+
     if (updates.length === 0) {
       return res.status(400).json({
         success: false,

@@ -231,11 +231,14 @@ const registerUser = async (req, res) => {
       html: buildWelcomeVerificationEmail({ appName: app.app_name, verificationUrl, supportEmail: app.support_email }),
     }).catch(err => console.error('Send verification email error:', err));
 
-    // Generate access token
+    // Determine access token TTL (per-app override, then env fallback, then default 7 days)
+    const ttl = app.access_token_expires_seconds ? parseInt(app.access_token_expires_seconds, 10) : (process.env.ACCESS_TOKEN_EXPIRES_SECONDS ? parseInt(process.env.ACCESS_TOKEN_EXPIRES_SECONDS, 10) : 604800);
+
+    // Generate access token (token may be returned as null until email verification completes)
     const accessToken = jwt.sign(
       { userId: user.id, appId: app.id, email: user.email },
       process.env.JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: ttl }
     );
 
     res.status(201).json({
@@ -253,7 +256,7 @@ const registerUser = async (req, res) => {
         },
         access_token: null,
         token_type: 'Bearer',
-        expires_in: 604800 // 7 days in seconds
+        expires_in: ttl
       }
     });
 
@@ -361,11 +364,14 @@ const loginUser = async (req, res) => {
       )
     `, [user.id, app.id, req.ip, req.headers['user-agent']]);
 
+    // Determine access token TTL (per-app override, then env fallback, then default 7 days)
+    const ttl = app.access_token_expires_seconds ? parseInt(app.access_token_expires_seconds, 10) : (process.env.ACCESS_TOKEN_EXPIRES_SECONDS ? parseInt(process.env.ACCESS_TOKEN_EXPIRES_SECONDS, 10) : 604800);
+
     // Generate access token
     const accessToken = jwt.sign(
       { userId: user.id, appId: app.id, email: user.email },
       process.env.JWT_SECRET,
-      { expiresIn: '1m' }
+      { expiresIn: ttl }
     );
 
     res.json({
@@ -385,7 +391,7 @@ const loginUser = async (req, res) => {
         },
         access_token: accessToken,
         token_type: 'Bearer',
-        expires_in: 604800
+        expires_in: ttl
       }
     });
 
@@ -1962,11 +1968,14 @@ const googleAuth = async (req, res) => {
       )
     `, [user.id, app.id, req.ip, req.headers['user-agent']]);
 
+    // Determine access token TTL (per-app override, then env fallback, then default 7 days)
+    const ttl = app.access_token_expires_seconds ? parseInt(app.access_token_expires_seconds, 10) : (process.env.ACCESS_TOKEN_EXPIRES_SECONDS ? parseInt(process.env.ACCESS_TOKEN_EXPIRES_SECONDS, 10) : 604800);
+
     // Generate access token
     const accessToken = jwt.sign(
       { userId: user.id, appId: app.id, email: user.email },
       process.env.JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: ttl }
     );
 
     res.json({
@@ -1985,7 +1994,7 @@ const googleAuth = async (req, res) => {
         },
         access_token: accessToken,
         token_type: 'Bearer',
-        expires_in: 604800,
+        expires_in: ttl,
         is_new_user: isNewUser
       }
     });

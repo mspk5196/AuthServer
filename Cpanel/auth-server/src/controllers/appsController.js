@@ -1268,6 +1268,26 @@ const mergeUsersAcrossApps = async (req, res) => {
     const { merges } = req.body;
     if (!Array.isArray(merges)) return res.status(400).json({ success: false, message: 'merges must be an array' });
 
+    // Validate that all referenced user IDs belong to apps owned by this developer
+    const referencedIdsSet = new Set();
+    for (const m of merges) {
+      const { keepUserId, otherUserIds = [], usernameChanges = {} } = m;
+      if (keepUserId) referencedIdsSet.add(keepUserId);
+      for (const oid of otherUserIds || []) if (oid) referencedIdsSet.add(oid);
+      for (const uid of Object.keys(usernameChanges || {})) if (uid) referencedIdsSet.add(uid);
+    }
+    const referencedIds = Array.from(referencedIdsSet);
+    if (referencedIds.length > 0) {
+      const check = await client.query(`
+        SELECT u.id FROM users u
+        JOIN dev_apps a ON a.id = u.app_id
+        WHERE u.id = ANY($1::uuid[]) AND a.developer_id = $2
+      `, [referencedIds, developerId]);
+      if (check.rows.length !== referencedIds.length) {
+        return res.status(400).json({ success: false, message: 'One or more provided user IDs do not belong to your apps' });
+      }
+    }
+
     await client.query('BEGIN');
 
     for (const m of merges) {

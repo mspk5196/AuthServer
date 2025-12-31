@@ -10,6 +10,8 @@ export default function AllUsers(){
   const [saving, setSaving] = useState(false);
   const [decisions, setDecisions] = useState({}); // email -> keepUserId
   const [usernameChanges, setUsernameChanges] = useState({}); // userId -> newUsername
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewPayload, setPreviewPayload] = useState(null);
 
   useEffect(()=>{ fetchAllUsers(); }, []);
 
@@ -43,23 +45,28 @@ export default function AllUsers(){
     setUsernameChanges(prev=>({ ...prev, [userId]: val }));
   }
 
-  async function applyMerges(){
-    // build merges payload from groups
+  // prepare preview of merges before applying
+  function preparePreview(){
     const merges = (data.groupsByEmail || []).map(g => ({
       email: g[0].email,
       keepUserId: decisions[g[0].email] || g[0].id,
       otherUserIds: g.filter(u => String(u.id) !== String(decisions[g[0].email] || g[0].id)).map(u => u.id),
       usernameChanges: {}
     }));
-    // attach usernameChanges
     for (const [uid, name] of Object.entries(usernameChanges)){
       for (const mg of merges){ if (!mg.usernameChanges) mg.usernameChanges = {}; mg.usernameChanges[uid] = name; }
     }
+    setPreviewPayload({ merges, summary: { groups: merges.length, totalUsers: data.users.length } });
+    setShowPreview(true);
+  }
 
+  async function confirmApply(){
+    if (!previewPayload) return alert('Nothing to apply');
+    if (!confirm('This operation will delete merged user records and update usernames. Do you want to proceed?')) return;
     setSaving(true);
     try {
-      const resp = await api.post('/apps/all-users/merge', { merges }, token);
-      if (resp.success) { alert('Merges applied'); fetchAllUsers(); }
+      const resp = await api.post('/apps/all-users/merge', previewPayload, token);
+      if (resp.success) { alert('Merges applied'); setShowPreview(false); fetchAllUsers(); }
       else alert(resp.message || 'Failed to apply merges');
     } catch (err){ console.error(err); alert('Failed to apply merges'); }
     setSaving(false);
@@ -113,8 +120,20 @@ export default function AllUsers(){
       ))}
 
       <div style={{marginTop:16}}>
-        <button onClick={applyMerges} disabled={saving}>{saving ? 'Applying...' : 'Apply merges'}</button>
+        <button onClick={preparePreview} disabled={saving}>{saving ? 'Preparing...' : 'Preview merges'}</button>
       </div>
+
+      {showPreview && previewPayload && (
+        <div style={{marginTop:20, border:'1px solid #cfc', padding:12, background:'#fffbe6'}}>
+          <h4>Preview: Merges to apply</h4>
+          <div>Duplicate groups: {previewPayload.summary.groups}</div>
+          <div>Total users scanned: {previewPayload.summary.totalUsers}</div>
+          <div style={{marginTop:8}}>
+            <button onClick={confirmApply} disabled={saving} style={{marginRight:8}}>{saving ? 'Applying...' : 'Confirm and apply merges'}</button>
+            <button onClick={() => setShowPreview(false)} disabled={saving}>Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

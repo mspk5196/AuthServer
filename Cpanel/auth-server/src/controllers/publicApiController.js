@@ -207,7 +207,7 @@ const registerUser = async (req, res) => {
         $1, $2, $3, $4, $5, $6::jsonb, false, false, false, NOW(), NOW()
       )
       RETURNING id, email, name, username, email_verified, created_at, extra
-    `, [app.id, email.toLowerCase(), hashedPassword, name, username, JSON.stringify(allowedExtra)]);
+    `, [app.id, email.toLowerCase(), hashedPassword, name, username.toLowerCase(), JSON.stringify(allowedExtra)]);
 
     const user = result.rows[0];
 
@@ -251,7 +251,7 @@ const registerUser = async (req, res) => {
           created_at: user.created_at,
           extra: user.extra || {}
         },
-        access_token: accessToken,
+        access_token: null,
         token_type: 'Bearer',
         expires_in: 604800 // 7 days in seconds
       }
@@ -365,7 +365,7 @@ const loginUser = async (req, res) => {
     const accessToken = jwt.sign(
       { userId: user.id, appId: app.id, email: user.email },
       process.env.JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '1m' }
     );
 
     res.json({

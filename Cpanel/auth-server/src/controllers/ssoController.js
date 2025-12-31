@@ -32,8 +32,15 @@ const consumeTicket = async (req, res) => {
     redeemUrl = `${baseAuth}/api/cpanel/redeem-cpanel-ticket`;
   }
   console.log('[SSO] Redeem URL:', redeemUrl, 'AUTH_API_BASE_URL:', AUTH_API_BASE_URL);
-  const redeemResp = await postJson(redeemUrl, { token: ticket });
-  console.log('[SSO] Redeem response:', JSON.stringify(redeemResp));
+  let redeemResp;
+  try {
+    // use a slightly larger timeout for external SSO redemption
+    redeemResp = await postJson(redeemUrl, { token: ticket }, {}, { timeout: 12000, retries: 2 });
+    console.log('[SSO] Redeem response:', JSON.stringify(redeemResp));
+  } catch (err) {
+    console.error('[SSO] Redeem error details:', err);
+    return res.status(502).json({ success: false, message: 'Failed to reach redeem endpoint', error: err?.message || 'REDEEM_ERROR' });
+  }
 
     if (!redeemResp || !redeemResp.success) {
       return res.status(401).json({

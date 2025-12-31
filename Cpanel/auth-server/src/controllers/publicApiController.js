@@ -284,7 +284,7 @@ const loginUser = async (req, res) => {
 
     // Find user
     const result = await pool.query(
-      'SELECT * FROM users WHERE app_id = $1 AND email = $2',
+      'SELECT * FROM users WHERE app_id = $1 AND (email = $2 OR username = $2)',
       [app.id, email.toLowerCase()]
     );
 

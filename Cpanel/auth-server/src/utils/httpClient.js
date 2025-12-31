@@ -30,26 +30,16 @@ function postJson(url, data, headers = {}, opts = {}) {
           'Content-Length': Buffer.byteLength(body),
           ...headers,
         },
-        // Lookup helper: prefer IPv4 but fall back to IPv6 and then system default
+        // Lookup helper: resolve all addresses then pick preferred family
         lookup: (hostname, lookupOpts, cb) => {
-          const families = [];
-          if (lookupOpts && lookupOpts.family) families.push(lookupOpts.family);
-          // prefer 4 then 6
-          families.push(4, 6);
-
-          let idx = 0;
-          const tryNext = () => {
-            if (idx >= families.length) {
-              return cb(new Error('DNS lookup failed for ' + hostname));
-            }
-            const fam = families[idx++];
-            dns.lookup(hostname, { family: fam }, (err, address, family) => {
-              if (!err && address) return cb(null, address, family);
-              // otherwise try next family
-              tryNext();
-            });
-          };
-          tryNext();
+          dns.lookup(hostname, { all: true }, (err, addrs) => {
+            if (err) return cb(err);
+            if (!addrs || addrs.length === 0) return cb(new Error('No addresses for ' + hostname));
+            // prefer IPv4 then IPv6, but accept whichever is available
+            let chosen = addrs.find(a => a.family === 4) || addrs.find(a => a.family === 6) || addrs[0];
+            if (!chosen || !chosen.address) return cb(new Error('No valid address for ' + hostname));
+            return cb(null, chosen.address, chosen.family);
+          });
         }
       };
 

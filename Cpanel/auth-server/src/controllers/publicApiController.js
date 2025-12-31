@@ -128,7 +128,7 @@ async function trackApiCall(appId, developerId, req) {
  */
 const registerUser = async (req, res) => {
   try {
-    const { email, password, name, username } = req.body;
+    const { email, password, name, username, extra } = req.body;
     const app = req.devApp;
 
     // Validation
@@ -175,17 +175,28 @@ const registerUser = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Create user
+    // Prepare allowed extra fields (filter against app.extra_fields metadata)
+    const extraMeta = app.extra_fields || [];
+    let allowedExtra = {};
+    if (extra && typeof extra === 'object') {
+      for (const k of Object.keys(extra)) {
+        if (extraMeta.find(f => f.name === k)) {
+          allowedExtra[k] = extra[k];
+        }
+      }
+    }
+
+    // Create user (store extra JSONB)
     const result = await pool.query(`
       INSERT INTO users (
-        app_id, email, password_hash, name, username,
+        app_id, email, password_hash, name, username, extra,
         email_verified, google_linked, is_blocked,
         created_at, updated_at
       ) VALUES (
-        $1, $2, $3, $4, $5, false, false, false, NOW(), NOW()
+        $1, $2, $3, $4, $5, $6::jsonb, false, false, false, NOW(), NOW()
       )
-      RETURNING id, email, name, username, email_verified, created_at
-    `, [app.id, email.toLowerCase(), hashedPassword, name, username]);
+      RETURNING id, email, name, username, email_verified, created_at, extra
+    `, [app.id, email.toLowerCase(), hashedPassword, name, username, JSON.stringify(allowedExtra)]);
 
     const user = result.rows[0];
 
@@ -357,7 +368,8 @@ const loginUser = async (req, res) => {
           email_verified: user.email_verified,
           google_linked: user.google_linked,
           last_login: user.last_login,
-          login_method: 'email'
+          login_method: 'email',
+          extra: user.extra || {}
         },
         access_token: accessToken,
         token_type: 'Bearer',

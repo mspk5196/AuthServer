@@ -15,6 +15,7 @@ export default function AppSettings(){
   const [showGoogleConfig, setShowGoogleConfig] = useState(false);
   const [googleClientId, setGoogleClientId] = useState('');
   const [googleClientSecret, setGoogleClientSecret] = useState('');
+  const [accessTokenTTL, setAccessTokenTTL] = useState('');
   const [extraFields, setExtraFields] = useState([]);
   const [userEditPermissions, setUserEditPermissions] = useState({ name: true, username: true, email: true });
 
@@ -30,6 +31,7 @@ export default function AppSettings(){
         setGoogleClientSecret(appData.google_client_secret || '');
         setExtraFields(appData.extra_fields || []);
         setUserEditPermissions(appData.user_edit_permissions || { name: true, username: true, email: true });
+        setAccessTokenTTL(appData.access_token_expires_seconds || '');
       }
     } catch (err) {
       console.error(err);
@@ -268,6 +270,44 @@ export default function AppSettings(){
             </div>
           </div>
         )}
+
+        {/* Access Token TTL */}
+        <div className="ttl-config">
+          <h4 className="config-title">Access Token TTL</h4>
+          <p className="config-info">Set the access token lifetime (in seconds). Leave blank to use server default.</p>
+          <div className="config-field">
+            <input
+              type="number"
+              min={60}
+              className="config-input"
+              value={accessTokenTTL === null ? '' : accessTokenTTL}
+              onChange={(e) => setAccessTokenTTL(e.target.value)}
+              placeholder="e.g., 604800 (7 days)"
+            />
+            <button
+              className="save-config-btn"
+              onClick={async () => {
+                setSaving(true);
+                try {
+                  const body = { access_token_expires_seconds: accessTokenTTL === '' ? null : parseInt(accessTokenTTL, 10) };
+                  const resp = await api.put(`/apps/updateApp/${appId}`, body, token);
+                  if (resp.success) {
+                    alert('Access token TTL saved');
+                    await fetchSettings();
+                  } else {
+                    alert(resp.message || 'Failed to save TTL');
+                  }
+                } catch (err) {
+                  console.error(err);
+                  alert('Failed to save TTL');
+                } finally {
+                  setSaving(false);
+                }
+              }}
+              disabled={saving}
+            >Save TTL</button>
+          </div>
+        </div>
       </div>
 
       {/* Usage Statistics Card */}

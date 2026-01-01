@@ -12,6 +12,9 @@ const Groups = () => {
   const [creating, setCreating] = useState(false);
   const [modalError, setModalError] = useState('');
   const [deletingId, setDeletingId] = useState(null);
+  const [viewingUsersFor, setViewingUsersFor] = useState(null);
+  const [groupUsers, setGroupUsers] = useState([]);
+  const [viewUsersLoading, setViewUsersLoading] = useState(false);
 
   useEffect(() => {
     fetchGroups();
@@ -90,6 +93,27 @@ const Groups = () => {
     }
   };
 
+  const handleViewUsers = async (group) => {
+    if (!group || !group.id) return;
+    setViewingUsersFor(group);
+    setViewUsersLoading(true);
+    try {
+      const token = tokenService.get();
+      const data = await api.get(`/apps/groups/${group.id}/users`, token);
+      if (data.success) {
+        setGroupUsers(data.data || []);
+      } else {
+        setGroupUsers([]);
+        alert(data.message || 'Failed to load group users');
+      }
+    } catch (err) {
+      console.error('Fetch group users error:', err);
+      alert('Failed to load group users. Please try again.');
+    } finally {
+      setViewUsersLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="apps-container">
@@ -150,7 +174,7 @@ const Groups = () => {
                   {deletingId === group.id ? 'Deleting...' : 'Delete'}
                 </button>
               </div>
-              <div className="app-card-body">
+                <div className="app-card-body">
                 <div className="app-info-row">
                   <span className="label">Created At:</span>
                   <span className="value">
@@ -159,6 +183,9 @@ const Groups = () => {
                       : '—'}
                   </span>
                 </div>
+                  <div className="app-info-row">
+                    <button className="btn-link" onClick={() => handleViewUsers(group)}>View Users</button>
+                  </div>
                 <div className="app-info-row">
                   <span className="label">Last Updated:</span>
                   <span className="value">
@@ -170,6 +197,54 @@ const Groups = () => {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {viewingUsersFor && (
+        <div className="modal-overlay" onClick={() => { setViewingUsersFor(null); setGroupUsers([]); }}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 900 }}>
+            <div className="modal-header">
+              <h2>Users in group: {viewingUsersFor.name}</h2>
+              <button className="modal-close" onClick={() => { setViewingUsersFor(null); setGroupUsers([]); }}>×</button>
+            </div>
+            <div style={{ padding: '1rem' }}>
+              {viewUsersLoading ? (
+                <div>Loading users...</div>
+              ) : (
+                <div style={{ maxHeight: 420, overflow: 'auto' }}>
+                  {groupUsers.length === 0 ? (
+                    <div>No users found in this group.</div>
+                  ) : (
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Email</th>
+                          <th>Name</th>
+                          <th>Username</th>
+                          <th>App</th>
+                          <th>Last Login</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {groupUsers.map(u => (
+                          <tr key={u.id}>
+                            <td>{u.email}</td>
+                            <td>{u.name}</td>
+                            <td>{u.username || '—'}</td>
+                            <td>{u.app_name || u.app_id}</td>
+                            <td>{u.last_login ? new Date(u.last_login).toLocaleString() : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="btn-secondary" onClick={() => { setViewingUsersFor(null); setGroupUsers([]); }}>Close</button>
+            </div>
+          </div>
         </div>
       )}
 

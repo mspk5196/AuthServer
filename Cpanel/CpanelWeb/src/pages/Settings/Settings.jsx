@@ -95,6 +95,9 @@ const Settings = () => {
     ? (planInfo.api_calls_used / planInfo.max_api_calls) * 100
     : 0;
 
+  const groupsUsed = planInfo?.app_groups_used || 0;
+  const groupsPercentage = planInfo?.max_app_groups ? (groupsUsed / planInfo.max_app_groups) * 100 : 0;
+
   // Convert features object to array for display
   const featuresArray = planInfo?.features
     ? Object.values(planInfo.features)
@@ -203,6 +206,21 @@ const Settings = () => {
               <div
                 className={`progress-bar-fill ${getProgressColor(apiCallsPercentage)}`}
                 style={{ width: `${Math.min(apiCallsPercentage, 100)}%` }}
+              />
+            </div>
+          </div>
+          <div className="usage-stat">
+            <div className="usage-stat-label">App Groups</div>
+            <div className="usage-stat-value">{groupsUsed}</div>
+            <div className="usage-stat-limit">
+              {planInfo?.max_app_groups === null || planInfo?.max_app_groups === undefined
+                ? 'Unlimited groups'
+                : `of ${planInfo.max_app_groups} groups`}
+            </div>
+            <div className="progress-bar">
+              <div
+                className={`progress-bar-fill ${getProgressColor(groupsPercentage)}`}
+                style={{ width: `${Math.min(groupsPercentage, 100)}%` }}
               />
             </div>
           </div>

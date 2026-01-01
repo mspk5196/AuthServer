@@ -34,6 +34,8 @@ router.get('/dashboard', authenticateToken, getDashboard);
 router.get('/groups', authenticateToken, getAppGroups);
 router.post('/groups', authenticateToken, createAppGroup);
 router.delete('/groups/:groupId', authenticateToken, deleteAppGroup);
+router.get('/groups/:groupId/users', authenticateToken, getGroupUsers);
+router.get('/groups/:groupId/users/:userId/logins', authenticateToken, getGroupUserLogins);
 
 // App management routes
 router.post('/createApp', authenticateToken, createApp);

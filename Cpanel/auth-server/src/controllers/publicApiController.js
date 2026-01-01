@@ -303,15 +303,65 @@ const loginUser = async (req, res) => {
       [app.id, email.toLowerCase()]
     );
 
+    let user;
     if (result.rows.length === 0) {
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid credentials',
-        message: 'Email or password is incorrect'
-      });
-    }
+      // If app is part of a group, attempt group-wide fallback: find a user
+      // in any app within the same group and verify the password there.
+      if (app.group_id) {
+        const identifier = email.toLowerCase();
+        const groupUserRes = await pool.query(`
+          SELECT u.*, a.id as app_id, a.app_name
+          FROM users u
+          JOIN dev_apps a ON u.app_id = a.id
+          WHERE a.group_id = $1 AND (u.email = $2 OR u.username = $2)
+          LIMIT 1
+        `, [app.group_id, identifier]);
 
-    const user = result.rows[0];
+        if (groupUserRes.rows.length > 0) {
+          const groupUser = groupUserRes.rows[0];
+
+          // If the found user uses Google-only auth, we cannot verify password
+          if (groupUser.password_hash === null && groupUser.google_linked === true) {
+            return res.status(401).json({ success: false, error: 'Invalid credentials', message: 'Email or password is incorrect' });
+          }
+
+          const isPasswordValidGroup = await bcrypt.compare(password, groupUser.password_hash || '');
+          if (!isPasswordValidGroup) {
+            return res.status(401).json({ success: false, error: 'Invalid credentials', message: 'Email or password is incorrect' });
+          }
+
+          // Create a local user record in the current app (per-app credentials allowed)
+          const bcryptSalt = await bcrypt.genSalt(10);
+          const localHash = await bcrypt.hash(password, bcryptSalt);
+
+          const insertRes = await pool.query(`
+            INSERT INTO users (app_id, email, password_hash, name, username, email_verified, google_linked, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, NULL, $5, $6, NOW(), NOW())
+            RETURNING id, email, name, username, email_verified, google_linked, last_login, app_id
+          `, [app.id, groupUser.email, localHash, groupUser.name, groupUser.email_verified, groupUser.google_linked]);
+
+          user = insertRes.rows[0];
+
+          // Record group_user_logins entry
+          try {
+            await pool.query(`
+              INSERT INTO group_user_logins (group_id, user_id, app_id, last_login, created_at, updated_at)
+              VALUES ($1, $2, $3, NOW(), NOW(), NOW())
+              ON CONFLICT (group_id, user_id, app_id) DO UPDATE SET last_login = NOW(), updated_at = NOW()
+            `, [app.group_id, user.id, app.id]);
+          } catch (err) {
+            console.error('Failed to record group_user_logins:', err.message || err);
+          }
+
+        } else {
+          return res.status(401).json({ success: false, error: 'Invalid credentials', message: 'Email or password is incorrect' });
+        }
+      } else {
+        return res.status(401).json({ success: false, error: 'Invalid credentials', message: 'Email or password is incorrect' });
+      }
+    } else {
+      user = result.rows[0];
+    }
 
     // Check if user is blocked
     if (user.is_blocked) {

@@ -109,6 +109,19 @@ const Home = () => {
         </div>
 
         <div className="stat-card">
+          <div className="stat-icon info">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </div>
+          <div className="stat-content">
+            <div className="stat-label">App Groups</div>
+            <div className="stat-value">{stats.groupsUsed || 0}</div>
+          </div>
+        </div>
+
+        <div className="stat-card">
           <div className="stat-icon warning">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>

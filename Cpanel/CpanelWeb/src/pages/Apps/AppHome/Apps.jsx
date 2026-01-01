@@ -9,6 +9,9 @@ const Apps = () => {
   const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [groups, setGroups] = useState([]);
+  const [groupsLoading, setGroupsLoading] = useState(false);
+  const [groupsError, setGroupsError] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const [newAppCredentials, setNewAppCredentials] = useState(null);
@@ -16,12 +19,14 @@ const Apps = () => {
     app_name: '',
     support_email: '',
     allow_google_signin: false,
-    allow_email_signin: true
+    allow_email_signin: true,
+    group_id: ''
   });
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     fetchApps();
+    fetchGroups();
   }, []);
 
   const fetchApps = async () => {
@@ -40,6 +45,25 @@ const Apps = () => {
       setError('Failed to load apps. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchGroups = async () => {
+    try {
+      setGroupsLoading(true);
+      setGroupsError('');
+      const token = tokenService.get();
+      const data = await api.get('/apps/groups', token);
+      if (data.success) {
+        setGroups(data.data || []);
+      } else {
+        setGroupsError(data.message || 'Failed to load app groups');
+      }
+    } catch (err) {
+      console.error('Fetch groups error:', err);
+      setGroupsError('Failed to load app groups. Please try again.');
+    } finally {
+      setGroupsLoading(false);
     }
   };
 
@@ -62,6 +86,9 @@ const Apps = () => {
         allow_google_signin: formData.allow_google_signin,
         allow_email_signin: formData.allow_email_signin
       };
+      if (formData.group_id) {
+        payload.group_id = formData.group_id;
+      }
       const data = await api.post('/apps/createApp', payload, token);
       if (data.success) {
         // Show credentials modal
@@ -74,7 +101,8 @@ const Apps = () => {
           app_name: '',
           support_email: '',
           allow_google_signin: false,
-          allow_email_signin: true
+          allow_email_signin: true,
+          group_id: ''
         });
 
         // Refresh apps list
@@ -171,6 +199,11 @@ const Apps = () => {
                   </div>
                 </div>
 
+                <div className="app-info-row">
+                  <span className="label">Group:</span>
+                  <span className="value">{app.group_name || 'Standalone app'}</span>
+                </div>
+
                 <div className="app-features">
                   <span className={`feature-badge ${app.allow_email_signin ? 'enabled' : 'disabled'}`}>
                     📧 Email Login
@@ -245,6 +278,31 @@ const Apps = () => {
                   onChange={(e) => setFormData({...formData, support_email: e.target.value})}
                   required
                 />
+              </div>
+
+              <div className="form-group">
+                <label>App Group (optional)</label>
+                <select
+                  value={formData.group_id}
+                  onChange={(e) => setFormData({ ...formData, group_id: e.target.value })}
+                >
+                  <option value="">Standalone app (no group)</option>
+                  {groups.map(group => (
+                    <option key={group.id} value={group.id}>
+                      {group.name}
+                    </option>
+                  ))}
+                </select>
+                {groupsLoading && (
+                  <p style={{ fontSize: '0.8rem', marginTop: '0.25rem', color: '#64748b' }}>
+                    Loading groups...
+                  </p>
+                )}
+                {groupsError && (
+                  <p style={{ fontSize: '0.8rem', marginTop: '0.25rem', color: '#b91c1c' }}>
+                    {groupsError}
+                  </p>
+                )}
               </div>
 
               <div className="form-group-checkbox">

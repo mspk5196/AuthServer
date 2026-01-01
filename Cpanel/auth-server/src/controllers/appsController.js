@@ -24,7 +24,7 @@ function generateApiCredentials() {
 const createApp = async (req, res) => {
   try {
     const developerId = req.user.developerId;
-    const { app_name, support_email, allow_google_signin = false, allow_email_signin = true } = req.body;
+    const { app_name, support_email, allow_google_signin = false, allow_email_signin = true, group_id = null } = req.body;
 
     console.log('Create app request from developer:', developerId);
     console.log('Form data:', { app_name, support_email, allow_google_signin, allow_email_signin });
@@ -111,6 +111,25 @@ const createApp = async (req, res) => {
       });
     }
 
+    // Optional: validate and attach app group (if provided)
+    let resolvedGroupId = null;
+    if (group_id !== null && group_id !== undefined && String(group_id).trim() !== '') {
+      resolvedGroupId = String(group_id).trim();
+
+      // Ensure the group belongs to this developer
+      const groupCheck = await pool.query(
+        'SELECT id FROM app_groups WHERE id = $1 AND developer_id = $2',
+        [resolvedGroupId, developerId]
+      );
+
+      if (groupCheck.rows.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid app group selected. Please choose a group that belongs to your account.'
+        });
+      }
+    }
+
     // Generate credentials
     const { apiKey, apiSecret } = generateApiCredentials();
     
@@ -124,12 +143,12 @@ const createApp = async (req, res) => {
       INSERT INTO dev_apps (
         developer_id, app_name, support_email, api_key, api_secret_hash,
         allow_google_signin, allow_email_signin, support_email_verified,
-        created_at, updated_at
+        group_id, created_at, updated_at
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, false, NOW(), NOW()
+        $1, $2, $3, $4, $5, $6, $7, false, $8, NOW(), NOW()
       )
-      RETURNING id, app_name, support_email, api_key, allow_google_signin, allow_email_signin, support_email_verified, created_at
-    `, [developerId, app_name, support_email, apiKey, hashedSecret, allow_google_signin, allow_email_signin]);
+      RETURNING id, app_name, support_email, api_key, allow_google_signin, allow_email_signin, support_email_verified, group_id, created_at
+    `, [developerId, app_name, support_email, apiKey, hashedSecret, allow_google_signin, allow_email_signin, resolvedGroupId]);
 
     const app = result.rows[0];
     console.log('App created successfully:', app.id);
@@ -186,12 +205,15 @@ const getMyApps = async (req, res) => {
         a.allow_google_signin,
         a.allow_email_signin,
         a.google_client_id,
+        a.group_id,
+        g.name as group_name,
         a.created_at,
         a.updated_at,
         COUNT(DISTINCT u.id) as total_users,
         COUNT(DISTINCT CASE WHEN u.created_at >= NOW() - INTERVAL '30 days' THEN u.id END) as active_users
       FROM dev_apps a
       LEFT JOIN users u ON u.app_id = a.id
+      LEFT JOIN app_groups g ON a.group_id = g.id
       WHERE a.developer_id = $1
       GROUP BY a.id
       ORDER BY a.created_at DESC
@@ -212,6 +234,34 @@ const getMyApps = async (req, res) => {
 };
 
 /**
+ * Get all app groups for the developer
+ */
+const getAppGroups = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+
+    const result = await pool.query(`
+      SELECT id, name, created_at, updated_at
+      FROM app_groups
+      WHERE developer_id = $1
+      ORDER BY created_at DESC, name ASC
+    `, [developerId]);
+
+    res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Get app groups error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch app groups',
+      error: error.message
+    });
+  }
+};
+
+/**
  * Get single app details with stats
  */
 const getAppDetails = async (req, res) => {
@@ -223,13 +273,15 @@ const getAppDetails = async (req, res) => {
     const appResult = await pool.query(`
       SELECT 
         a.*,
+        g.name as group_name,
         COUNT(DISTINCT u.id) as total_users,
         COUNT(DISTINCT CASE WHEN u.created_at >= NOW() - INTERVAL '30 days' THEN u.id END) as active_users,
         COUNT(DISTINCT CASE WHEN u.email_verified = true THEN u.id END) as verified_users
       FROM dev_apps a
       LEFT JOIN users u ON u.app_id = a.id
+      LEFT JOIN app_groups g ON a.group_id = g.id
       WHERE a.id = $1 AND a.developer_id = $2
-      GROUP BY a.id
+      GROUP BY a.id, g.name
     `, [appId, developerId]);
 
     if (appResult.rows.length === 0) {
@@ -1368,6 +1420,7 @@ const mergeUsersAcrossApps = async (req, res) => {
 module.exports = {
   createApp,
   getMyApps,
+  getAppGroups,
   getAppDetails,
   updateApp,
   regenerateApiKey,

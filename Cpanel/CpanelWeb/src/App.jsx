@@ -136,7 +136,7 @@ function App() {
         <Route path="apps" element={<Apps />} />
         <Route path="apps/:appId" element={<AppDetails />} />
         <Route path="apps/:appId/settings" element={<AppSettings />} />
-        <Route path="apps/all-users" element={<AllUsers />} />
+        {/* <Route path="apps/all-users" element={<AllUsers />} /> */}
         <Route path="settings" element={<Settings />} />
         <Route path="documentation" element={<Documentation />} />
         <Route path="*" element={<Navigate to="/" replace />} />

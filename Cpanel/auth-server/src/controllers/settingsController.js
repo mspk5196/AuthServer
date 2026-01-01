@@ -79,11 +79,16 @@ const getPlanInfo = async (req, res) => {
       return Number.isNaN(n) ? fallback : n;
     };
 
-    let appsLimitRaw = features.max_apps;
-    let apiCallsLimitRaw = features.max_api_calls;
+    let appsLimitRaw = features.max_apps ?? features.apps_limit;
+    let apiCallsLimitRaw = features.max_api_calls ?? features.api_calls_limit;
 
     const appsLimit = parseLimit(appsLimitRaw, null); // 0 or null = unlimited
     const apiCallsLimit = parseLimit(apiCallsLimitRaw, null); // 0 or null = unlimited
+
+    // New group-related limits
+    const maxStandaloneApps = parseLimit(features.max_standalone_apps, null);
+    const maxAppGroups = parseLimit(features.max_app_groups, null);
+    const maxAppsPerGroup = parseLimit(features.max_apps_per_group, null);
 
     // Format features description array (prefer features_desc; fallback to features keys)
     let featuresDesc = planInfo.features_desc;
@@ -106,6 +111,31 @@ const getPlanInfo = async (req, res) => {
         featuresDesc.push(`Up to ${apiCallsLimit.toLocaleString()} API calls per month`);
       } else if (apiCallsLimit === 0 || apiCallsLimit === null) {
         featuresDesc.push('Unlimited API calls per month');
+      }
+
+      // Group / standalone app limits (only show when explicitly configured)
+      if (maxStandaloneApps !== null) {
+        if (maxStandaloneApps === 0) {
+          featuresDesc.push('Unlimited standalone apps');
+        } else {
+          featuresDesc.push(`Up to ${maxStandaloneApps} standalone apps`);
+        }
+      }
+
+      if (maxAppGroups !== null) {
+        if (maxAppGroups === 0) {
+          featuresDesc.push('Unlimited app groups');
+        } else {
+          featuresDesc.push(`Up to ${maxAppGroups} app groups`);
+        }
+      }
+
+      if (maxAppsPerGroup !== null) {
+        if (maxAppsPerGroup === 0) {
+          featuresDesc.push('Unlimited apps per group');
+        } else {
+          featuresDesc.push(`Up to ${maxAppsPerGroup} apps per group`);
+        }
       }
     }
 

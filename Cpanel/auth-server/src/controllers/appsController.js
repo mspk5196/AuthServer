@@ -86,6 +86,22 @@ const createApp = async (req, res) => {
     const planFeatures = planCheck.rows[0].features || {};
     console.log('Plan features:', planFeatures);
 
+
+    // Add app group usage (how many groups the developer has)
+    const groupCountRes = await pool.query('SELECT COUNT(*) AS count FROM app_groups WHERE developer_id = $1', [developerId]);
+    const groupsUsed = parseInt(groupCountRes.rows[0].count || 0);
+
+    // Extract group-related limits from plan
+    const planFeatures = planResult.rows[0] ? planResult.rows[0].features || {} : {};
+    const parseLimit = (value, fallback) => {
+      if (value === null || value === undefined) return fallback;
+      if (typeof value === 'number') return value;
+      const n = Number(value);
+      return Number.isNaN(n) ? fallback : n;
+    };
+    const maxAppGroups = parseLimit(planFeatures.max_app_groups, null);
+    const maxAppsPerGroup = parseLimit(planFeatures.max_apps_per_group, null);
+    const maxStandaloneApps = parseLimit(planFeatures.max_standalone_apps, null);
     // Extract app limits from features JSONB
     // 0 or null (or missing) means unlimited
     let maxApps = null; // total apps (standalone + in groups)
@@ -1177,13 +1193,17 @@ const getDashboard = async (req, res) => {
       LIMIT 1
     `, [developerId]);
 
-    const planInfo = planResult.rows.length > 0 ? {
-      name: planResult.rows[0].plan_name,
-      features: planResult.rows[0].features,
-      isActive: planResult.rows[0].is_active,
-      startDate: planResult.rows[0].start_date,
-      endDate: planResult.rows[0].end_date
-    } : null;
+     const planInfo = planResult.rows.length > 0 ? {
+       name: planResult.rows[0].plan_name,
+       features: planResult.rows[0].features,
+       isActive: planResult.rows[0].is_active,
+       startDate: planResult.rows[0].start_date,
+       endDate: planResult.rows[0].end_date,
+       max_app_groups: maxAppGroups,
+       app_groups_used: groupsUsed,
+       max_apps_per_group: maxAppsPerGroup,
+       max_standalone_apps: maxStandaloneApps
+     } : null;
 
     // Format recent apps with status
     const recentApps = recentAppsResult.rows.map(app => ({
@@ -1203,7 +1223,8 @@ const getDashboard = async (req, res) => {
           totalApps,
           totalUsers,
           todayApiCalls,
-          monthApiCalls
+          monthApiCalls,
+          groupsUsed
         },
         recentApps,
         planInfo
@@ -1616,6 +1637,8 @@ module.exports = {
   getAppGroups,
   createAppGroup,
   deleteAppGroup,
+  getGroupUsers,
+  getGroupUserLogins,
   getAppDetails,
   updateApp,
   regenerateApiKey,
@@ -1635,4 +1658,62 @@ module.exports = {
   listAllUsersAcrossApps,
   mergeUsersAcrossApps,
   setCombineUsersFlag,
+};
+
+/**
+ * Get all users across all apps within a group (developer-owned)
+ */
+const getGroupUsers = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { groupId } = req.params;
+
+    if (!groupId) return res.status(400).json({ success: false, message: 'Group ID required' });
+
+    // Verify group ownership
+    const groupCheck = await pool.query('SELECT id FROM app_groups WHERE id = $1 AND developer_id = $2', [groupId, developerId]);
+    if (groupCheck.rows.length === 0) return res.status(404).json({ success: false, message: 'Group not found' });
+
+    const usersRes = await pool.query(`
+      SELECT u.id, u.email, u.name, u.username, u.email_verified, u.is_blocked, u.last_login, u.app_id, a.app_name
+      FROM users u
+      JOIN dev_apps a ON u.app_id = a.id
+      WHERE a.group_id = $1
+      ORDER BY LOWER(u.email) NULLS LAST, a.app_name
+    `, [groupId]);
+
+    res.json({ success: true, data: usersRes.rows });
+  } catch (err) {
+    console.error('getGroupUsers error', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch group users', error: err.message });
+  }
+};
+
+/**
+ * Get apps in which a user (by user id) has login records within the group
+ */
+const getGroupUserLogins = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { groupId, userId } = req.params;
+
+    if (!groupId || !userId) return res.status(400).json({ success: false, message: 'Group ID and User ID required' });
+
+    // Verify group ownership
+    const groupCheck = await pool.query('SELECT id FROM app_groups WHERE id = $1 AND developer_id = $2', [groupId, developerId]);
+    if (groupCheck.rows.length === 0) return res.status(404).json({ success: false, message: 'Group not found' });
+
+    const loginsRes = await pool.query(`
+      SELECT gul.app_id, a.app_name, gul.last_login
+      FROM group_user_logins gul
+      JOIN dev_apps a ON a.id = gul.app_id
+      WHERE gul.group_id = $1 AND gul.user_id = $2
+      ORDER BY gul.last_login DESC
+    `, [groupId, userId]);
+
+    res.json({ success: true, data: loginsRes.rows });
+  } catch (err) {
+    console.error('getGroupUserLogins error', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch user logins for group', error: err.message });
+  }
 };

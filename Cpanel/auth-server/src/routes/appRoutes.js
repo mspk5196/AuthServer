@@ -24,6 +24,8 @@ const {
   getAppGroups,
   createAppGroup,
   deleteAppGroup,
+  getGroupUsers,
+  getGroupUserLogins
 } = require('../controllers/appsController'); // Fixed: was appController
 const { authenticateToken } = require('../middleware/auth');
 

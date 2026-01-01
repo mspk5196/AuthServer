@@ -1629,35 +1629,6 @@ const mergeUsersAcrossApps = async (req, res) => {
   }
 };
 
-module.exports = {
-  createApp,
-  getMyApps,
-  getAppGroups,
-  createAppGroup,
-  deleteAppGroup,
-  getGroupUsers,
-  getGroupUserLogins,
-  getAppDetails,
-  updateApp,
-  regenerateApiKey,
-  getAppSummary,
-  listAppUsers,
-  getUserLoginHistory,
-  createAppUser,
-  setUserBlocked,
-  getAppUsage,
-  getDashboard,
-  verifyAppEmail,
-  updateAppSupportEmail,
-  exportUsersCSV,
-  requestAppDeletion,
-  confirmAppDeletion,
-  // new developer-level functions
-  listAllUsersAcrossApps,
-  mergeUsersAcrossApps,
-  setCombineUsersFlag,
-};
-
 /**
  * Get all users across all apps within a group (developer-owned)
  */
@@ -1714,4 +1685,35 @@ const getGroupUserLogins = async (req, res) => {
     console.error('getGroupUserLogins error', err);
     res.status(500).json({ success: false, message: 'Failed to fetch user logins for group', error: err.message });
   }
+};
+
+
+
+module.exports = {
+  createApp,
+  getMyApps,
+  getAppGroups,
+  createAppGroup,
+  deleteAppGroup,
+  getGroupUsers,
+  getGroupUserLogins,
+  getAppDetails,
+  updateApp,
+  regenerateApiKey,
+  getAppSummary,
+  listAppUsers,
+  getUserLoginHistory,
+  createAppUser,
+  setUserBlocked,
+  getAppUsage,
+  getDashboard,
+  verifyAppEmail,
+  updateAppSupportEmail,
+  exportUsersCSV,
+  requestAppDeletion,
+  confirmAppDeletion,
+  // new developer-level functions
+  listAllUsersAcrossApps,
+  mergeUsersAcrossApps,
+  setCombineUsersFlag,
 };

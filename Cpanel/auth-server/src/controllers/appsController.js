@@ -215,7 +215,17 @@ const getMyApps = async (req, res) => {
       LEFT JOIN users u ON u.app_id = a.id
       LEFT JOIN app_groups g ON a.group_id = g.id
       WHERE a.developer_id = $1
-      GROUP BY a.id
+      GROUP BY 
+        a.id,
+        a.app_name,
+        a.api_key,
+        a.allow_google_signin,
+        a.allow_email_signin,
+        a.google_client_id,
+        a.group_id,
+        g.name,
+        a.created_at,
+        a.updated_at
       ORDER BY a.created_at DESC
     `, [developerId]);
 
@@ -952,21 +962,23 @@ const getDashboard = async (req, res) => {
     `, [developerId]);
     const totalUsers = parseInt(usersResult.rows[0].count);
 
-    // Get today's API calls
+    // Get today's API calls (across all apps for this developer)
     const todayCallsResult = await pool.query(`
       SELECT COUNT(*) as count
-      FROM dev_api_calls
-      WHERE developer_id = $1 
-      AND DATE(created_at) = CURRENT_DATE
+      FROM dev_api_calls dac
+      JOIN dev_apps a ON dac.app_id = a.id
+      WHERE a.developer_id = $1 
+      AND DATE(dac.created_at) = CURRENT_DATE
     `, [developerId]);
     const todayApiCalls = parseInt(todayCallsResult.rows[0].count);
 
-    // Get this month's API calls
+    // Get this month's API calls (across all apps for this developer)
     const monthCallsResult = await pool.query(`
       SELECT COUNT(*) as count
-      FROM dev_api_calls
-      WHERE developer_id = $1 
-      AND DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE)
+      FROM dev_api_calls dac
+      JOIN dev_apps a ON dac.app_id = a.id
+      WHERE a.developer_id = $1 
+      AND DATE_TRUNC('month', dac.created_at) = DATE_TRUNC('month', CURRENT_DATE)
     `, [developerId]);
     const monthApiCalls = parseInt(monthCallsResult.rows[0].count);
 

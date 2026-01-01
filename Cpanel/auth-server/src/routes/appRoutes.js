@@ -21,11 +21,15 @@ const {
   listAllUsersAcrossApps,
   mergeUsersAcrossApps,
   setCombineUsersFlag,
+  getAppGroups,
 } = require('../controllers/appsController'); // Fixed: was appController
 const { authenticateToken } = require('../middleware/auth');
 
 // Dashboard route
 router.get('/dashboard', authenticateToken, getDashboard);
+
+// App groups routes
+router.get('/groups', authenticateToken, getAppGroups);
 
 // App management routes
 router.post('/createApp', authenticateToken, createApp);

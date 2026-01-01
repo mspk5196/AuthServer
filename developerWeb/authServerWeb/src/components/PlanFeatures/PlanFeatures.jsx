@@ -4,14 +4,59 @@ export const getFeatureSentences = (features) => {
   if (!features) return [];
 
   const sentences = [];
+  const getNumeric = (value) => {
+    if (typeof value === 'number') return value;
+    const n = Number(value);
+    return Number.isNaN(n) ? null : n;
+  };
 
-  if (typeof features.max_apps === 'number') {
-    sentences.push(`Up to ${features.max_apps} apps`);
+  // App limits (support both new and legacy keys). 0 = unlimited.
+  const appsLimit = getNumeric(features.max_apps ?? features.apps_limit);
+  if (appsLimit !== null) {
+    if (appsLimit === 0) {
+      sentences.push('Unlimited apps');
+    } else {
+      sentences.push(`Up to ${appsLimit} apps`);
+    }
   }
 
-  if (typeof features.max_api_calls === 'number') {
-    const formattedCalls = features.max_api_calls.toLocaleString();
-    sentences.push(`Up to ${formattedCalls} API calls per month`);
+  // API call limits (support both new and legacy keys). 0 = unlimited.
+  const apiCallsLimit = getNumeric(features.max_api_calls ?? features.api_calls_limit);
+  if (apiCallsLimit !== null) {
+    if (apiCallsLimit === 0) {
+      sentences.push('Unlimited API calls per month');
+    } else {
+      const formattedCalls = apiCallsLimit.toLocaleString();
+      sentences.push(`Up to ${formattedCalls} API calls per month`);
+    }
+  }
+
+  // Group / standalone app limits
+  const maxStandaloneApps = getNumeric(features.max_standalone_apps);
+  if (maxStandaloneApps !== null) {
+    if (maxStandaloneApps === 0) {
+      sentences.push('Unlimited standalone apps');
+    } else {
+      sentences.push(`Up to ${maxStandaloneApps} standalone apps`);
+    }
+  }
+
+  const maxAppGroups = getNumeric(features.max_app_groups);
+  if (maxAppGroups !== null) {
+    if (maxAppGroups === 0) {
+      sentences.push('Unlimited app groups');
+    } else {
+      sentences.push(`Up to ${maxAppGroups} app groups`);
+    }
+  }
+
+  const maxAppsPerGroup = getNumeric(features.max_apps_per_group);
+  if (maxAppsPerGroup !== null) {
+    if (maxAppsPerGroup === 0) {
+      sentences.push('Unlimited apps per group');
+    } else {
+      sentences.push(`Up to ${maxAppsPerGroup} apps per group`);
+    }
   }
 
   if (features.google_login) {

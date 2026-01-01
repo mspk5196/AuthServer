@@ -41,6 +41,14 @@ const DashboardLayout = () => {
               </svg>
               Apps
             </NavLink>
+            <NavLink to="/groups" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+              <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="8" cy="8" r="3" />
+                <circle cx="16" cy="16" r="3" />
+                <path d="M11 9.5l3 3" />
+              </svg>
+              Groups
+            </NavLink>
             <NavLink to="/documentation" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
               <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />

@@ -13,6 +13,10 @@ const Apps = () => {
   const [groupsLoading, setGroupsLoading] = useState(false);
   const [groupsError, setGroupsError] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+    const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+    const [groupFormName, setGroupFormName] = useState('');
+    const [creatingGroup, setCreatingGroup] = useState(false);
+    const [groupModalError, setGroupModalError] = useState('');
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const [newAppCredentials, setNewAppCredentials] = useState(null);
   const [formData, setFormData] = useState({
@@ -64,6 +68,34 @@ const Apps = () => {
       setGroupsError('Failed to load app groups. Please try again.');
     } finally {
       setGroupsLoading(false);
+    }
+  };
+
+  const handleCreateGroup = async (e) => {
+    e.preventDefault();
+
+    if (!groupFormName.trim()) {
+      setGroupModalError('Group name is required');
+      return;
+    }
+
+    try {
+      setCreatingGroup(true);
+      setGroupModalError('');
+      const token = tokenService.get();
+      const data = await api.post('/apps/groups', { name: groupFormName.trim() }, token);
+      if (data.success) {
+        setGroupFormName('');
+        setShowCreateGroupModal(false);
+        await fetchGroups();
+      } else {
+        setGroupModalError(data.message || 'Failed to create group');
+      }
+    } catch (err) {
+      console.error('Create group error:', err);
+      setGroupModalError('Failed to create group. Please try again.');
+    } finally {
+      setCreatingGroup(false);
     }
   };
 
@@ -147,12 +179,21 @@ const Apps = () => {
           <h1>📱 My Applications</h1>
           <p>Create and manage your applications</p>
         </div>
-        <button 
-          className="btn-primary"
-          onClick={() => setShowCreateModal(true)}
-        >
-          + Create New App
-        </button>
+        <div>
+          <button
+            className="btn-secondary"
+            style={{ marginRight: '0.5rem' }}
+            onClick={() => setShowCreateGroupModal(true)}
+          >
+            + Create Group
+          </button>
+          <button 
+            className="btn-primary"
+            onClick={() => setShowCreateModal(true)}
+          >
+            + Create New App
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -342,6 +383,61 @@ const Apps = () => {
                   disabled={creating}
                 >
                   {creating ? 'Creating...' : 'Create App'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create Group Modal */}
+      {showCreateGroupModal && (
+        <div className="modal-overlay" onClick={() => setShowCreateGroupModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Create New App Group</h2>
+              <button
+                className="modal-close"
+                onClick={() => setShowCreateGroupModal(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateGroup}>
+              <div className="form-group">
+                <label>Group Name *</label>
+                <input
+                  type="text"
+                  placeholder="My Customer Group"
+                  value={groupFormName}
+                  onChange={(e) => setGroupFormName(e.target.value)}
+                  required
+                />
+              </div>
+
+              {groupModalError && (
+                <div className="alert alert-error">
+                  <span>⚠️</span>
+                  <p>{groupModalError}</p>
+                </div>
+              )}
+
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowCreateGroupModal(false)}
+                  disabled={creatingGroup}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={creatingGroup}
+                >
+                  {creatingGroup ? 'Creating...' : 'Create Group'}
                 </button>
               </div>
             </form>

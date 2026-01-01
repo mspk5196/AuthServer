@@ -19,6 +19,20 @@ function generateApiCredentials() {
 }
 
 /**
+ * Safely parse numeric limits from plan features.
+ * Returns a number, or null when unlimited/not set.
+ */
+function parsePlanLimit(raw) {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw === 'number') return raw;
+  if (typeof raw === 'string') {
+    const n = parseInt(raw, 10);
+    if (!Number.isNaN(n)) return n;
+  }
+  return null;
+}
+
+/**
  * Create a new app
  */
 const createApp = async (req, res) => {
@@ -65,34 +79,22 @@ const createApp = async (req, res) => {
       });
     }
 
-    const planFeatures = planCheck.rows[0].features;
+    const planFeatures = planCheck.rows[0].features || {};
     console.log('Plan features:', planFeatures);
 
-    // Extract max_apps from features (handle different JSONB structures)
-    // 0 means unlimited
-    let maxApps = null; // null or 0 means unlimited
-    if (planFeatures) {
-      let rawLimit = null;
-
-      if (planFeatures.apps_limit !== undefined && planFeatures.apps_limit !== null) {
-        rawLimit = planFeatures.apps_limit;
-      } else if (planFeatures.max_apps !== undefined && planFeatures.max_apps !== null) {
-        rawLimit = planFeatures.max_apps;
-      }
-
-      if (rawLimit !== null) {
-        if (typeof rawLimit === 'number') {
-          maxApps = rawLimit;
-        } else if (typeof rawLimit === 'string') {
-          const match = rawLimit.match(/(\d+)/);
-          if (match) {
-            maxApps = parseInt(match[1], 10);
-          }
-        }
-      }
+    // Extract app limits from features JSONB
+    // 0 or null (or missing) means unlimited
+    let maxApps = null; // total apps (standalone + in groups)
+    if (planFeatures.apps_limit !== undefined && planFeatures.apps_limit !== null) {
+      maxApps = parsePlanLimit(planFeatures.apps_limit);
+    } else if (planFeatures.max_apps !== undefined && planFeatures.max_apps !== null) {
+      maxApps = parsePlanLimit(planFeatures.max_apps);
     }
 
-    console.log('Max apps allowed (0 or null = unlimited):', maxApps);
+    const maxStandaloneApps = parsePlanLimit(planFeatures.max_standalone_apps);
+    const maxAppsPerGroup = parsePlanLimit(planFeatures.max_apps_per_group);
+
+    console.log('Max apps (total):', maxApps, 'Max standalone apps:', maxStandaloneApps, 'Max apps per group:', maxAppsPerGroup);
 
     // Count existing apps
     const appCount = await pool.query(
@@ -103,11 +105,11 @@ const createApp = async (req, res) => {
     const currentAppCount = parseInt(appCount.rows[0].count, 10);
     console.log('Current app count:', currentAppCount);
 
-    // Check if app limit is exceeded (0 or null means unlimited)
+    // Check total apps limit (0 or null means unlimited)
     if (maxApps !== null && maxApps !== 0 && currentAppCount >= maxApps) {
       return res.status(403).json({
         success: false,
-        message: `Plan limit reached. You can create maximum ${maxApps} apps. Please upgrade your plan.`
+        message: `Plan limit reached. You can create maximum ${maxApps} apps in total. Please upgrade your plan.`
       });
     }
 
@@ -127,6 +129,38 @@ const createApp = async (req, res) => {
           success: false,
           message: 'Invalid app group selected. Please choose a group that belongs to your account.'
         });
+      }
+
+      // If there is a per-group app limit, enforce it
+      if (maxAppsPerGroup !== null && maxAppsPerGroup !== 0) {
+        const groupAppCountRes = await pool.query(
+          'SELECT COUNT(*) as count FROM dev_apps WHERE group_id = $1',
+          [resolvedGroupId]
+        );
+        const currentGroupApps = parseInt(groupAppCountRes.rows[0].count, 10);
+        console.log('Current apps in group', resolvedGroupId, ':', currentGroupApps);
+        if (currentGroupApps >= maxAppsPerGroup) {
+          return res.status(403).json({
+            success: false,
+            message: `Plan limit reached for this group. Each group can have a maximum of ${maxAppsPerGroup} apps.`
+          });
+        }
+      }
+    } else {
+      // Standalone app: enforce standalone app limit if configured
+      if (maxStandaloneApps !== null && maxStandaloneApps !== 0) {
+        const standaloneCountRes = await pool.query(
+          'SELECT COUNT(*) as count FROM dev_apps WHERE developer_id = $1 AND group_id IS NULL',
+          [developerId]
+        );
+        const currentStandaloneCount = parseInt(standaloneCountRes.rows[0].count, 10);
+        console.log('Current standalone app count:', currentStandaloneCount);
+        if (currentStandaloneCount >= maxStandaloneApps) {
+          return res.status(403).json({
+            success: false,
+            message: `Plan limit reached. You can create a maximum of ${maxStandaloneApps} standalone apps. Please upgrade your plan or create apps inside groups.`
+          });
+        }
       }
     }
 
@@ -267,6 +301,78 @@ const getAppGroups = async (req, res) => {
       success: false,
       message: 'Failed to fetch app groups',
       error: error.message
+    });
+  }
+};
+
+/**
+ * Create a new app group for the developer
+ */
+const createAppGroup = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { name } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Group name is required'
+      });
+    }
+
+    // Check plan limits for app groups
+    const planCheck = await pool.query(`
+      SELECT 
+        p.features,
+        dpr.plan_id,
+        p.name as plan_name
+      FROM developer_plan_registrations dpr
+      JOIN dev_plans p ON dpr.plan_id = p.id
+      WHERE dpr.developer_id = $1 AND dpr.is_active = true
+      LIMIT 1
+    `, [developerId]);
+
+    if (planCheck.rows.length === 0) {
+      return res.status(403).json({
+        success: false,
+        message: 'No active plan found. Please subscribe to a plan first.'
+      });
+    }
+
+    const planFeatures = planCheck.rows[0].features || {};
+    const maxAppGroups = parsePlanLimit(planFeatures.max_app_groups);
+
+    if (maxAppGroups !== null && maxAppGroups !== 0) {
+      const groupCountRes = await pool.query(
+        'SELECT COUNT(*) as count FROM app_groups WHERE developer_id = $1',
+        [developerId]
+      );
+      const currentGroups = parseInt(groupCountRes.rows[0].count, 10);
+      if (currentGroups >= maxAppGroups) {
+        return res.status(403).json({
+          success: false,
+          message: `Plan limit reached. You can create a maximum of ${maxAppGroups} app groups. Please upgrade your plan.`,
+        });
+      }
+    }
+
+    const insertRes = await pool.query(`
+      INSERT INTO app_groups (developer_id, name, created_at, updated_at)
+      VALUES ($1, $2, NOW(), NOW())
+      RETURNING id, name, created_at, updated_at
+    `, [developerId, name.trim()]);
+
+    return res.status(201).json({
+      success: true,
+      message: 'App group created successfully',
+      data: insertRes.rows[0],
+    });
+  } catch (error) {
+    console.error('Create app group error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to create app group',
+      error: error.message,
     });
   }
 };
@@ -1433,6 +1539,7 @@ module.exports = {
   createApp,
   getMyApps,
   getAppGroups,
+  createAppGroup,
   getAppDetails,
   updateApp,
   regenerateApiKey,

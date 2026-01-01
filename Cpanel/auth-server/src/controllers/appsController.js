@@ -18,6 +18,10 @@ function generateApiCredentials() {
   return { apiKey, apiSecret };
 }
 
+function generatePublicApiKey() {
+  return 'pg_' + crypto.randomBytes(24).toString('hex');
+}
+
 /**
  * Safely parse numeric limits from plan features.
  * Returns a number, or null when unlimited/not set.
@@ -356,11 +360,13 @@ const createAppGroup = async (req, res) => {
       }
     }
 
+    const publicApiKey = generatePublicApiKey();
+
     const insertRes = await pool.query(`
-      INSERT INTO app_groups (developer_id, name, created_at, updated_at)
-      VALUES ($1, $2, NOW(), NOW())
-      RETURNING id, name, created_at, updated_at
-    `, [developerId, name.trim()]);
+      INSERT INTO app_groups (developer_id, name, public_api_key, created_at, updated_at)
+      VALUES ($1, $2, $3, NOW(), NOW())
+      RETURNING id, name, public_api_key, created_at, updated_at
+    `, [developerId, name.trim(), publicApiKey]);
 
     return res.status(201).json({
       success: true,

@@ -85,23 +85,7 @@ const createApp = async (req, res) => {
 
     const planFeatures = planCheck.rows[0].features || {};
     console.log('Plan features:', planFeatures);
-
-
-    // Add app group usage (how many groups the developer has)
-    const groupCountRes = await pool.query('SELECT COUNT(*) AS count FROM app_groups WHERE developer_id = $1', [developerId]);
-    const groupsUsed = parseInt(groupCountRes.rows[0].count || 0);
-
-    // Extract group-related limits from plan
-    const planFeatures = planResult.rows[0] ? planResult.rows[0].features || {} : {};
-    const parseLimit = (value, fallback) => {
-      if (value === null || value === undefined) return fallback;
-      if (typeof value === 'number') return value;
-      const n = Number(value);
-      return Number.isNaN(n) ? fallback : n;
-    };
-    const maxAppGroups = parseLimit(planFeatures.max_app_groups, null);
-    const maxAppsPerGroup = parseLimit(planFeatures.max_apps_per_group, null);
-    const maxStandaloneApps = parseLimit(planFeatures.max_standalone_apps, null);
+    
     // Extract app limits from features JSONB
     // 0 or null (or missing) means unlimited
     let maxApps = null; // total apps (standalone + in groups)
@@ -1192,18 +1176,32 @@ const getDashboard = async (req, res) => {
       WHERE dpr.developer_id = $1 AND dpr.is_active = true
       LIMIT 1
     `, [developerId]);
+    // Compute group usage and limits
+    const groupCountRes = await pool.query('SELECT COUNT(*) AS count FROM app_groups WHERE developer_id = $1', [developerId]);
+    const groupsUsed = parseInt(groupCountRes.rows[0].count || 0);
 
-     const planInfo = planResult.rows.length > 0 ? {
-       name: planResult.rows[0].plan_name,
-       features: planResult.rows[0].features,
-       isActive: planResult.rows[0].is_active,
-       startDate: planResult.rows[0].start_date,
-       endDate: planResult.rows[0].end_date,
-       max_app_groups: maxAppGroups,
-       app_groups_used: groupsUsed,
-       max_apps_per_group: maxAppsPerGroup,
-       max_standalone_apps: maxStandaloneApps
-     } : null;
+    const planFeatures = planResult.rows[0] ? planResult.rows[0].features || {} : {};
+    const parseLimit = (value, fallback) => {
+      if (value === null || value === undefined) return fallback;
+      if (typeof value === 'number') return value;
+      const n = Number(value);
+      return Number.isNaN(n) ? fallback : n;
+    };
+    const maxAppGroups = parseLimit(planFeatures.max_app_groups, null);
+    const maxAppsPerGroup = parseLimit(planFeatures.max_apps_per_group, null);
+    const maxStandaloneApps = parseLimit(planFeatures.max_standalone_apps, null);
+
+    const planInfo = planResult.rows.length > 0 ? {
+      name: planResult.rows[0].plan_name,
+      features: planResult.rows[0].features,
+      isActive: planResult.rows[0].is_active,
+      startDate: planResult.rows[0].start_date,
+      endDate: planResult.rows[0].end_date,
+      max_app_groups: maxAppGroups,
+      app_groups_used: groupsUsed,
+      max_apps_per_group: maxAppsPerGroup,
+      max_standalone_apps: maxStandaloneApps
+    } : null;
 
     // Format recent apps with status
     const recentApps = recentAppsResult.rows.map(app => ({

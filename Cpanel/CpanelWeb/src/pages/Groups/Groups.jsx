@@ -11,6 +11,7 @@ const Groups = () => {
   const [groupFormName, setGroupFormName] = useState('');
   const [creating, setCreating] = useState(false);
   const [modalError, setModalError] = useState('');
+  const [deletingId, setDeletingId] = useState(null);
 
   useEffect(() => {
     fetchGroups();
@@ -60,6 +61,32 @@ const Groups = () => {
       setModalError('Failed to create group. Please try again.');
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleDeleteGroup = async (group) => {
+    if (!group || !group.id) return;
+
+    const confirmed = window.confirm(
+      `Delete group "${group.name}"?\n\nThis cannot be undone. You must delete apps in this group first.`
+    );
+    if (!confirmed) return;
+
+    try {
+      setDeletingId(group.id);
+      const token = tokenService.get();
+      const data = await api.delete(`/apps/groups/${group.id}`, token);
+      if (data.success) {
+        await fetchGroups();
+      } else {
+        alert(data.message || 'Failed to delete group');
+      }
+    } catch (err) {
+      console.error('Delete group error:', err);
+      const msg = err?.data?.message || 'Failed to delete group. Please try again.';
+      alert(msg);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -114,6 +141,14 @@ const Groups = () => {
             <div key={group.id} className="app-card">
               <div className="app-card-header">
                 <h3>{group.name}</h3>
+                <button
+                  className="btn-link btn-danger"
+                  style={{ marginLeft: 'auto' }}
+                  onClick={() => handleDeleteGroup(group)}
+                  disabled={deletingId === group.id}
+                >
+                  {deletingId === group.id ? 'Deleting...' : 'Delete'}
+                </button>
               </div>
               <div className="app-card-body">
                 <div className="app-info-row">

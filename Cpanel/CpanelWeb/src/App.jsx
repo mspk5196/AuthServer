@@ -11,6 +11,7 @@ import AppSettings from './pages/Apps/AppSettings/AppSettings';
 // import AllUsers from './pages/Apps/AllUsers/AllUsers';
 import Settings from './pages/Settings/Settings';
 import Documentation from './pages/Documentation/Documentation';
+import Groups from './pages/Groups/Groups';
 import './App.css';
 import VerifyAppEmail from './pages/Apps/VerifyAppEmail/VerifyAppEmail';
 
@@ -137,6 +138,7 @@ function App() {
         <Route path="apps/:appId" element={<AppDetails />} />
         <Route path="apps/:appId/settings" element={<AppSettings />} />
         {/* <Route path="apps/all-users" element={<AllUsers />} /> */}
+        <Route path="groups" element={<Groups />} />
         <Route path="settings" element={<Settings />} />
         <Route path="documentation" element={<Documentation />} />
         <Route path="*" element={<Navigate to="/" replace />} />

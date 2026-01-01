@@ -310,6 +310,65 @@ const getAppGroups = async (req, res) => {
 };
 
 /**
+ * Delete an app group for the developer.
+ * Business rule: groups that still have apps cannot be deleted.
+ */
+const deleteAppGroup = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { groupId } = req.params;
+
+    if (!groupId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Group ID is required',
+      });
+    }
+
+    // Ensure the group exists and belongs to this developer
+    const groupRes = await pool.query(
+      'SELECT id, name FROM app_groups WHERE id = $1 AND developer_id = $2',
+      [groupId, developerId]
+    );
+
+    if (groupRes.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Group not found',
+      });
+    }
+
+    // Enforce business rule: a group with apps cannot be removed
+    const appCountRes = await pool.query(
+      'SELECT COUNT(*) AS count FROM dev_apps WHERE group_id = $1',
+      [groupId]
+    );
+    const appCount = parseInt(appCountRes.rows[0].count, 10);
+
+    if (appCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'This group still has apps. Delete or re-create those apps before deleting the group.',
+      });
+    }
+
+    await pool.query('DELETE FROM app_groups WHERE id = $1 AND developer_id = $2', [groupId, developerId]);
+
+    return res.json({
+      success: true,
+      message: 'Group deleted successfully',
+    });
+  } catch (error) {
+    console.error('Delete app group error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to delete app group',
+      error: error.message,
+    });
+  }
+};
+
+/**
  * Create a new app group for the developer
  */
 const createAppGroup = async (req, res) => {
@@ -629,6 +688,16 @@ const deleteApp = async (developerId, appId) => {
     const error = new Error('App not found');
     error.statusCode = 404;
     throw error;
+  }
+
+  // Clean up dependent records that reference this app but do NOT have
+  // ON DELETE CASCADE configured at the database level.
+  // This avoids foreign key violations during app deletion.
+  try {
+    await pool.query('DELETE FROM user_deletion_history WHERE app_id = $1', [appId]);
+  } catch (err) {
+    console.error('Error cleaning up user_deletion_history for app deletion:', err);
+    // Let the main delete continue; if this fails due to FK, the error will surface.
   }
 
   // Delete app (cascade will handle related records if configured)
@@ -1546,6 +1615,7 @@ module.exports = {
   getMyApps,
   getAppGroups,
   createAppGroup,
+  deleteAppGroup,
   getAppDetails,
   updateApp,
   regenerateApiKey,

@@ -8,7 +8,7 @@ import Home from './pages/Home/Home';
 import Apps from './pages/Apps/AppHome/Apps';
 import AppDetails from './pages/Apps/AppDetails/AppDetails';
 import AppSettings from './pages/Apps/AppSettings/AppSettings';
-import AllUsers from './pages/Apps/AllUsers/AllUsers';
+// import AllUsers from './pages/Apps/AllUsers/AllUsers';
 import Settings from './pages/Settings/Settings';
 import Documentation from './pages/Documentation/Documentation';
 import './App.css';

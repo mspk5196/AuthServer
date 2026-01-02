@@ -2175,7 +2175,7 @@ const setPasswordGoogleUser = async (req, res) => {
 const verifyEmailSetPasswordGoogleUser = async (req, res) => {
   try {
     const { token } = req.query;
-    const app = req.devApp;
+    // const app = req.devApp;
     if (!token) {
       return res.status(400).send(`
         <!DOCTYPE html>
@@ -2276,7 +2276,7 @@ const verifyEmailSetPasswordGoogleUser = async (req, res) => {
       sendMail({
         to: user.email,
         subject: 'Password linked to your account',
-        html: buildPasswordSetConfirmationEmail({ changedAt: new Date().toLocaleString(), supportEmail: app.support_email }),
+        html: buildPasswordSetConfirmationEmail({ changedAt: new Date().toLocaleString(), supportEmail: 'Contact your app support.' }),
       }).catch(err => console.error('Send password setup confirmation email error:', err));
 
       return res.json({

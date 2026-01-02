@@ -2175,6 +2175,7 @@ const setPasswordGoogleUser = async (req, res) => {
 const verifyEmailSetPasswordGoogleUser = async (req, res) => {
   try {
     const { token } = req.query;
+    const app = req.devApp;
     if (!token) {
       return res.status(400).send(`
         <!DOCTYPE html>

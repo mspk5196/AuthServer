@@ -6,7 +6,7 @@ const Contact = () => {
       <div className="container">
         <h1>Contact Us</h1>
         <p>
-          For billing, technical, or general questions about the MSPK Auth Platform,
+          For billing, technical, or general questions about the MSPK™ Auth Platform,
           you can reach us at the email address below.
         </p>
         <h2>Support Email</h2>

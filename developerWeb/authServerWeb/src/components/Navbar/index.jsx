@@ -22,7 +22,7 @@ const Navbar = () => {
           <span className="logo">
             <img
               src="/logo.png"
-              alt="MSPK Apps"
+              alt="MSPK™ Apps"
               style={{ height: '40px', width: '40px', borderRadius: '8px' }}
             />
           </span>

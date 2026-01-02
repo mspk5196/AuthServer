@@ -832,9 +832,9 @@ const confirmAppDeletion = async (req, res) => {
             <h1>Application deleted successfully</h1>
             <p>Your app and its related authentication data have been <span class="highlight">permanently deleted</span>.</p>
             <p>If you did not perform this action, please contact support immediately at <a href="mailto:${process.env.SUPPORT_EMAIL}">${process.env.SUPPORT_EMAIL}</a>.</p>
-            <a class="button" href="https://authservices.mspkapps.in/">Return to MSPK Auth Portal</a>
+            <a class="button" href="https://authservices.mspkapps.in/">Return to MSPK™ Auth Portal</a>
             <div class="footer">
-              MSPK Apps Authentication Platform (mspkapps.in)
+              MSPK™ Apps Authentication Platform (mspkapps.in)
             </div>
           </div>
         </body>

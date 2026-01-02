@@ -40,7 +40,7 @@ const Privacy = () => {
         ) : (
           <>
             <p>
-              We collect only the minimum information required to operate the MSPK Auth Platform,
+              We collect only the minimum information required to operate the MSPK™ Auth Platform,
               such as your developer account details and basic usage metrics.
             </p>
             <h2>Data We Collect</h2>

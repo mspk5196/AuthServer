@@ -2016,7 +2016,7 @@ const googleAuth = async (req, res) => {
     const app = req.devApp;
 
     // Validation
-    if (!id_token && !access_token) {
+    if (!id_token) {
       return res.status(400).json({
         success: false,
         error: 'Validation error',
@@ -2036,7 +2036,7 @@ const googleAuth = async (req, res) => {
     // Validate token with Google
     let googleUser;
     try {
-      const tokenToVerify = id_token || access_token;
+      const tokenToVerify = id_token;
       const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${tokenToVerify}`);
 
       if (!response.ok) {

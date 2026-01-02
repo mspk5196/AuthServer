@@ -15,6 +15,7 @@ const {
   buildGoogleUserWelcomeEmail,
   buildSetPasswordGoogleUserEmail,
   buildPasswordSetConfirmationEmail,
+  buildProfileUpdateVerificationEmail,
 } = require('../templates/emailTemplates');
 const { log, error } = require('console');
 

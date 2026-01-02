@@ -36,7 +36,7 @@ const buildChangePasswordLinkEmail = ({ appName, name, verificationUrl, supportE
 const buildPasswordChangedEmail = ({ appName, changedAt, supportEmail }) => `
   <h2>Your account password was changed on ${appName} at ${changedAt}!</h2>
   <p>If you did not initiate this change, please contact support immediately.</p>
-  <p>Authentication system powered by MSPK APPS (mspkapps.in).</p>
+  <p>Authentication system powered by MSPK™ Apps (mspkapps.in).</p>
   ${supportLine(supportEmail)}
 `;
 
@@ -66,7 +66,7 @@ const buildDeleteAccountEmail = ({ appName, verificationUrl, supportEmail }) => 
 const buildAccountDeletedEmail = ({ appName, deletedAt, supportEmail }) => `
   <h2>Your account was deleted on ${appName} at ${deletedAt}!</h2>
   <p>All data associated with your account has been permanently deleted.</p>
-  <p>Authentication system powered by MSPK APPS (mspkapps.in).</p>
+  <p>Authentication system powered by MSPK™ Apps (mspkapps.in).</p>
   ${supportLine(supportEmail)}
 `;
 
@@ -77,7 +77,7 @@ const buildGoogleUserWelcomeEmail = ({ appName, email, verificationUrl, supportE
   <p>To enable traditional email/password login, you can optionally set a password:</p>
   <a href="${verificationUrl}">${verificationUrl}</a>
   <p>This link will expire in 24 hours.</p>
-  <p>Authentication system powered by MSPK APPS (mspkapps.in).</p>
+  <p>Authentication system powered by MSPK™ Apps (mspkapps.in).</p>
   ${supportLine(supportEmail)}
 `;
 
@@ -89,7 +89,7 @@ const buildSetPasswordGoogleUserEmail = ({ appName, name, verificationUrl, suppo
   <a href="${verificationUrl}">${verificationUrl}</a>
   <p>This link will expire in 24 hours.</p>
   <p>Purpose: Set Password - Google User</p>
-  <p>Authentication system powered by MSPK APPS (mspkapps.in).</p>
+  <p>Authentication system powered by MSPK™ Apps (mspkapps.in).</p>
   ${supportLine(supportEmail)}
 `;
 
@@ -97,7 +97,7 @@ const buildSetPasswordGoogleUserEmail = ({ appName, name, verificationUrl, suppo
 const buildPasswordSetConfirmationEmail = ({ changedAt, supportEmail }) => `
   <h2>Your password was set on ${changedAt}!</h2>
   <p>You can now login with your email and password.</p>
-  <p>Authentication system powered by MSPK APPS (mspkapps.in).</p>
+  <p>Authentication system powered by MSPK™ Apps (mspkapps.in).</p>
   ${supportLine(supportEmail)}
 `;
 
@@ -141,7 +141,7 @@ const buildAppDeleteConfirmationEmail = ({ appName, developerName, confirmationU
   <p>Hi ${developerName || 'Developer'},</p>
   <p>
     You requested to <strong>permanently delete</strong> the application
-    <strong>${appName}</strong> from the MSPK Auth Platform.
+    <strong>${appName}</strong> from the MSPK™ Auth Platform.
   </p>
   <p>
     Deleting this app will remove its configuration and may remove associated
@@ -162,7 +162,7 @@ const buildAppDeleteConfirmationEmail = ({ appName, developerName, confirmationU
   </p>
   ${supportLine(supportEmail)}
   <p style="margin-top:16px;font-size:12px;color:#6b7280;">
-    Authentication system powered by MSPK APPS (mspkapps.in).
+    Authentication system powered by MSPK™ Apps (mspkapps.in).
   </p>
 `;
 

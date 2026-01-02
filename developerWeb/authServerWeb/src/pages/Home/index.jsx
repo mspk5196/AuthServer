@@ -182,7 +182,7 @@ const Home = () => {
         <div className="container">
           <div className="footer-content">
             <div className="footer-section">
-              <h4>MSPK Auth Platform</h4>
+              <h4>MSPK™ Auth Platform</h4>
               <p>Complete authentication solution for developers</p>
             </div>
             <div className="footer-section">
@@ -203,7 +203,7 @@ const Home = () => {
             </div>
           </div>
           <div className="footer-bottom">
-            <p>&copy; {new Date().getFullYear()} MSPK Apps. All rights reserved.</p>
+            <p>&copy; {new Date().getFullYear()} MSPK™ Apps. All rights reserved.</p>
           </div>
         </div>
       </footer>

@@ -14,7 +14,7 @@ const sendMail = async ({ to, subject, html }) => {
     });
 
     const mailOptions = {
-      from: process.env.FROM_EMAIL || `"MSPK Apps Support" <${process.env.FROM_EMAIL}>`,
+      from: `"MSPK™ Apps Support" <${process.env.FROM_EMAIL}>`,
       to,
       subject,
       html,

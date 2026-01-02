@@ -17,7 +17,7 @@ const DashboardLayout = () => {
       <aside className="dashboard-sidebar">
         <div className="sidebar-header">
           <a href="/" className="sidebar-logo">
-            <img src="/logo.png" alt="MSPK Apps" style={{ height: '32px', width: '32px', borderRadius: '8px' }} />
+            <img src="/logo.png" alt="MSPK™ Apps" style={{ height: '32px', width: '32px', borderRadius: '8px' }} />
             <span style={{ marginLeft: '0.5rem' }}>cPanel</span>
           </a>
         </div>

@@ -31,20 +31,20 @@ const createCpanelTicket = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Forbidden' });
     }
 
-  const ticket = crypto.randomUUID();
+    const ticket = crypto.randomUUID();
     const key = `cpanel:ticket:${ticket}`;
-    const ttlSeconds = 60; 
+    const ttlSeconds = 60;
 
     // NX ensures no overwrite; EX sets TTL
-  const redis = await getRedis();
-  const ok = await redis.set(key, JSON.stringify({ developerId: payload.userId }), { EX: ttlSeconds, NX: true });
+    const redis = await getRedis();
+    const ok = await redis.set(key, JSON.stringify({ developerId: payload.userId }), { EX: ttlSeconds, NX: true });
     if (ok !== 'OK') {
       return res.status(500).json({ success: false, message: 'Could not create ticket' });
     }
 
     const base = (process.env.CPANEL_URL).replace(/\/$/, '');
     const cpanelUrl = `${base}/sso/${ticket}`;
-    console.log('[cPanelTicket] created URL:', cpanelUrl);
+    // console.log('[cPanelTicket] created URL:', cpanelUrl);
     return res.status(201).json({
       success: true,
       data: {

@@ -380,13 +380,15 @@ const Settings = () => {
                   <button className="btn btn-primary" onClick={handleUpgradePlan}>
                     Upgrade Plan
                   </button>
-                  <button
-                    className="btn btn-danger"
-                    onClick={handleCancelPlan}
-                    disabled={loading}
-                  >
-                    Cancel Plan
-                  </button>
+                  {(!currentPlan.price || Number(currentPlan.price) === 0) && (
+                    <button
+                      className="btn btn-danger"
+                      onClick={handleCancelPlan}
+                      disabled={loading}
+                    >
+                      Cancel Plan
+                    </button>
+                  )}
                 </div>
               </div>
             ) : (

@@ -846,9 +846,18 @@ const resendVerification = async (req, res) => {
       });
     }
 
-    const validPurposes = ['New Account', 'Password change', 'Profile Edit'];
-    const verifyPurpose = purpose && validPurposes.includes(purpose) ? purpose : 'New Account';
+    const validPurposes = [
+      'New Account',
+      'Password change',
+      'Profile Edit',
+      'Forget Password',
+      'Delete Account',
+      'Set Password - Google User',
+    ];
 
+    const verifyPurpose =
+      purpose && validPurposes.includes(purpose) ? purpose : 'New Account';
+      
     // Find user
     const result = await pool.query(
       'SELECT id, email, name, email_verified FROM users WHERE app_id = $1 AND email = $2',

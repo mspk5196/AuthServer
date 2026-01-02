@@ -125,6 +125,129 @@ async function trackApiCall(appId, developerId, req) {
 }
 
 /**
+ * Verify access token validity
+ *
+ * POST /api/v1/:apiKey/auth/verify-token
+ * Headers:
+ *   X-API-Key, X-API-Secret (handled by verifyAppCredentials)
+ *   Authorization: Bearer <access_token> (preferred)
+ * Body (optional): { "access_token": "..." }
+ *
+ * Response (200):
+ *   { success: true, valid: true,  user: { ... }, token: { exp, iat } }
+ *   { success: true, valid: false, reason: 'expired'|'invalid'|'user_not_found'|'account_blocked'|'app_mismatch' }
+ */
+const verifyAccessToken = async (req, res) => {
+  try {
+    const app = req.devApp;
+
+    // Prefer Authorization header
+    const authHeader = req.headers['authorization'];
+    let token = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    } else if (req.body && req.body.access_token) {
+      token = req.body.access_token;
+    }
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        valid: false,
+        error: 'Token required',
+        message: 'Access token is required (Authorization header or access_token in body)'
+      });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (err) {
+      if (['TokenExpiredError', 'JsonWebTokenError', 'NotBeforeError'].includes(err.name)) {
+        return res.status(200).json({
+          success: true,
+          valid: false,
+          reason: err.name === 'TokenExpiredError' ? 'expired' : 'invalid',
+          message: 'Access token is invalid or expired'
+        });
+      }
+
+      console.error('Access token verification error:', err);
+      return res.status(500).json({
+        success: false,
+        valid: false,
+        error: 'Verification failed',
+        message: 'Failed to verify access token'
+      });
+    }
+
+    // Ensure token belongs to this app
+    if (!decoded.appId || decoded.appId !== app.id) {
+      return res.status(200).json({
+        success: true,
+        valid: false,
+        reason: 'app_mismatch',
+        message: 'Token does not belong to this app'
+      });
+    }
+
+    // Ensure user exists and is not blocked
+    const userRes = await pool.query(
+      'SELECT id, email, name, username, is_blocked FROM users WHERE id = $1 AND app_id = $2',
+      [decoded.userId, app.id]
+    );
+
+    if (userRes.rows.length === 0) {
+      return res.status(200).json({
+        success: true,
+        valid: false,
+        reason: 'user_not_found',
+        message: 'User not found for this token'
+      });
+    }
+
+    const user = userRes.rows[0];
+
+    if (user.is_blocked) {
+      return res.status(200).json({
+        success: true,
+        valid: false,
+        reason: 'account_blocked',
+        message: 'User account is blocked'
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      valid: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        username: user.username
+      },
+      token: {
+        app_id: decoded.appId,
+        user_id: decoded.userId,
+        email: decoded.email,
+        iat: decoded.iat,
+        exp: decoded.exp
+      }
+    });
+  } catch (error) {
+    console.error('Verify access token error:', error);
+    res.status(500).json({
+      success: false,
+      valid: false,
+      error: 'Verification failed',
+      message: 'Failed to verify access token'
+    });
+  }
+};
+
+
+/**
  * Register a new user
  */
 const registerUser = async (req, res) => {
@@ -858,7 +981,7 @@ const resendVerification = async (req, res) => {
 
     const verifyPurpose =
       purpose && validPurposes.includes(purpose) ? purpose : 'New Account';
-      
+
     // Find user
     const result = await pool.query(
       'SELECT id, email, name, email_verified FROM users WHERE app_id = $1 AND email = $2',
@@ -2861,5 +2984,6 @@ module.exports = {
   setPasswordGoogleUser,
   verifyEmailSetPasswordGoogleUser,
   verifyChangePassword,
+  verifyAccessToken,
   confirmUserUpdate
 };

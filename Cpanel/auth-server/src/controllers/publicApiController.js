@@ -693,8 +693,8 @@ const requestChangePasswordLink = async (req, res) => {
     // Decide email type based on whether user has a password set
     const verificationToken = crypto.randomBytes(32).toString('hex');
 
-      // Send Change Password link for accounts with existing password
-      await pool.query(`
+    // Send Change Password link for accounts with existing password
+    await pool.query(`
         INSERT INTO user_email_verifications (
           user_id, app_id, token, expires_at, created_at, verify_type
         ) VALUES (
@@ -702,14 +702,14 @@ const requestChangePasswordLink = async (req, res) => {
         )
       `, [user.id, app.id, verificationToken]);
 
-      const verificationUrl = `${process.env.BACKEND_URL}/api/v1/auth/verify-change-password?token=${verificationToken}`;
+    const verificationUrl = `${process.env.BACKEND_URL}/api/v1/auth/verify-change-password?token=${verificationToken}`;
 
-      sendMail({
-        to: user.email,
-        subject: 'Change your password',
-        html: buildChangePasswordLinkEmail({ appName: app.app_name, name: user.name, verificationUrl, supportEmail: app.support_email }),
-      }).catch(err => console.error('Send change password link email error:', err));
-    
+    sendMail({
+      to: user.email,
+      subject: 'Change your password',
+      html: buildChangePasswordLinkEmail({ appName: app.app_name, name: user.name, verificationUrl, supportEmail: app.support_email }),
+    }).catch(err => console.error('Send change password link email error:', err));
+
 
     res.json({
       success: true,
@@ -751,7 +751,7 @@ const changePassword = async (req, res) => {
       });
     }
 
- 
+
 
     const token = authHeader.substring(7);
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -1983,10 +1983,30 @@ const googleAuth = async (req, res) => {
         user = insertResult.rows[0];
         isNewUser = true;
 
+        // Invalidate old tokens
+        await pool.query(
+          'UPDATE user_email_verifications SET used = true WHERE user_id = $1 AND used = false',
+          [user.id]
+        );
+
+        // Generate new token
+        const verificationToken = crypto.randomBytes(32).toString('hex');
+
+        await pool.query(`
+      INSERT INTO user_email_verifications (
+        user_id, app_id, token, expires_at, verify_type, created_at
+      ) VALUES (
+        $1, $2, $3, NOW() + INTERVAL '1 day', $4, NOW()
+      )
+    `, [user.id, app.id, verificationToken, 'Set Password - Google User']);
+
+        // Send verification email
+        const verificationUrl = `${process.env.BACKEND_URL}/api/v1/auth/verify-email-set-password-google-user?token=${verificationToken}`;
+
         sendMail({
           to: googleUser.email?.toLowerCase(),
           subject: 'Welcome to ' + app.app_name,
-          html: buildGoogleUserWelcomeEmail({ appName: app.app_name, email: googleUser.email?.toLowerCase(), name: googleUser.name, supportEmail: app.support_email }),
+          html: buildGoogleUserWelcomeEmail({ appName: app.app_name, email: googleUser.email?.toLowerCase(), verificationUrl, name: googleUser.name, supportEmail: app.support_email }),
         }).catch(err => console.error('Send welcome email error:', err));
 
       }
@@ -2094,7 +2114,7 @@ const setPasswordGoogleUser = async (req, res) => {
         error: 'Already password set, try resetting password',
         message: 'Password is already set for this account. Please use the password reset option if you forgot your password.'
       });
-    } 
+    }
 
     if (!user.google_linked) {
       return res.status(400).json({
@@ -2127,7 +2147,7 @@ const setPasswordGoogleUser = async (req, res) => {
       to: email,
       subject: 'Link to set your password',
       html: buildSetPasswordGoogleUserEmail({ appName: app.app_name, name: user.name, verificationUrl, supportEmail: app.support_email }),
-    }).catch(err => console.error('Send verification email error:', err));
+    }).catch(err => console.error('Send set password email error:', err));
 
     res.json({
       success: true,

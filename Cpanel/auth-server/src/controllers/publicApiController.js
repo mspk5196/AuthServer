@@ -2192,7 +2192,8 @@ const googleAuth = async (req, res) => {
           google_linked: user.google_linked,
           email_verified: user.email_verified,
           last_login: user.last_login,
-          login_method: 'google'
+          login_method: 'google',
+          extra: user.extra || {}
         },
         access_token: accessToken,
         token_type: 'Bearer',

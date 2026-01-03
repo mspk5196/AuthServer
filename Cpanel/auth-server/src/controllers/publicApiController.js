@@ -142,7 +142,7 @@ const verifyAccessToken = async (req, res) => {
     const app = req.devApp;
     // Prefer Authorization header
     const authHeader = req.headers['authorization'];
-    console.log("app in verifyAccessToken:", app, "\n", "authHeader:", authHeader);
+    // console.log    console.log("app in verifyAccessToken:", app, "\n", "authHeader:", authHeader);
     let token = null;
 
     if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -217,7 +217,7 @@ const verifyAccessToken = async (req, res) => {
         message: 'User account is blocked'
       });
     }
-    console.log('Token true');
+    // console.log    console.log('Token true');
 
     return res.status(200).json({
       success: true,
@@ -639,7 +639,7 @@ const verifyEmail = async (req, res) => {
 const getUserProfile = async (req, res) => {
   try {
     const authHeader = req.headers['authorization'];
-    console.log("authHeader(getProfile)", authHeader);
+    // console.log    console.log("authHeader(getProfile)", authHeader);
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({
@@ -650,7 +650,7 @@ const getUserProfile = async (req, res) => {
     }
 
     const token = authHeader.substring(7);
-    console.log("token(getProfile):", token);
+    // console.log    console.log("token(getProfile):", token);
     // Verify JWT token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
@@ -2829,13 +2829,13 @@ const verifyChangePassword = async (req, res) => {
 const patchUserProfile = async (req, res) => {
   try {
     const authHeader = req.headers['authorization'];
-    console.log("log1 ", authHeader);
+    // console.log    console.log("log1 ", authHeader);
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ success: false, error: 'Unauthorized', message: 'Access token is required' });
     }
 
     const token = authHeader.substring(7);
-    console.log(token);
+    // console.log    console.log(token);
 
     let decoded;
     try {
@@ -2858,14 +2858,14 @@ const patchUserProfile = async (req, res) => {
 
     const body = req.body || {};
     const app = req.devApp;
-    console.log("body", body, "\n", "app", app);
+    // console.log    console.log("body", body, "\n", "app", app);
 
     // Build editable map
     const extraFields = app.extra_fields || [];
     const editableExtra = {};
     for (const f of extraFields) editableExtra[f.name] = !!f.editable_by_user;
     const userEditPerm = app.user_edit_permissions || {};
-    console.log("editableExtra", editableExtra, "\n", "userEditPerm", userEditPerm);
+    // console.log    console.log("editableExtra", editableExtra, "\n", "userEditPerm", userEditPerm);
     // Determine allowed updates
     const allowed = {};
     if (body.name !== undefined && userEditPerm.name === true) allowed.name = body.name;

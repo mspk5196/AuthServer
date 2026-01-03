@@ -17,7 +17,7 @@ function passwordDecryptAES(encrypted) {
   const decipher = crypto.createDecipheriv('aes-256-cbc', SECRET_KEY_PASSWORD, IV_PASSWORD);
   let dec = decipher.update(encrypted, 'base64', 'utf8');
   dec += decipher.final('utf8');
-  console.log(encrypted);
+  // console.log  console.log(encrypted);
   return dec;
 }
 

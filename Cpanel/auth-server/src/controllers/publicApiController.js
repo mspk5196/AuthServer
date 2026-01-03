@@ -140,9 +140,9 @@ async function trackApiCall(appId, developerId, req) {
 const verifyAccessToken = async (req, res) => {
   try {
     const app = req.devApp;
-
     // Prefer Authorization header
     const authHeader = req.headers['authorization'];
+    console.log("app in verifyAccessToken:", app, "\n", "authHeader:", authHeader);
     let token = null;
 
     if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -217,6 +217,7 @@ const verifyAccessToken = async (req, res) => {
         message: 'User account is blocked'
       });
     }
+    console.log('Token true');
 
     return res.status(200).json({
       success: true,
@@ -2826,14 +2827,14 @@ const verifyChangePassword = async (req, res) => {
 const patchUserProfile = async (req, res) => {
   try {
     const authHeader = req.headers['authorization'];
-//  console.log("log1 ",authHeader);
+    console.log("log1 ", authHeader);
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ success: false, error: 'Unauthorized', message: 'Access token is required' });
     }
 
     const token = authHeader.substring(7);
-    // console.log(token);
-    
+    console.log(token);
+
     let decoded;
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -2847,7 +2848,7 @@ const patchUserProfile = async (req, res) => {
     }
 
     const userId = decoded.userId;
-    console.log("userId", userId);
+    // console.log("userId", userId);
     // Load user
     const userRes = await pool.query('SELECT id, email, name, username, extra FROM users WHERE id = $1 AND app_id = $2', [userId, req.devApp.id]);
     if (userRes.rows.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
@@ -2856,13 +2857,13 @@ const patchUserProfile = async (req, res) => {
     const body = req.body || {};
     const app = req.devApp;
     console.log("body", body, "\n", "app", app);
-    
+
     // Build editable map
     const extraFields = app.extra_fields || [];
     const editableExtra = {};
     for (const f of extraFields) editableExtra[f.name] = !!f.editable_by_user;
     const userEditPerm = app.user_edit_permissions || {};
-
+    console.log("editableExtra", editableExtra, "\n", "userEditPerm", userEditPerm);
     // Determine allowed updates
     const allowed = {};
     if (body.name !== undefined && userEditPerm.name === true) allowed.name = body.name;

@@ -194,7 +194,7 @@ const verifyAccessToken = async (req, res) => {
 
     // Ensure user exists and is not blocked
     const userRes = await pool.query(
-      'SELECT id, email, name, username, is_blocked FROM users WHERE id = $1 AND app_id = $2',
+      'SELECT * FROM users WHERE id = $1 AND app_id = $2',
       [decoded.userId, app.id]
     );
 

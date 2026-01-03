@@ -1,6 +1,6 @@
 # AuthClient NPM Package Documentation (Backend-Only Usage)
 
-> All usage of `@mspk/auth-client` and all API keys/secrets **must live in your backend only**.
+> All usage of `@mspkapps/auth-client` and all API keys/secrets **must live in your backend only**.
 > Frontend apps (React / React Native) should **never** import this package or see the keys.
 > They only call your backend, and your backend calls the AuthClient.
 
@@ -13,9 +13,9 @@
 In your backend project (e.g. `Backend/`):
 
 ```bash
-npm install @mspk/auth-client
+npm install @mspkapps/auth-client
 # or
-yarn add @mspk/auth-client
+yarn add @mspkapps/auth-client
 ```
 
 Do **not** install this package in your frontend projects.
@@ -36,7 +36,7 @@ AUTH_BASE_URL=https://cpanel.backend.mspkapps.in/api/v1
 Create `src/auth/authClient.js` in your backend:
 
 ```javascript
-import authclient from '@mspk/auth-client';
+import authclient from '@mspkapps/auth-client';
 
 // Initialize once at backend startup
 authclient.init({
@@ -58,7 +58,7 @@ Example `src/routes/authRoutes.js`:
 ```javascript
 import express from 'express';
 import authclient from '../auth/authClient.js';
-import { AuthError } from '@mspk/auth-client';
+import { AuthError } from '@mspkapps/auth-client';
 
 const router = express.Router();
 
@@ -259,7 +259,7 @@ export default app;
 
 ## 2. React (Vite) Frontend – Call Your Backend
 
-Your React app **does not** import `@mspk/auth-client` and knows nothing about API keys.
+Your React app **does not** import `@mspkapps/auth-client` and knows nothing about API keys.
 It only calls your backend routes like `/api/auth/login`, `/api/auth/register`, etc.
 
 ### 2.1 API Service
@@ -496,7 +496,7 @@ The Google ID token is sent to `/api/auth/google` on your backend, which then ca
 
 ## 3. React Native CLI – Call Your Backend
 
-React Native app also **never** imports `@mspk/auth-client`. It talks only to your backend.
+React Native app also **never** imports `@mspkapps/auth-client`. It talks only to your backend.
 
 ### 3.1 API Service (React Native)
 
@@ -655,7 +655,7 @@ function LoginScreen() {
 
 ## 4. Key & Security Guidelines
 
-- `@mspk/auth-client` is **backend-only**.
+- `@mspkapps/auth-client` is **backend-only**.
 - API key, secret, and `googleClientId` live **only in backend env vars**.
 - Frontend talks to backend over HTTPS (`/api/auth/*`, `/api/user/*`).
 - Frontend stores only **user-level access token** (e.g. in `localStorage` / `AsyncStorage`).
@@ -680,7 +680,7 @@ function LoginScreen() {
 
 ## 6. Summary
 
-- Install and initialize `@mspk/auth-client` **only in your backend**.
+- Install and initialize `@mspkapps/auth-client` **only in your backend**.
 - Implement clean REST endpoints in your backend that call `authclient` methods.
 - React and React Native frontends call those endpoints with plain HTTP (fetch/axios).
 - This keeps API keys safe and maintains a clean separation between frontend and backend.

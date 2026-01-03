@@ -2826,13 +2826,13 @@ const verifyChangePassword = async (req, res) => {
 const patchUserProfile = async (req, res) => {
   try {
     const authHeader = req.headers['authorization'];
-
+ console.log("log1 ",authHeader);
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ success: false, error: 'Unauthorized', message: 'Access token is required' });
     }
 
     const token = authHeader.substring(7);
-    console.log(token);
+    console.log(authHeader);
     
     let decoded;
     try {

@@ -639,7 +639,8 @@ const verifyEmail = async (req, res) => {
 const getUserProfile = async (req, res) => {
   try {
     const authHeader = req.headers['authorization'];
-
+    console.log("authHeader(getProfile)", authHeader);
+    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({
         success: false,
@@ -649,7 +650,7 @@ const getUserProfile = async (req, res) => {
     }
 
     const token = authHeader.substring(7);
-
+    console.log("token(getProfile):", token);
     // Verify JWT token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 

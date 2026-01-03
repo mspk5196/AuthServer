@@ -44,8 +44,8 @@ const createApp = async (req, res) => {
     const developerId = req.user.developerId;
     const { app_name, support_email, allow_google_signin = false, allow_email_signin = true, group_id = null } = req.body;
 
-    console.log('Create app request from developer:', developerId);
-    console.log('Form data:', { app_name, support_email, allow_google_signin, allow_email_signin });
+    // console.log('Create app request from developer:', developerId);
+    // console.log('Form data:', { app_name, support_email, allow_google_signin, allow_email_signin });
 
     // Validation
     if (!app_name) {
@@ -74,7 +74,7 @@ const createApp = async (req, res) => {
       LIMIT 1
     `, [developerId]);
 
-    console.log('Plan check result:', planCheck.rows);
+    // console.log('Plan check result:', planCheck.rows);
 
     if (planCheck.rows.length === 0) {
       return res.status(403).json({
@@ -84,7 +84,7 @@ const createApp = async (req, res) => {
     }
 
     const planFeatures = planCheck.rows[0].features || {};
-    console.log('Plan features:', planFeatures);
+    // console.log('Plan features:', planFeatures);
     
     // Extract app limits from features JSONB
     // 0 or null (or missing) means unlimited
@@ -98,7 +98,7 @@ const createApp = async (req, res) => {
     const maxStandaloneApps = parsePlanLimit(planFeatures.max_standalone_apps);
     const maxAppsPerGroup = parsePlanLimit(planFeatures.max_apps_per_group);
 
-    console.log('Max apps (total):', maxApps, 'Max standalone apps:', maxStandaloneApps, 'Max apps per group:', maxAppsPerGroup);
+    // console.log('Max apps (total):', maxApps, 'Max standalone apps:', maxStandaloneApps, 'Max apps per group:', maxAppsPerGroup);
 
     // Count existing apps
     const appCount = await pool.query(
@@ -107,7 +107,7 @@ const createApp = async (req, res) => {
     );
 
     const currentAppCount = parseInt(appCount.rows[0].count, 10);
-    console.log('Current app count:', currentAppCount);
+    // console.log('Current app count:', currentAppCount);
 
     // Check total apps limit (0 or null means unlimited)
     if (maxApps !== null && maxApps !== 0 && currentAppCount >= maxApps) {
@@ -142,7 +142,7 @@ const createApp = async (req, res) => {
           [resolvedGroupId]
         );
         const currentGroupApps = parseInt(groupAppCountRes.rows[0].count, 10);
-        console.log('Current apps in group', resolvedGroupId, ':', currentGroupApps);
+        // console.log('Current apps in group', resolvedGroupId, ':', currentGroupApps);
         if (currentGroupApps >= maxAppsPerGroup) {
           return res.status(403).json({
             success: false,
@@ -158,7 +158,7 @@ const createApp = async (req, res) => {
           [developerId]
         );
         const currentStandaloneCount = parseInt(standaloneCountRes.rows[0].count, 10);
-        console.log('Current standalone app count:', currentStandaloneCount);
+        // console.log        console.log('Current standalone app count:', currentStandaloneCount);
         if (currentStandaloneCount >= maxStandaloneApps) {
           return res.status(403).json({
             success: false,
@@ -174,7 +174,7 @@ const createApp = async (req, res) => {
     // Hash the secret BEFORE storing
     const hashedSecret = crypto.createHash('sha256').update(apiSecret).digest('hex');
 
-    console.log('Creating app with credentials...');
+    // console.log    console.log('Creating app with credentials...');
 
     // Create app with hashed secret and email pending verification
     const result = await pool.query(`
@@ -189,7 +189,7 @@ const createApp = async (req, res) => {
     `, [developerId, app_name, support_email, apiKey, hashedSecret, allow_google_signin, allow_email_signin, resolvedGroupId]);
 
     const app = result.rows[0];
-    console.log('App created successfully:', app.id);
+    // console.log    console.log('App created successfully:', app.id);
 
     // Generate verification token
     const verificationToken = crypto.randomBytes(32).toString('hex');
@@ -500,7 +500,7 @@ const getAppDetails = async (req, res) => {
         ORDER BY date DESC
       `, [appId]);
     } catch (err) {
-      console.log('dev_api_calls table not found, skipping usage stats');
+      // console.log      console.log('dev_api_calls table not found, skipping usage stats');
     }
 
     res.json({
@@ -1245,7 +1245,7 @@ const verifyAppEmail = async (req, res) => {
   try {
     const { token } = req.params;
 
-    console.log('Verifying app email with token:', token);
+    // console.log    console.log('Verifying app email with token:', token);
 
     // Find the verification record
     const tokenResult = await pool.query(

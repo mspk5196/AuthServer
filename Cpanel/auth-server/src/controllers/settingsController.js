@@ -66,7 +66,7 @@ const getPlanInfo = async (req, res) => {
       const apiCallsResult = await pool.query(apiCallsQuery, [developerId]);
       apiCallsUsed = parseInt(apiCallsResult.rows[0]?.api_calls || 0);
     } catch (error) {
-      console.log('API usage tracking error:', error.message);
+      // console.log      console.log('API usage tracking error:', error.message);
     }
 
     // Extract limits from features JSONB (0 means unlimited)
@@ -290,7 +290,7 @@ const getUsageStats = async (req, res) => {
       const apiTodayResult = await pool.query(apiTodayQuery, [developerId]);
       apiCallsToday = parseInt(apiTodayResult.rows[0]?.count || 0);
     } catch (error) {
-      console.log('API usage tracking error:', error.message);
+      // console.log      console.log('API usage tracking error:', error.message);
     }
 
     // Get total users across all apps
@@ -305,7 +305,7 @@ const getUsageStats = async (req, res) => {
       const usersResult = await pool.query(usersQuery, [developerId]);
       totalUsers = parseInt(usersResult.rows[0]?.count || 0);
     } catch (error) {
-      console.log('Users count error:', error.message);
+      // console.log      console.log('Users count error:', error.message);
     }
 
     res.json({

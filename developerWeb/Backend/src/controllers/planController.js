@@ -270,7 +270,7 @@ const selectPlan = async (req, res) => {
         }),
       });
 
-      console.log('Plan change notification sent to:', devRes.rows[0].email);
+      // console.log      console.log('Plan change notification sent to:', devRes.rows[0].email);
     } catch (emailError) {
       console.error('Failed to send plan change notification:', emailError);
       // Don't fail the plan selection, just log the error

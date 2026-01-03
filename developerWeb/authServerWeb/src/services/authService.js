@@ -16,7 +16,7 @@ export const authService = {
       acceptPolicies: !!acceptPolicies,
     };
 
-    console.log('Sending registration data:', registerData);
+    // console.log    console.log('Sending registration data:', registerData);
     const response = await api.post('/developer/register', registerData);
     
     return response;

@@ -635,9 +635,6 @@ const verifyEmail = async (req, res) => {
   }
 };
 
-/**
- * Get user profile (requires authentication)
- */
 const getUserProfile = async (req, res) => {
   try {
     const authHeader = req.headers['authorization'];

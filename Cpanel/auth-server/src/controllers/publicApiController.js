@@ -2832,6 +2832,8 @@ const patchUserProfile = async (req, res) => {
     }
 
     const token = authHeader.substring(7);
+    console.log(token);
+    
     let decoded;
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET);

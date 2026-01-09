@@ -183,7 +183,7 @@ const Dashboard = () => {
               <Link to="/contact">Contact</Link>
             </div>
             <p className="footer-copyright">
-              &copy; {new Date().getFullYear()} MSPK Apps. All rights reserved.
+              &copy; {new Date().getFullYear()} MSPK™ Apps. All rights reserved.
             </p>
           </footer>
         </div>

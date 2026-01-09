@@ -44,7 +44,7 @@ const Terms = () => {
         ) : (
           <>
             <p>
-              These terms describe how you may use the MSPK Auth Platform and related services.
+              These terms describe how you may use the MSPK™ Auth Platform and related services.
               By creating a developer account or using the APIs, you agree to these terms.
             </p>
             <h2>Use of Service</h2>

@@ -1,0 +1,12 @@
+services:
+  cpanel-backend:
+    ports: ["5002:5000"]
+
+  cpanel-frontend:
+    ports: ["4002:4000"]
+
+  developer-backend:
+    ports: ["5001:5000"]
+
+  developer-frontend:
+    ports: ["4001:4000"]

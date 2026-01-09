@@ -18,11 +18,26 @@ const {
   exportUsersCSV,
   requestAppDeletion,
   confirmAppDeletion,
+  listAllUsersAcrossApps,
+  mergeUsersAcrossApps,
+  setCombineUsersFlag,
+  getAppGroups,
+  createAppGroup,
+  deleteAppGroup,
+  getGroupUsers,
+  getGroupUserLogins
 } = require('../controllers/appsController'); // Fixed: was appController
 const { authenticateToken } = require('../middleware/auth');
 
 // Dashboard route
 router.get('/dashboard', authenticateToken, getDashboard);
+
+// App groups routes
+router.get('/groups', authenticateToken, getAppGroups);
+router.post('/groups', authenticateToken, createAppGroup);
+router.delete('/groups/:groupId', authenticateToken, deleteAppGroup);
+router.get('/groups/:groupId/users', authenticateToken, getGroupUsers);
+router.get('/groups/:groupId/users/:userId/logins', authenticateToken, getGroupUserLogins);
 
 // App management routes
 router.post('/createApp', authenticateToken, createApp);

@@ -13,6 +13,12 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
   const [selectedPlanId, setSelectedPlanId] = useState(null);
   const [error, setError] = useState('');
 
+  const isUnlimitedAdmin = (p) => {
+    if (!p) return false;
+    const n = (p.name || p.plan_name || p.key || p.slug || '').toString().toLowerCase();
+    return n === 'unlimited_admin' || n === 'unlimited admin';
+  };
+
   useEffect(() => {
     fetchPlans();
   }, []);
@@ -24,22 +30,20 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
       
       const response = await api.get('/developer/plans');
       const fetched = response.data.plans || [];
-      setPlans(fetched);
+      const filtered = fetched.filter((p) => !isUnlimitedAdmin(p));
+      setPlans(filtered);
       // initialize displayedPlans based on whether a currentPlanId was provided
       if (currentPlanId) {
-        const current = fetched.find((p) => p.id === currentPlanId);
+        const current = filtered.find((p) => p.id === currentPlanId);
         if (current) {
           const currentPrice = Number(current.price || 0);
-          const higher = fetched.filter((p) => {
-            const pPrice = Number(p.price || 0);
-            return pPrice > currentPrice;
-          });
+          const higher = filtered.filter((p) => Number(p.price || 0) > currentPrice);
           setDisplayedPlans(higher);
         } else {
-          setDisplayedPlans(fetched);
+          setDisplayedPlans(filtered);
         }
       } else {
-        setDisplayedPlans(fetched);
+        setDisplayedPlans(filtered);
       }
     } catch (err) {
       console.error('Failed to fetch plans:', err);

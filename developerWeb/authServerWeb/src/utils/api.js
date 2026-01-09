@@ -18,7 +18,7 @@ class ApiError extends Error {
   }
 }
 
-const handleResponse = async (response) => {
+const handleResponse = async (response, options = {}) => {
   const contentType = response.headers.get('content-type');
   const isJson = contentType && contentType.includes('application/json');
   const data = isJson ? await response.json() : await response.text();
@@ -27,9 +27,10 @@ const handleResponse = async (response) => {
     // Handle unauthorized - clear tokens
     // But don't clear tokens for email not verified or account blocked errors
     if (response.status === 401 && data.error !== 'EMAIL_NOT_VERIFIED') {
-      // If backend returns 401, redirect to login. Token clearing is handled
-      // server-side via cookie revocation when appropriate.
-      if (window.location.pathname !== '/login') {
+      // Redirect behavior is optional; callers can opt-out by passing
+      // `redirectOn401: false` in options. Default is true for legacy behavior.
+      const shouldRedirect = options.redirectOn401 !== false;
+      if (shouldRedirect && window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
     }
@@ -66,7 +67,7 @@ export const api = {
       headers: getHeaders(options.headers),
       ...options,
     });
-    return handleResponse(response);
+    return handleResponse(response, options);
   },
 
   post: async (endpoint, body, options = {}) => {
@@ -82,7 +83,7 @@ export const api = {
       body: JSON.stringify(body),
       ...options,
     });
-    return handleResponse(response);
+    return handleResponse(response, options);
   },
 
   put: async (endpoint, body, options = {}) => {
@@ -93,7 +94,7 @@ export const api = {
       body: JSON.stringify(body),
       ...options,
     });
-    return handleResponse(response);
+    return handleResponse(response, options);
   },
 
   patch: async (endpoint, body, options = {}) => {
@@ -104,7 +105,7 @@ export const api = {
       body: JSON.stringify(body),
       ...options,
     });
-    return handleResponse(response);
+    return handleResponse(response, options);
   },
 
   delete: async (endpoint, options = {}) => {
@@ -114,7 +115,7 @@ export const api = {
       headers: getHeaders(options.headers),
       ...options,
     });
-    return handleResponse(response);
+    return handleResponse(response, options);
   },
 };
 

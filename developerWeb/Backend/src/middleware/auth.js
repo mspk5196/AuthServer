@@ -46,7 +46,8 @@ const authenticateToken = (req, res, next) => {
     // If no Authorization header, try access token cookie
     if (!token && req.headers.cookie) {
       const cookies = Object.fromEntries(req.headers.cookie.split(';').map(c => c.trim().split('=').map(decodeURIComponent)));
-      token = cookies['access_token'] || cookies['access-token'] || cookies['accessToken'];
+      token = cookies['access_token'] || cookies['access-token'] || cookies['accessToken']
+        || cookies['cpanel_access_token'] || cookies['cpanel-access_token'] || cookies['cpanel_access-token'];
     }
 
     if (!token) {

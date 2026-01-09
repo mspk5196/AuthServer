@@ -1,60 +1,46 @@
-version: "3.8"
-
 services:
   cpanel-backend:
-    build:
-      context: ./Cpanel/auth-server
     container_name: cpanel-backend
-    ports:
-      - "5002:5000"
+    build:
+      context: ../Cpanel/auth-server
+    image: mspk/cpanel-backend:${IMAGE_TAG}
     env_file:
       - /opt/envs/cpanel-backend.env
-    networks:
-      - webnet
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    networks: [webnet]
 
   cpanel-frontend:
+    container_name: cpanel-frontend
     build:
-      context: ./Cpanel/CpanelWeb
+      context: ../Cpanel/CpanelWeb
       args:
         VITE_CPANEL_API_BASE_URL: ${VITE_CPANEL_API_BASE_URL}
         VITE_MAIN_PORTAL_URL: ${VITE_MAIN_PORTAL_URL}
-    container_name: cpanel-frontend
-    ports:
-      - "4002:4000"
+    image: mspk/cpanel-frontend:${IMAGE_TAG}
     env_file:
       - /opt/envs/cpanel-frontend.env
-    networks:
-      - webnet
+    networks: [webnet]
 
   developer-backend:
-    build:
-      context: ./developerWeb/Backend
     container_name: developer-backend
-    ports:
-      - "5001:5000"
+    build:
+      context: ../developerWeb/Backend
+    image: mspk/dev-backend:${IMAGE_TAG}
     env_file:
       - /opt/envs/dev-backend.env
-    networks:
-      - webnet
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    networks: [webnet]
 
   developer-frontend:
+    container_name: developer-frontend
     build:
-      context: ./developerWeb/authServerWeb
+      context: ../developerWeb/authServerWeb
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL}
         VITE_API_URL: ${VITE_API_URL}
         VITE_SUPPORT_EMAIL: ${VITE_SUPPORT_EMAIL}
-    container_name: developer-frontend
-    ports:
-      - "4001:4000"
+    image: mspk/dev-frontend:${IMAGE_TAG}
     env_file:
       - /opt/envs/dev-frontend.env
-    networks:
-      - webnet
+    networks: [webnet]
 
 networks:
   webnet:

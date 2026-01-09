@@ -15,6 +15,7 @@ const {
   buildGoogleUserWelcomeEmail,
   buildSetPasswordGoogleUserEmail,
   buildPasswordSetConfirmationEmail,
+  buildProfileUpdateVerificationEmail,
 } = require('../templates/emailTemplates');
 const { log, error } = require('console');
 
@@ -124,11 +125,135 @@ async function trackApiCall(appId, developerId, req) {
 }
 
 /**
+ * Verify access token validity
+ *
+ * POST /api/v1/:apiKey/auth/verify-token
+ * Headers:
+ *   X-API-Key, X-API-Secret (handled by verifyAppCredentials)
+ *   Authorization: Bearer <access_token> (preferred)
+ * Body (optional): { "access_token": "..." }
+ *
+ * Response (200):
+ *   { success: true, valid: true,  user: { ... }, token: { exp, iat } }
+ *   { success: true, valid: false, reason: 'expired'|'invalid'|'user_not_found'|'account_blocked'|'app_mismatch' }
+ */
+const verifyAccessToken = async (req, res) => {
+  try {
+    const app = req.devApp;
+    // Prefer Authorization header
+    const authHeader = req.headers['authorization'];
+    // console.log    console.log("app in verifyAccessToken:", app, "\n", "authHeader:", authHeader);
+    let token = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    } else if (req.body && req.body.access_token) {
+      token = req.body.access_token;
+    }
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        valid: false,
+        error: 'Token required',
+        message: 'Access token is required (Authorization header or access_token in body)'
+      });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (err) {
+      if (['TokenExpiredError', 'JsonWebTokenError', 'NotBeforeError'].includes(err.name)) {
+        return res.status(200).json({
+          success: true,
+          valid: false,
+          reason: err.name === 'TokenExpiredError' ? 'expired' : 'invalid',
+          message: 'Access token is invalid or expired'
+        });
+      }
+
+      console.error('Access token verification error:', err);
+      return res.status(500).json({
+        success: false,
+        valid: false,
+        error: 'Verification failed',
+        message: 'Failed to verify access token'
+      });
+    }
+
+    // Ensure token belongs to this app
+    if (!decoded.appId || decoded.appId !== app.id) {
+      return res.status(200).json({
+        success: true,
+        valid: false,
+        reason: 'app_mismatch',
+        message: 'Token does not belong to this app'
+      });
+    }
+
+    // Ensure user exists and is not blocked
+    const userRes = await pool.query(
+      'SELECT * FROM users WHERE id = $1 AND app_id = $2',
+      [decoded.userId, app.id]
+    );
+
+    if (userRes.rows.length === 0) {
+      return res.status(200).json({
+        success: true,
+        valid: false,
+        reason: 'user_not_found',
+        message: 'User not found for this token'
+      });
+    }
+
+    const user = userRes.rows[0];
+
+    if (user.is_blocked) {
+      return res.status(200).json({
+        success: true,
+        valid: false,
+        reason: 'account_blocked',
+        message: 'User account is blocked'
+      });
+    }
+    // console.log    console.log('Token true');
+
+    return res.status(200).json({
+      success: true,
+      valid: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        username: user.username
+      },
+      token: {
+        app_id: decoded.appId,
+        user_id: decoded.userId,
+        email: decoded.email,
+        iat: decoded.iat,
+        exp: decoded.exp
+      }
+    });
+  } catch (error) {
+    console.error('Verify access token error:', error);
+    res.status(500).json({
+      success: false,
+      valid: false,
+      error: 'Verification failed',
+      message: 'Failed to verify access token'
+    });
+  }
+};
+
+
+/**
  * Register a new user
  */
 const registerUser = async (req, res) => {
   try {
-    const { email, password, name, username } = req.body;
+    const { email, password, name, username, extra } = req.body;
     const app = req.devApp;
 
     // Validation
@@ -175,17 +300,39 @@ const registerUser = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Create user
+    // Prepare allowed extra fields (filter against app.extra_fields metadata)
+    const extraMeta = app.extra_fields || [];
+    let allowedExtra = {};
+    const coreKeys = new Set(['email', 'password', 'name', 'username', 'extra']);
+    // Accept both `extra: { ... }` and top-level keys matching defined extra fields
+    if (extra && typeof extra === 'object') {
+      for (const k of Object.keys(extra)) {
+        if (coreKeys.has(k)) continue; // never store core fields in extra
+        if (extraMeta.find(f => f.name === k)) {
+          allowedExtra[k] = extra[k];
+        }
+      }
+    }
+    for (const k of Object.keys(req.body || {})) {
+      if (coreKeys.has(k)) continue;
+      // skip if already captured from `extra` object
+      if (Object.prototype.hasOwnProperty.call(allowedExtra, k)) continue;
+      if (extraMeta.find(f => f.name === k)) {
+        allowedExtra[k] = req.body[k];
+      }
+    }
+
+    // Create user (store extra JSONB)
     const result = await pool.query(`
       INSERT INTO users (
-        app_id, email, password_hash, name, username,
+        app_id, email, password_hash, name, username, extra,
         email_verified, google_linked, is_blocked,
         created_at, updated_at
       ) VALUES (
-        $1, $2, $3, $4, $5, false, false, false, NOW(), NOW()
+        $1, $2, $3, $4, $5, $6::jsonb, false, false, false, NOW(), NOW()
       )
-      RETURNING id, email, name, username, email_verified, created_at
-    `, [app.id, email.toLowerCase(), hashedPassword, name, username]);
+      RETURNING id, email, name, username, email_verified, created_at, extra
+    `, [app.id, email.toLowerCase(), hashedPassword, name, username.toLowerCase(), JSON.stringify(allowedExtra)]);
 
     const user = result.rows[0];
 
@@ -206,14 +353,17 @@ const registerUser = async (req, res) => {
     sendMail({
       to: email,
       subject: 'Verify Your Email',
-      html: buildWelcomeVerificationEmail({ appName: app.app_name, verificationUrl }),
+      html: buildWelcomeVerificationEmail({ appName: app.app_name, verificationUrl, supportEmail: app.support_email }),
     }).catch(err => console.error('Send verification email error:', err));
 
-    // Generate access token
+    // Determine access token TTL (per-app override, then env fallback, then default 7 days)
+    const ttl = app.access_token_expires_seconds ? parseInt(app.access_token_expires_seconds, 10) : (process.env.ACCESS_TOKEN_EXPIRES_SECONDS ? parseInt(process.env.ACCESS_TOKEN_EXPIRES_SECONDS, 10) : 604800);
+
+    // Generate access token (token may be returned as null until email verification completes)
     const accessToken = jwt.sign(
       { userId: user.id, appId: app.id, email: user.email },
       process.env.JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: ttl }
     );
 
     res.status(201).json({
@@ -226,11 +376,12 @@ const registerUser = async (req, res) => {
           name: user.name,
           username: user.username,
           email_verified: user.email_verified,
-          created_at: user.created_at
+          created_at: user.created_at,
+          extra: user.extra || {}
         },
-        access_token: accessToken,
+        access_token: null,
         token_type: 'Bearer',
-        expires_in: 604800 // 7 days in seconds
+        expires_in: ttl
       }
     });
 
@@ -273,19 +424,69 @@ const loginUser = async (req, res) => {
 
     // Find user
     const result = await pool.query(
-      'SELECT * FROM users WHERE app_id = $1 AND email = $2',
+      'SELECT * FROM users WHERE app_id = $1 AND (email = $2 OR username = $2)',
       [app.id, email.toLowerCase()]
     );
 
+    let user;
     if (result.rows.length === 0) {
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid credentials',
-        message: 'Email or password is incorrect'
-      });
-    }
+      // If app is part of a group, attempt group-wide fallback: find a user
+      // in any app within the same group and verify the password there.
+      if (app.group_id) {
+        const identifier = email.toLowerCase();
+        const groupUserRes = await pool.query(`
+          SELECT u.*, a.id as app_id, a.app_name
+          FROM users u
+          JOIN dev_apps a ON u.app_id = a.id
+          WHERE a.group_id = $1 AND (u.email = $2 OR u.username = $2)
+          LIMIT 1
+        `, [app.group_id, identifier]);
 
-    const user = result.rows[0];
+        if (groupUserRes.rows.length > 0) {
+          const groupUser = groupUserRes.rows[0];
+
+          // If the found user uses Google-only auth, we cannot verify password
+          if (groupUser.password_hash === null && groupUser.google_linked === true) {
+            return res.status(401).json({ success: false, error: 'Invalid credentials', message: 'Email or password is incorrect' });
+          }
+
+          const isPasswordValidGroup = await bcrypt.compare(password, groupUser.password_hash || '');
+          if (!isPasswordValidGroup) {
+            return res.status(401).json({ success: false, error: 'Invalid credentials', message: 'Email or password is incorrect' });
+          }
+
+          // Create a local user record in the current app (per-app credentials allowed)
+          const bcryptSalt = await bcrypt.genSalt(10);
+          const localHash = await bcrypt.hash(password, bcryptSalt);
+
+          const insertRes = await pool.query(`
+            INSERT INTO users (app_id, email, password_hash, name, username, email_verified, google_linked, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, NULL, $5, $6, NOW(), NOW())
+            RETURNING id, email, name, username, email_verified, google_linked, last_login, app_id
+          `, [app.id, groupUser.email, localHash, groupUser.name, groupUser.email_verified, groupUser.google_linked]);
+
+          user = insertRes.rows[0];
+
+          // Record group_user_logins entry
+          try {
+            await pool.query(`
+              INSERT INTO group_user_logins (group_id, user_id, app_id, last_login, created_at, updated_at)
+              VALUES ($1, $2, $3, NOW(), NOW(), NOW())
+              ON CONFLICT (group_id, user_id, app_id) DO UPDATE SET last_login = NOW(), updated_at = NOW()
+            `, [app.group_id, user.id, app.id]);
+          } catch (err) {
+            console.error('Failed to record group_user_logins:', err.message || err);
+          }
+
+        } else {
+          return res.status(401).json({ success: false, error: 'Invalid credentials', message: 'Email or password is incorrect' });
+        }
+      } else {
+        return res.status(401).json({ success: false, error: 'Invalid credentials', message: 'Email or password is incorrect' });
+      }
+    } else {
+      user = result.rows[0];
+    }
 
     // Check if user is blocked
     if (user.is_blocked) {
@@ -338,11 +539,14 @@ const loginUser = async (req, res) => {
       )
     `, [user.id, app.id, req.ip, req.headers['user-agent']]);
 
+    // Determine access token TTL (per-app override, then env fallback, then default 7 days)
+    const ttl = app.access_token_expires_seconds ? parseInt(app.access_token_expires_seconds, 10) : (process.env.ACCESS_TOKEN_EXPIRES_SECONDS ? parseInt(process.env.ACCESS_TOKEN_EXPIRES_SECONDS, 10) : 604800);
+
     // Generate access token
     const accessToken = jwt.sign(
       { userId: user.id, appId: app.id, email: user.email },
       process.env.JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: ttl }
     );
 
     res.json({
@@ -357,11 +561,12 @@ const loginUser = async (req, res) => {
           email_verified: user.email_verified,
           google_linked: user.google_linked,
           last_login: user.last_login,
-          login_method: 'email'
+          login_method: 'email',
+          extra: user.extra || {}
         },
         access_token: accessToken,
         token_type: 'Bearer',
-        expires_in: 604800
+        expires_in: ttl
       }
     });
 
@@ -431,13 +636,11 @@ const verifyEmail = async (req, res) => {
   }
 };
 
-/**
- * Get user profile (requires authentication)
- */
 const getUserProfile = async (req, res) => {
   try {
     const authHeader = req.headers['authorization'];
-
+    // console.log    console.log("authHeader(getProfile)", authHeader);
+    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({
         success: false,
@@ -447,13 +650,13 @@ const getUserProfile = async (req, res) => {
     }
 
     const token = authHeader.substring(7);
-
+    // console.log    console.log("token(getProfile):", token);
     // Verify JWT token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     // Get user info
     const result = await pool.query(
-      'SELECT id, email, name, username, email_verified, google_linked, is_blocked, last_login, created_at FROM users WHERE id = $1 AND app_id = $2',
+      'SELECT id, email, name, username, email_verified, google_linked, is_blocked, last_login, created_at, extra FROM users WHERE id = $1 AND app_id = $2',
       [decoded.userId, req.devApp.id]
     );
 
@@ -465,9 +668,23 @@ const getUserProfile = async (req, res) => {
       });
     }
 
+    // Build editable permissions map
+    const app = req.devApp || {};
+    const extraFields = app.extra_fields || [];
+    const editable = {
+      name: (app.user_edit_permissions && app.user_edit_permissions.name) === true,
+      username: (app.user_edit_permissions && app.user_edit_permissions.username) === true,
+      email: (app.user_edit_permissions && app.user_edit_permissions.email) === true,
+      extra: {}
+    };
+    for (const f of extraFields) {
+      editable.extra[f.name] = !!f.editable_by_user;
+    }
+
     res.json({
       success: true,
-      data: result.rows[0]
+      data: result.rows[0],
+      editable
     });
 
   } catch (error) {
@@ -537,7 +754,7 @@ const requestPasswordReset = async (req, res) => {
     sendMail({
       to: email,
       subject: 'Reset Your Password',
-      html: buildPasswordResetEmail({ name: user.name, resetUrl }),
+      html: buildPasswordResetEmail({ name: user.name, resetUrl, supportEmail: app.support_email }),
     }).catch(err => console.error('Send reset email error:', err));
 
     res.json({
@@ -599,8 +816,8 @@ const requestChangePasswordLink = async (req, res) => {
     // Decide email type based on whether user has a password set
     const verificationToken = crypto.randomBytes(32).toString('hex');
 
-      // Send Change Password link for accounts with existing password
-      await pool.query(`
+    // Send Change Password link for accounts with existing password
+    await pool.query(`
         INSERT INTO user_email_verifications (
           user_id, app_id, token, expires_at, created_at, verify_type
         ) VALUES (
@@ -608,14 +825,14 @@ const requestChangePasswordLink = async (req, res) => {
         )
       `, [user.id, app.id, verificationToken]);
 
-      const verificationUrl = `${process.env.BACKEND_URL}/api/v1/auth/verify-change-password?token=${verificationToken}`;
+    const verificationUrl = `${process.env.BACKEND_URL}/api/v1/auth/verify-change-password?token=${verificationToken}`;
 
-      sendMail({
-        to: user.email,
-        subject: 'Change your password',
-        html: buildChangePasswordLinkEmail({ appName: app.app_name, name: user.name, verificationUrl }),
-      }).catch(err => console.error('Send change password link email error:', err));
-    
+    sendMail({
+      to: user.email,
+      subject: 'Change your password',
+      html: buildChangePasswordLinkEmail({ appName: app.app_name, name: user.name, verificationUrl, supportEmail: app.support_email }),
+    }).catch(err => console.error('Send change password link email error:', err));
+
 
     res.json({
       success: true,
@@ -657,7 +874,7 @@ const changePassword = async (req, res) => {
       });
     }
 
- 
+
 
     const token = authHeader.substring(7);
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -710,7 +927,7 @@ const changePassword = async (req, res) => {
     sendMail({
       to: user.email,
       subject: 'Account password changed successfully',
-      html: buildPasswordChangedEmail({ appName: app.app_name, changedAt: new Date().toLocaleString() }),
+      html: buildPasswordChangedEmail({ appName: app.app_name, changedAt: new Date().toLocaleString(), supportEmail: app.support_email }),
     }).catch(err => console.error('Send verification email error:', err));
 
     res.json({
@@ -752,8 +969,17 @@ const resendVerification = async (req, res) => {
       });
     }
 
-    const validPurposes = ['New Account', 'Password change', 'Profile Edit'];
-    const verifyPurpose = purpose && validPurposes.includes(purpose) ? purpose : 'New Account';
+    const validPurposes = [
+      'New Account',
+      'Password change',
+      'Profile Edit',
+      'Forget Password',
+      'Delete Account',
+      'Set Password - Google User',
+    ];
+
+    const verifyPurpose =
+      purpose && validPurposes.includes(purpose) ? purpose : 'New Account';
 
     // Find user
     const result = await pool.query(
@@ -801,7 +1027,7 @@ const resendVerification = async (req, res) => {
     sendMail({
       to: email,
       subject: 'Verify Your Email',
-      html: buildEmailVerificationEmail({ name: user.name, verificationUrl, verifyPurpose }),
+      html: buildEmailVerificationEmail({ name: user.name, verificationUrl, verifyPurpose, supportEmail: app.support_email }),
     }).catch(err => console.error('Send verification email error:', err));
 
     res.json({
@@ -1199,7 +1425,7 @@ const completePasswordReset = async (req, res) => {
     sendMail({
       to: resetRecord.email,
       subject: 'Account password changed successfully',
-      html: buildPasswordChangedEmail({ appName: app.app_name, changedAt: new Date().toLocaleString() }),
+      html: buildPasswordChangedEmail({ appName: app.app_name, changedAt: new Date().toLocaleString(), supportEmail: app.support_email }),
     }).catch(err => console.error('Send verification email error:', err));
 
     res.json({
@@ -1267,7 +1493,7 @@ const deleteAccount = async (req, res) => {
     sendMail({
       to: email,
       subject: 'Delete Your Account',
-      html: buildDeleteAccountEmail({ appName: app.app_name, verificationUrl }),
+      html: buildDeleteAccountEmail({ appName: app.app_name, verificationUrl, supportEmail: app.support_email }),
     }).catch(err => console.error('Send verification email error:', err));
 
     // Soft delete: mark as deleted (recommended for data retention/compliance)
@@ -1762,7 +1988,7 @@ const verifyDeleteEmail = async (req, res) => {
     sendMail({
       to: user.email,
       subject: 'Account deleted successfully',
-      html: buildAccountDeletedEmail({ appName: app.app_name, deletedAt: new Date().toLocaleString() }),
+      html: buildAccountDeletedEmail({ appName: app.app_name, deletedAt: new Date().toLocaleString(), supportEmail: app.support_email }),
     }).catch(err => console.error('Send deletion confirmation email error:', err));
 
     res.json({
@@ -1789,7 +2015,7 @@ const googleAuth = async (req, res) => {
     const app = req.devApp;
 
     // Validation
-    if (!id_token && !access_token) {
+    if (!id_token) {
       return res.status(400).json({
         success: false,
         error: 'Validation error',
@@ -1809,7 +2035,7 @@ const googleAuth = async (req, res) => {
     // Validate token with Google
     let googleUser;
     try {
-      const tokenToVerify = id_token || access_token;
+      const tokenToVerify = id_token;
       const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${tokenToVerify}`);
 
       if (!response.ok) {
@@ -1889,10 +2115,30 @@ const googleAuth = async (req, res) => {
         user = insertResult.rows[0];
         isNewUser = true;
 
+        // Invalidate old tokens
+        await pool.query(
+          'UPDATE user_email_verifications SET used = true WHERE user_id = $1 AND used = false',
+          [user.id]
+        );
+
+        // Generate new token
+        const verificationToken = crypto.randomBytes(32).toString('hex');
+
+        await pool.query(`
+      INSERT INTO user_email_verifications (
+        user_id, app_id, token, expires_at, verify_type, created_at
+      ) VALUES (
+        $1, $2, $3, NOW() + INTERVAL '1 day', $4, NOW()
+      )
+    `, [user.id, app.id, verificationToken, 'Set Password - Google User']);
+
+        // Send verification email
+        const verificationUrl = `${process.env.BACKEND_URL}/api/v1/auth/verify-email-set-password-google-user?token=${verificationToken}`;
+
         sendMail({
           to: googleUser.email?.toLowerCase(),
           subject: 'Welcome to ' + app.app_name,
-          html: buildGoogleUserWelcomeEmail({ appName: app.app_name, name: googleUser.name }),
+          html: buildGoogleUserWelcomeEmail({ appName: app.app_name, email: googleUser.email?.toLowerCase(), verificationUrl, name: googleUser.name, supportEmail: app.support_email }),
         }).catch(err => console.error('Send welcome email error:', err));
 
       }
@@ -1924,11 +2170,14 @@ const googleAuth = async (req, res) => {
       )
     `, [user.id, app.id, req.ip, req.headers['user-agent']]);
 
+    // Determine access token TTL (per-app override, then env fallback, then default 7 days)
+    const ttl = app.access_token_expires_seconds ? parseInt(app.access_token_expires_seconds, 10) : (process.env.ACCESS_TOKEN_EXPIRES_SECONDS ? parseInt(process.env.ACCESS_TOKEN_EXPIRES_SECONDS, 10) : 604800);
+
     // Generate access token
     const accessToken = jwt.sign(
       { userId: user.id, appId: app.id, email: user.email },
       process.env.JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: ttl }
     );
 
     res.json({
@@ -1943,11 +2192,12 @@ const googleAuth = async (req, res) => {
           google_linked: user.google_linked,
           email_verified: user.email_verified,
           last_login: user.last_login,
-          login_method: 'google'
+          login_method: 'google',
+          extra: user.extra || {}
         },
         access_token: accessToken,
         token_type: 'Bearer',
-        expires_in: 604800,
+        expires_in: ttl,
         is_new_user: isNewUser
       }
     });
@@ -1997,7 +2247,7 @@ const setPasswordGoogleUser = async (req, res) => {
         error: 'Already password set, try resetting password',
         message: 'Password is already set for this account. Please use the password reset option if you forgot your password.'
       });
-    } 
+    }
 
     if (!user.google_linked) {
       return res.status(400).json({
@@ -2029,8 +2279,8 @@ const setPasswordGoogleUser = async (req, res) => {
     sendMail({
       to: email,
       subject: 'Link to set your password',
-      html: buildSetPasswordGoogleUserEmail({ appName: app.app_name, name: user.name, verificationUrl }),
-    }).catch(err => console.error('Send verification email error:', err));
+      html: buildSetPasswordGoogleUserEmail({ appName: app.app_name, name: user.name, verificationUrl, supportEmail: app.support_email }),
+    }).catch(err => console.error('Send set password email error:', err));
 
     res.json({
       success: true,
@@ -2049,6 +2299,7 @@ const setPasswordGoogleUser = async (req, res) => {
 const verifyEmailSetPasswordGoogleUser = async (req, res) => {
   try {
     const { token } = req.query;
+    // const app = req.devApp;
     if (!token) {
       return res.status(400).send(`
         <!DOCTYPE html>
@@ -2149,7 +2400,7 @@ const verifyEmailSetPasswordGoogleUser = async (req, res) => {
       sendMail({
         to: user.email,
         subject: 'Password linked to your account',
-        html: buildPasswordSetConfirmationEmail({ setAt: new Date().toLocaleString() }),
+        html: buildPasswordSetConfirmationEmail({ changedAt: new Date().toLocaleString(), supportEmail: 'Contact your app support.' }),
       }).catch(err => console.error('Send password setup confirmation email error:', err));
 
       return res.json({
@@ -2469,7 +2720,7 @@ const verifyChangePassword = async (req, res) => {
       sendMail({
         to: user.email,
         subject: 'Password changed successfully',
-        html: buildPasswordChangedEmail({ appName: app.app_name, changedAt: new Date().toLocaleString() }),
+        html: buildPasswordChangedEmail({ appName: app.app_name, changedAt: new Date().toLocaleString(), supportEmail: app.support_email }),
       }).catch(err => console.error('Send change password confirmation email error:', err));
 
       return res.json({ success: true, message: 'Password changed successfully.' });
@@ -2571,6 +2822,151 @@ const verifyChangePassword = async (req, res) => {
   }
 };
 
+/**
+ * Patch user profile (may require verification)
+ * PATCH /:apiKey/user/profile
+ */
+const patchUserProfile = async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    // console.log    console.log("log1 ", authHeader);
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ success: false, error: 'Unauthorized', message: 'Access token is required' });
+    }
+
+    const token = authHeader.substring(7);
+    // console.log    console.log(token);
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (err) {
+      return res.status(401).json({ success: false, error: 'Invalid token', message: 'Access token invalid or expired' });
+    }
+
+    // Ensure app matches
+    if (!req.devApp || req.devApp.id !== decoded.appId) {
+      return res.status(403).json({ success: false, error: 'App mismatch', message: 'Token does not belong to this app' });
+    }
+
+    const userId = decoded.userId;
+    // console.log("userId", userId);
+    // Load user
+    const userRes = await pool.query('SELECT id, email, name, username, extra FROM users WHERE id = $1 AND app_id = $2', [userId, req.devApp.id]);
+    if (userRes.rows.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
+    const user = userRes.rows[0];
+
+    const body = req.body || {};
+    const app = req.devApp;
+    // console.log    console.log("body", body, "\n", "app", app);
+
+    // Build editable map
+    const extraFields = app.extra_fields || [];
+    const editableExtra = {};
+    for (const f of extraFields) editableExtra[f.name] = !!f.editable_by_user;
+    const userEditPerm = app.user_edit_permissions || {};
+    // console.log    console.log("editableExtra", editableExtra, "\n", "userEditPerm", userEditPerm);
+    // Determine allowed updates
+    const allowed = {};
+    if (body.name !== undefined && userEditPerm.name === true) allowed.name = body.name;
+    if (body.username !== undefined && userEditPerm.username === true) allowed.username = body.username;
+    if (body.email !== undefined && userEditPerm.email === true) allowed.email = body.email;
+    if (body.extra !== undefined && typeof body.extra === 'object') {
+      const filtered = {};
+      for (const k of Object.keys(body.extra)) {
+        if (editableExtra[k]) filtered[k] = body.extra[k];
+      }
+      if (Object.keys(filtered).length > 0) allowed.extra = filtered;
+    }
+
+    if (Object.keys(allowed).length === 0) {
+      return res.status(400).json({ success: false, message: 'No editable fields provided or not permitted' });
+    }
+
+    // If email changed, create pending update and send verification to new email
+    if (allowed.email && allowed.email.toLowerCase() !== user.email.toLowerCase()) {
+      const verificationToken = crypto.randomBytes(32).toString('hex');
+      const payload = allowed;
+      await pool.query(`
+        INSERT INTO pending_user_updates (user_id, app_id, payload, email_target, token, expires_at, created_at)
+        VALUES ($1,$2,$3,$4,$5,NOW() + INTERVAL '24 hours', NOW())
+      `, [userId, app.id, JSON.stringify(payload), allowed.email.toLowerCase(), verificationToken]);
+
+      const verificationUrl = `${process.env.BACKEND_URL}/api/v1/user/confirm-update?token=${verificationToken}`;
+      const changesSummary = Object.keys(allowed).join(', ');
+      sendMail({ to: allowed.email, subject: 'Confirm profile changes', html: buildProfileUpdateVerificationEmail({ name: user.name, verificationUrl, changesSummary, supportEmail: app.support_email }) }).catch(err => console.error('Send profile update verification email error:', err));
+
+      return res.status(202).json({ success: true, verification_required: true, message: 'Verification sent to new email address' });
+    }
+
+    // For non-email updates: apply immediately
+    const updates = [];
+    const params = [];
+    let idx = 1;
+    if (allowed.name !== undefined) { updates.push(`name = $${idx++}`); params.push(allowed.name); }
+    if (allowed.username !== undefined) { updates.push(`username = $${idx++}`); params.push(allowed.username); }
+    if (allowed.extra !== undefined) {
+      // merge into jsonb
+      updates.push(`extra = COALESCE(extra, '{}'::jsonb) || $${idx++}::jsonb`);
+      params.push(JSON.stringify(allowed.extra));
+    }
+    if (updates.length > 0) {
+      params.push(userId);
+      await pool.query(`UPDATE users SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${idx}`, params);
+    }
+
+    res.json({ success: true, message: 'Profile updated' });
+
+  } catch (error) {
+    console.error('Patch user profile error:', error);
+    res.status(500).json({ success: false, message: 'Failed to update profile' });
+  }
+};
+
+/**
+ * Confirm pending user update via token
+ * GET /user/confirm-update?token=...
+ */
+const confirmUserUpdate = async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) return res.status(400).json({ success: false, message: 'Token is required' });
+
+    const q = await pool.query('SELECT * FROM pending_user_updates WHERE token = $1 AND used = false AND expires_at > NOW()', [token]);
+    if (q.rows.length === 0) return res.status(400).json({ success: false, message: 'Invalid or expired token' });
+    const pending = q.rows[0];
+
+    // Apply payload
+    const payload = pending.payload || {};
+    const updates = [];
+    const params = [];
+    let idx = 1;
+    if (payload.name !== undefined) { updates.push(`name = $${idx++}`); params.push(payload.name); }
+    if (payload.username !== undefined) { updates.push(`username = $${idx++}`); params.push(payload.username); }
+    if (payload.email !== undefined) { updates.push(`email = $${idx++}`); params.push(payload.email.toLowerCase()); updates.push(`email_verified = true`); }
+    if (payload.extra !== undefined) { updates.push(`extra = COALESCE(extra, '{}'::jsonb) || $${idx++}::jsonb`); params.push(JSON.stringify(payload.extra)); }
+
+    if (updates.length > 0) {
+      params.push(pending.user_id);
+      await pool.query(`UPDATE users SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${idx}`, params);
+    }
+
+    // mark pending used
+    await pool.query('UPDATE pending_user_updates SET used = true WHERE id = $1', [pending.id]);
+
+    // respond with simple success page
+    res.send(`
+      <html><body>
+      <h2>Profile changes confirmed</h2>
+      <p>Your profile changes have been applied.</p>
+      </body></html>
+    `);
+
+  } catch (error) {
+    console.error('Confirm user update error:', error);
+    res.status(500).json({ success: false, message: 'Failed to confirm update' });
+  }
+};
 
 module.exports = {
   verifyAppCredentials,
@@ -2578,6 +2974,7 @@ module.exports = {
   loginUser,
   verifyEmail,
   getUserProfile,
+  patchUserProfile,
   requestPasswordReset,
   requestChangePasswordLink,
   resetPasswordPage,
@@ -2590,5 +2987,7 @@ module.exports = {
   googleAuth,
   setPasswordGoogleUser,
   verifyEmailSetPasswordGoogleUser,
-  verifyChangePassword
+  verifyChangePassword,
+  verifyAccessToken,
+  confirmUserUpdate
 };

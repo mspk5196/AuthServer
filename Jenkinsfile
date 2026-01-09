@@ -1,13 +1,11 @@
 pipeline {
   agent any
-
-  options {
-    timestamps()
-  }
+  options { timestamps() }
 
   environment {
-    COMPOSE_PROJECT_NAME = "auth-server"
-    ENV_DIR = "/opt/envs"
+    APP = "auth-server"
+    EMAIL = "ci@mspkapps.in"
+    IMAGE_TAG = "prod-${BUILD_NUMBER}"
   }
 
   stages {
@@ -18,91 +16,100 @@ pipeline {
       }
     }
 
-    stage('Verify Docker') {
+    stage('Merge test → main') {
       steps {
-        sh '''
-          docker --version
-          docker compose version
-        '''
-      }
-    }
+        withCredentials([usernamePassword(
+          credentialsId: 'github-ci-token',
+          usernameVariable: 'GIT_USER',
+          passwordVariable: 'GIT_TOKEN'
+        )]) {
+          sh '''
+            set -e
+            git config user.name "Jenkins CI"
+            git config user.email "ci@mspkapps.in"
 
-    stage('Build Images') {
-      steps {
-        sh '''
-          docker compose build
-        '''
-      }
-    }
+            git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@github.com/MSPK-APPS/auth-server.git
 
-    stage('Deploy Services') {
-      steps {
-        script {
-          try {
-            echo "🚀 Deploying new version..."
-            sh '''
-              docker compose up -d
-            '''
-            echo "✅ Deployment successful"
-          } catch (err) {
-            echo "❌ Deployment failed, starting rollback..."
+            git fetch origin \
+              +refs/heads/main:refs/remotes/origin/main \
+              +refs/heads/test:refs/remotes/origin/test
 
-            // Rollback to previous running state
-            sh '''
-              docker compose down
-              docker compose up -d
-            '''
-
-            error("Rollback completed due to deployment failure")
-          }
+            git checkout -B main origin/main
+            git merge origin/test --no-ff -m "ci: promote test → prod"
+            git push origin main
+          '''
         }
+      }
+    }
+
+    stage('Build & Deploy (PRODUCTION)') {
+      steps {
+        sh '''
+          bash -lc '
+            set -e
+            set -a
+
+            source /opt/envs/frontend.prod.env
+            source /opt/envs/cpanel-backend.env
+            source /opt/envs/cpanel-frontend.env
+            source /opt/envs/dev-backend.env
+            source /opt/envs/dev-frontend.env
+
+            set +a
+
+            docker compose -p auth-server \
+              -f docker/docker-compose.base.yml \
+              -f docker/docker-compose.prod.yml \
+              build
+
+            docker compose -p auth-server \
+              -f docker/docker-compose.base.yml \
+              -f docker/docker-compose.prod.yml \
+              up -d
+          '
+        '''
       }
     }
   }
 
   post {
-
     success {
       emailext(
-        subject: "✅ DEPLOY SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-        to: "mspk@mspkapps.in",
-        mimeType: 'text/html',
+        to: EMAIL,
+        subject: "✅ ${APP} deployed to PRODUCTION (Build #${BUILD_NUMBER})",
         body: """
-        <h2>Deployment Successful 🎉</h2>
-        <p><b>Project:</b> ${env.JOB_NAME}</p>
-        <p><b>Build:</b> #${env.BUILD_NUMBER}</p>
-        <p><b>Status:</b> SUCCESS</p>
-        <p><b>Build URL:</b>
-          <a href="${env.BUILD_URL}">
-            ${env.BUILD_URL}
-          </a>
-        </p>
-        <br/>
-        <p>All services are up and running.</p>
-        """
+              SUCCESS ✅
+
+              Application : ${APP}
+              Build Number: ${BUILD_NUMBER}
+              Image Tag   : ${IMAGE_TAG}
+              Branch      : main
+
+              See attached Jenkins build log for details.
+              """,
+        attachLog: true,
+        compressLog: true
       )
     }
 
     failure {
       emailext(
-        subject: "❌ DEPLOY FAILED (Rollback Done): ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-        to: "mspk@mspkapps.in",
-        mimeType: 'text/html',
+        to: EMAIL,
+        subject: "❌ ${APP} CI FAILED (Build #${BUILD_NUMBER})",
         body: """
-        <h2>Deployment Failed ❌</h2>
-        <p><b>Project:</b> ${env.JOB_NAME}</p>
-        <p><b>Build:</b> #${env.BUILD_NUMBER}</p>
-        <p><b>Status:</b> FAILED</p>
-        <p><b>Action:</b> Rollback executed</p>
-        <p><b>Build URL:</b>
-          <a href="${env.BUILD_URL}">
-            ${env.BUILD_URL}
-          </a>
-        </p>
-        <br/>
-        <p>Please check Jenkins logs for details.</p>
-        """
+              FAILURE ❌
+
+              Application : ${APP}
+              Build Number: ${BUILD_NUMBER}
+              Branch      : test → main
+
+              ❌ Production was NOT touched.
+              See attached Jenkins build log for exact error.
+              """,
+        attachLog: true,
+        compressLog: true
       )
     }
   }
+
 }

@@ -44,7 +44,7 @@ const Settings = () => {
       const response = await api.get('/developer/my-plan');
       if (response.data.hasPlan) {
         setCurrentPlan(response.data.plan);
-        console.log(response.data.plan);
+        // console.log        console.log(response.data.plan);
         
       }
     } catch (error) {
@@ -380,13 +380,15 @@ const Settings = () => {
                   <button className="btn btn-primary" onClick={handleUpgradePlan}>
                     Upgrade Plan
                   </button>
-                  <button
-                    className="btn btn-danger"
-                    onClick={handleCancelPlan}
-                    disabled={loading}
-                  >
-                    Cancel Plan
-                  </button>
+                  {(!currentPlan.price || Number(currentPlan.price) === 0) && (
+                    <button
+                      className="btn btn-danger"
+                      onClick={handleCancelPlan}
+                      disabled={loading}
+                    >
+                      Cancel Plan
+                    </button>
+                  )}
                 </div>
               </div>
             ) : (

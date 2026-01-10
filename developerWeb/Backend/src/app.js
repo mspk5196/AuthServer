@@ -12,7 +12,13 @@ getRedis().catch(console.error);
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginOpenerPolicy: false,
+    crossOriginResourcePolicy: false,
+    contentSecurityPolicy: false
+  })
+);
 
 // simple request logger
 app.use((req, res, next) => {
@@ -26,6 +32,13 @@ app.post('/api/razorpay/webhook', express.raw({ type: 'application/json' }), pay
 // routes
 app.use('/api/developer', authRoutes);
 app.use('/api/cpanel', cPanelRoutes);
+// block all non-API routes
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api')) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  next();
+});
 
 // error handler (simple)
 app.use((err, req, res, next) => {

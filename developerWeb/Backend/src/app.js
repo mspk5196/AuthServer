@@ -19,7 +19,7 @@ app.use(
     contentSecurityPolicy: false
   })
 );
-
+ 
 // simple request logger
 app.use((req, res, next) => {
   console.log(`[${req.method}] ${req.url}`);

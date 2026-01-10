@@ -13,7 +13,7 @@ const server = http.createServer(app);
 app.set('trust proxy', 1);
 
 app.get('/', (req, res) => {
-  res.send('✅ OK - Auth Server Running');
+  res.send('✅ OK - Auth Server Running with no problems');
 });
 
 // Start scheduled jobs

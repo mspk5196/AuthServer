@@ -94,7 +94,7 @@ AuthServer was built over multiple phases totaling **200+ commits** of iteration
 - Better portal UI/UX
 
 ---
-
+ 
 ## 🏗️ Running Locally
 
 ```sh

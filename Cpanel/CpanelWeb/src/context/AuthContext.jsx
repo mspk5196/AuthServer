@@ -22,14 +22,23 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   const logout = () => {
-    // Clear the cPanel token
+    // Clear the cPanel token and session expiry
     tokenService.clear();
+    localStorage.removeItem('cpanel_session_expiry');
     setDeveloper(null);
     
     // Redirect to main developer portal
     const mainPortalUrl = import.meta.env.VITE_MAIN_PORTAL_URL;
     window.location.href = mainPortalUrl;
   };
+
+  // Set session expiry when developer is set
+  useEffect(() => {
+    if (developer && !localStorage.getItem('cpanel_session_expiry')) {
+      const expiryTime = new Date(Date.now() + 15 * 60 * 1000);
+      localStorage.setItem('cpanel_session_expiry', expiryTime.toISOString());
+    }
+  }, [developer]);
 
   const value = {
     developer,

@@ -296,6 +296,28 @@ const registerUser = async (req, res) => {
       });
     }
 
+    // Check if email exists in any other app within the same group
+    const groupCheck = await pool.query(`
+      SELECT ag.group_name, da.app_name
+      FROM users u
+      JOIN dev_apps da ON u.app_id = da.id
+      JOIN app_groups ag ON da.group_id = ag.id
+      WHERE da.group_id = (SELECT group_id FROM dev_apps WHERE id = $1)
+        AND u.email = $2
+        AND da.id != $1
+      LIMIT 1
+    `, [app.id, email.toLowerCase()]);
+
+    if (groupCheck.rows.length > 0) {
+      const groupInfo = groupCheck.rows[0];
+      return res.status(409).json({
+        success: false,
+        error: 'Email exists in group',
+        message: `User already registered with us in the "${groupInfo.group_name}" group. Please use the same credentials to log in.`,
+        group_name: groupInfo.group_name
+      });
+    }
+
     // Hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);

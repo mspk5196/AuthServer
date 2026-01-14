@@ -235,8 +235,8 @@ const getGroupUsersWithStatus = async (req, res) => {
     // Login method filter
     if (req.query.loginMethod) {
       const loginMethodMap = {
-        'google': `gul.google_id IS NOT NULL`,
-        'email': `gul.google_id IS NULL`
+        'google': `u.google_id IS NOT NULL`,
+        'email': `u.google_id IS NULL`
       };
       if (loginMethodMap[req.query.loginMethod]) {
         filters.push(loginMethodMap[req.query.loginMethod]);
@@ -288,8 +288,8 @@ const getGroupUsersWithStatus = async (req, res) => {
         gbu.reason as block_reason,
         gbu.blocked_at,
         gbu.blocked_by,
-        gul.google_id,
-        CASE WHEN gul.google_id IS NOT NULL THEN 'google' ELSE 'email' END as login_method
+        u.google_id,
+        CASE WHEN u.google_id IS NOT NULL THEN 'google' ELSE 'email' END as login_method
       FROM users u
       JOIN dev_apps da ON u.app_id = da.id
       LEFT JOIN group_blocked_users gbu ON gbu.group_id = da.group_id AND gbu.user_id = u.id
@@ -784,6 +784,344 @@ const deleteExtraFieldData = async (req, res) => {
   }
 };
 
+/**
+ * Detect conflicts when enabling common mode for username/name/password/extra_fields
+ */
+const detectCommonModeConflicts = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { groupId } = req.params;
+    const { field } = req.query; // 'username', 'name', 'password', 'extra_fields'
+
+    // Verify group ownership
+    const groupCheck = await pool.query(
+      'SELECT id, group_name FROM app_groups WHERE id = $1 AND developer_id = $2',
+      [groupId, developerId]
+    );
+
+    if (groupCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Group not found'
+      });
+    }
+
+    const conflicts = [];
+
+    if (field === 'username' || field === 'all') {
+      // Find users with different usernames across apps in the group
+      const usernameConflicts = await pool.query(`
+        SELECT 
+          u.email,
+          ARRAY_AGG(DISTINCT u.username ORDER BY u.username) as usernames,
+          ARRAY_AGG(DISTINCT da.app_name ORDER BY da.app_name) as apps,
+          COUNT(DISTINCT u.username) as distinct_count
+        FROM users u
+        JOIN dev_apps da ON u.app_id = da.id
+        WHERE da.group_id = $1 AND u.username IS NOT NULL
+        GROUP BY u.email
+        HAVING COUNT(DISTINCT u.username) > 1
+      `, [groupId]);
+
+      if (usernameConflicts.rows.length > 0) {
+        conflicts.push({
+          field: 'username',
+          conflicts: usernameConflicts.rows
+        });
+      }
+    }
+
+    if (field === 'name' || field === 'all') {
+      // Find users with different names across apps in the group
+      const nameConflicts = await pool.query(`
+        SELECT 
+          u.email,
+          ARRAY_AGG(DISTINCT u.name ORDER BY u.name) as names,
+          ARRAY_AGG(DISTINCT da.app_name ORDER BY da.app_name) as apps,
+          COUNT(DISTINCT u.name) as distinct_count
+        FROM users u
+        JOIN dev_apps da ON u.app_id = da.id
+        WHERE da.group_id = $1 AND u.name IS NOT NULL
+        GROUP BY u.email
+        HAVING COUNT(DISTINCT u.name) > 1
+      `, [groupId]);
+
+      if (nameConflicts.rows.length > 0) {
+        conflicts.push({
+          field: 'name',
+          conflicts: nameConflicts.rows
+        });
+      }
+    }
+
+    if (field === 'password' || field === 'all') {
+      // For passwords, just check if user exists in multiple apps
+      // (we'll need to send password reset emails)
+      const passwordConflicts = await pool.query(`
+        SELECT 
+          u.email,
+          COUNT(DISTINCT da.id) as app_count,
+          ARRAY_AGG(DISTINCT da.app_name ORDER BY da.app_name) as apps
+        FROM users u
+        JOIN dev_apps da ON u.app_id = da.id
+        WHERE da.group_id = $1
+        GROUP BY u.email
+        HAVING COUNT(DISTINCT da.id) > 1
+      `, [groupId]);
+
+      if (passwordConflicts.rows.length > 0) {
+        conflicts.push({
+          field: 'password',
+          conflicts: passwordConflicts.rows,
+          note: 'Users will receive email to set a common password'
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        group_name: groupCheck.rows[0].group_name,
+        conflicts,
+        has_conflicts: conflicts.length > 0
+      }
+    });
+
+  } catch (error) {
+    console.error('Detect common mode conflicts error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to detect conflicts',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Enable common mode for a field (username/name/password/extra_fields)
+ */
+const enableCommonMode = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { groupId } = req.params;
+    const { field, resolutions } = req.body; // field: 'username', 'name', 'password', 'extra_fields_data'
+                                              // resolutions: { email: selectedValue, ... }
+
+    // Verify group ownership
+    const groupCheck = await pool.query(
+      'SELECT id FROM app_groups WHERE id = $1 AND developer_id = $2',
+      [groupId, developerId]
+    );
+
+    if (groupCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Group not found'
+      });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Update group setting
+      const fieldColumn = `use_common_${field}`;
+      await client.query(
+        `UPDATE app_groups SET ${fieldColumn} = true WHERE id = $1`,
+        [groupId]
+      );
+
+      // Apply resolutions and update group_user_logins
+      if (resolutions && typeof resolutions === 'object') {
+        for (const [email, value] of Object.entries(resolutions)) {
+          // Get user IDs for this email in the group
+          const userIds = await client.query(`
+            SELECT u.id
+            FROM users u
+            JOIN dev_apps da ON u.app_id = da.id
+            WHERE da.group_id = $1 AND u.email = $2
+          `, [groupId, email]);
+
+          if (userIds.rows.length > 0) {
+            const userId = userIds.rows[0].id;
+
+            // Check if group_user_logins entry exists
+            const gulCheck = await client.query(
+              'SELECT id FROM group_user_logins WHERE user_id = $1 AND group_id = $2',
+              [userId, groupId]
+            );
+
+            if (field === 'username') {
+              if (gulCheck.rows.length > 0) {
+                await client.query(
+                  'UPDATE group_user_logins SET common_username = $1 WHERE user_id = $2 AND group_id = $3',
+                  [value, userId, groupId]
+                );
+              } else {
+                await client.query(
+                  'INSERT INTO group_user_logins (user_id, group_id, common_username) VALUES ($1, $2, $3)',
+                  [userId, groupId, value]
+                );
+              }
+            } else if (field === 'name') {
+              if (gulCheck.rows.length > 0) {
+                await client.query(
+                  'UPDATE group_user_logins SET common_name = $1 WHERE user_id = $2 AND group_id = $3',
+                  [value, userId, groupId]
+                );
+              } else {
+                await client.query(
+                  'INSERT INTO group_user_logins (user_id, group_id, common_name) VALUES ($1, $2, $3)',
+                  [userId, groupId, value]
+                );
+              }
+            }
+          }
+        }
+      }
+
+      // If enabling common password, create pending password resets
+      if (field === 'password') {
+        const usersNeedingReset = await client.query(`
+          SELECT DISTINCT u.email
+          FROM users u
+          JOIN dev_apps da ON u.app_id = da.id
+          WHERE da.group_id = $1
+          GROUP BY u.email
+          HAVING COUNT(DISTINCT da.id) > 1
+        `, [groupId]);
+
+        for (const user of usersNeedingReset.rows) {
+          const resetToken = require('crypto').randomBytes(32).toString('hex');
+          await client.query(`
+            INSERT INTO pending_password_resets (
+              user_email, group_id, reset_token, reason, expires_at
+            ) VALUES ($1, $2, $3, 'common_mode_enabled', NOW() + INTERVAL '7 days')
+          `, [user.email, groupId, resetToken]);
+
+          // TODO: Send email to user with reset link
+          // const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+          // sendMail({ to: user.email, subject: 'Set Your Password', ... });
+        }
+      }
+
+      await client.query('COMMIT');
+
+      res.json({
+        success: true,
+        message: `Common ${field} mode enabled successfully`,
+        data: {
+          pending_password_resets: field === 'password' ? true : false
+        }
+      });
+
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+  } catch (error) {
+    console.error('Enable common mode error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to enable common mode',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Disable common mode for a field
+ */
+const disableCommonMode = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { groupId } = req.params;
+    const { field } = req.body; // 'username', 'name', 'password', 'extra_fields_data'
+
+    // Verify group ownership
+    const groupCheck = await pool.query(
+      'SELECT id FROM app_groups WHERE id = $1 AND developer_id = $2',
+      [groupId, developerId]
+    );
+
+    if (groupCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Group not found'
+      });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Copy common data to each app's user record
+      if (field === 'username') {
+        await client.query(`
+          UPDATE users u
+          SET username = gul.common_username
+          FROM group_user_logins gul
+          JOIN dev_apps da ON u.app_id = da.id
+          WHERE u.id = gul.user_id
+            AND da.group_id = $1
+            AND gul.common_username IS NOT NULL
+        `, [groupId]);
+      } else if (field === 'name') {
+        await client.query(`
+          UPDATE users u
+          SET name = gul.common_name
+          FROM group_user_logins gul
+          JOIN dev_apps da ON u.app_id = da.id
+          WHERE u.id = gul.user_id
+            AND da.group_id = $1
+            AND gul.common_name IS NOT NULL
+        `, [groupId]);
+      } else if (field === 'password') {
+        await client.query(`
+          UPDATE users u
+          SET password_hash = gul.common_password_hash
+          FROM group_user_logins gul
+          JOIN dev_apps da ON u.app_id = da.id
+          WHERE u.id = gul.user_id
+            AND da.group_id = $1
+            AND gul.common_password_hash IS NOT NULL
+        `, [groupId]);
+      }
+
+      // Update group setting
+      const fieldColumn = `use_common_${field}`;
+      await client.query(
+        `UPDATE app_groups SET ${fieldColumn} = false WHERE id = $1`,
+        [groupId]
+      );
+
+      await client.query('COMMIT');
+
+      res.json({
+        success: true,
+        message: `Common ${field} mode disabled. Data copied to each app.`
+      });
+
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+  } catch (error) {
+    console.error('Disable common mode error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to disable common mode',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getGroupSettings,
   updateGroupSettings,
@@ -794,5 +1132,8 @@ module.exports = {
   bulkUnblockUsers,
   addUserToGroup,
   getBulkOperations,
-  deleteExtraFieldData
+  deleteExtraFieldData,
+  detectCommonModeConflicts,
+  enableCommonMode,
+  disableCommonMode
 };

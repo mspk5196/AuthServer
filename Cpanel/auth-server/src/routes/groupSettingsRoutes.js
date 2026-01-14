@@ -11,7 +11,10 @@ const {
   bulkUnblockUsers,
   addUserToGroup,
   getBulkOperations,
-  deleteExtraFieldData
+  deleteExtraFieldData,
+  detectCommonModeConflicts,
+  enableCommonMode,
+  disableCommonMode
 } = require('../controllers/groupSettingsController');
 
 // All routes require developer authentication
@@ -36,5 +39,10 @@ router.get('/:groupId/bulk-operations', getBulkOperations);
 
 // Extra field data management
 router.delete('/:groupId/extra-field-data', deleteExtraFieldData);
+
+// Flexible data management (common vs per-app)
+router.get('/:groupId/common-mode-conflicts', detectCommonModeConflicts);
+router.post('/:groupId/enable-common-mode', enableCommonMode);
+router.post('/:groupId/disable-common-mode', disableCommonMode);
 
 module.exports = router;

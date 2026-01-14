@@ -59,6 +59,18 @@ export default function GroupSettings() {
   // Bulk operations
   const [bulkOperations, setBulkOperations] = useState([]);
 
+  // Data Management (flexible common vs per-app)
+  const [dataManagementSettings, setDataManagementSettings] = useState({
+    useCommonUsername: false,
+    useCommonName: false,
+    useCommonPassword: false,
+    useCommonExtraFieldsData: false
+  });
+  const [conflicts, setConflicts] = useState([]);
+  const [resolutions, setResolutions] = useState({});
+  const [showConflictModal, setShowConflictModal] = useState(false);
+  const [currentField, setCurrentField] = useState('');
+
   useEffect(() => {
     fetchGroupSettings();
   }, [groupId]);
@@ -84,6 +96,14 @@ export default function GroupSettings() {
         setCommonClientSecret(groupData.common_google_client_secret || '');
         setUseCommonExtraFields(groupData.use_common_extra_fields || false);
         setCommonExtraFields(groupData.common_extra_fields || []);
+        
+        // Load data management settings
+        setDataManagementSettings({
+          useCommonUsername: groupData.use_common_username || false,
+          useCommonName: groupData.use_common_name || false,
+          useCommonPassword: groupData.use_common_password || false,
+          useCommonExtraFieldsData: groupData.use_common_extra_fields_data || false
+        });
       } else {
         setError(resp.message || 'Failed to load group settings');
       }
@@ -500,6 +520,106 @@ export default function GroupSettings() {
     setConfirmAction(null);
     setConfirmMessage('');
   }
+
+  // Data Management Functions
+  async function detectConflicts(field) {
+    try {
+      setLoading(true);
+      const resp = await api.get(
+        `/group-settings/${groupId}/common-mode-conflicts?field=${field}`,
+        token
+      );
+      if (resp.success) {
+        setConflicts(resp.data.conflicts);
+        setCurrentField(field);
+        if (resp.data.has_conflicts && field !== 'password') {
+          setShowConflictModal(true);
+        } else if (field === 'password') {
+          // For password, just confirm that emails will be sent
+          setConfirmMessage(
+            `Enabling common password will send password reset emails to ${
+              resp.data.conflicts.find(c => c.field === 'password')?.conflicts.length || 0
+            } users. Continue?`
+          );
+          setConfirmAction(() => () => enableCommonModeWithResolutions(field, {}));
+          setShowConfirmModal(true);
+        } else {
+          // No conflicts, enable directly
+          await enableCommonModeWithResolutions(field, {});
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Failed to check for conflicts');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function enableCommonModeWithResolutions(field, resolutionsData) {
+    try {
+      setSaving(true);
+      const resp = await api.post(
+        `/group-settings/${groupId}/enable-common-mode`,
+        { field, resolutions: resolutionsData },
+        token
+      );
+      if (resp.success) {
+        setSuccess(`Common ${field} mode enabled successfully!`);
+        await fetchGroupSettings();
+        setShowConflictModal(false);
+        setResolutions({});
+        setTimeout(() => setSuccess(''), 3000);
+      } else {
+        setError(resp.message || 'Failed to enable common mode');
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Failed to enable common mode');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function disableCommonModeWithConfirmation(field) {
+    setConfirmMessage(
+      `Disabling common ${field} will copy the current common value to each app's user records. Continue?`
+    );
+    setConfirmAction(() => async () => {
+      try {
+        setSaving(true);
+        const resp = await api.post(
+          `/group-settings/${groupId}/disable-common-mode`,
+          { field },
+          token
+        );
+        if (resp.success) {
+          setSuccess(resp.message);
+          await fetchGroupSettings();
+          setTimeout(() => setSuccess(''), 3000);
+        } else {
+          setError(resp.message || 'Failed to disable common mode');
+        }
+      } catch (err) {
+        console.error(err);
+        setError('Failed to disable common mode');
+      } finally {
+        setSaving(false);
+      }
+    });
+    setShowConfirmModal(true);
+  }
+
+  function handleDataManagementToggle(field, enabled) {
+    if (enabled) {
+      // Enabling - check for conflicts first
+      detectConflicts(field);
+    } else {
+      // Disabling - show confirmation
+      disableCommonModeWithConfirmation(field);
+    }
+  }
+
   if (loading) {
     return <div className="group-settings-loading">Loading group settings...</div>;
   }
@@ -556,6 +676,12 @@ export default function GroupSettings() {
           onClick={() => setActiveTab('fields')}
         >
           📋 Extra Fields
+        </button>
+        <button
+          className={`tab ${activeTab === 'data-mgmt' ? 'active' : ''}`}
+          onClick={() => setActiveTab('data-mgmt')}
+        >
+          🔄 Data Management
         </button>
         <button
           className={`tab ${activeTab === 'users' ? 'active' : ''}`}
@@ -631,8 +757,37 @@ export default function GroupSettings() {
                     if (e.target.checked) {
                       enableCommonOAuth();
                     } else {
-                      setUseCommonOAuth(false);
-                      setShowOAuthPanel(false);
+                      // Show confirmation before disabling
+                      setConfirmMessage('Disabling common OAuth will remove the shared credentials. You will need to configure OAuth separately for each app in their individual app settings. Continue?');
+                      setConfirmAction(() => async () => {
+                        setUseCommonOAuth(false);
+                        setShowOAuthPanel(false);
+                        setCommonClientId('');
+                        setCommonClientSecret('');
+                        // Save the change immediately
+                        setSaving(true);
+                        try {
+                          const body = {
+                            use_common_google_oauth: false,
+                            common_google_client_id: '',
+                            common_google_client_secret: ''
+                          };
+                          const resp = await api.put(`/group-settings/${groupId}`, body, token);
+                          if (resp.success) {
+                            setSuccess('Common OAuth disabled. Configure OAuth per app in their settings.');
+                            await fetchGroupSettings();
+                            setTimeout(() => setSuccess(''), 4000);
+                          } else {
+                            setError(resp.message || 'Failed to disable OAuth');
+                          }
+                        } catch (err) {
+                          console.error(err);
+                          setError('Failed to disable common OAuth');
+                        } finally {
+                          setSaving(false);
+                        }
+                      });
+                      setShowConfirmModal(true);
                     }
                   }}
                 />
@@ -863,6 +1018,135 @@ export default function GroupSettings() {
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {/* Data Management Tab */}
+        {activeTab === 'data-mgmt' && (
+          <div className="data-mgmt-tab">
+            <h2>Flexible User Data Management</h2>
+            <p className="tab-description">
+              Choose whether users share the same username, name, password, and extra field values 
+              across all apps in this group, or have different values for each app.
+            </p>
+
+            <div className="data-mgmt-grid">
+              {/* Username Setting */}
+              <div className="data-mgmt-card">
+                <div className="card-header">
+                  <h3>👤 Username</h3>
+                  <label className="toggle-container-small">
+                    <input
+                      type="checkbox"
+                      checked={dataManagementSettings.useCommonUsername}
+                      onChange={(e) => handleDataManagementToggle('username', e.target.checked)}
+                      disabled={saving}
+                    />
+                    <span className="toggle-slider-small"></span>
+                  </label>
+                </div>
+                <p className="card-description">
+                  {dataManagementSettings.useCommonUsername ? (
+                    <>✓ Users have the <strong>same username</strong> across all apps in this group</>
+                  ) : (
+                    <>Users can have <strong>different usernames</strong> for each app</>
+                  )}
+                </p>
+              </div>
+
+              {/* Name Setting */}
+              <div className="data-mgmt-card">
+                <div className="card-header">
+                  <h3>📝 Name</h3>
+                  <label className="toggle-container-small">
+                    <input
+                      type="checkbox"
+                      checked={dataManagementSettings.useCommonName}
+                      onChange={(e) => handleDataManagementToggle('name', e.target.checked)}
+                      disabled={saving}
+                    />
+                    <span className="toggle-slider-small"></span>
+                  </label>
+                </div>
+                <p className="card-description">
+                  {dataManagementSettings.useCommonName ? (
+                    <>✓ Users have the <strong>same name</strong> across all apps in this group</>
+                  ) : (
+                    <>Users can have <strong>different names</strong> for each app</>
+                  )}
+                </p>
+              </div>
+
+              {/* Password Setting */}
+              <div className="data-mgmt-card">
+                <div className="card-header">
+                  <h3>🔑 Password</h3>
+                  <label className="toggle-container-small">
+                    <input
+                      type="checkbox"
+                      checked={dataManagementSettings.useCommonPassword}
+                      onChange={(e) => handleDataManagementToggle('password', e.target.checked)}
+                      disabled={saving}
+                    />
+                    <span className="toggle-slider-small"></span>
+                  </label>
+                </div>
+                <p className="card-description">
+                  {dataManagementSettings.useCommonPassword ? (
+                    <>✓ Users have the <strong>same password</strong> across all apps in this group</>
+                  ) : (
+                    <>Users can have <strong>different passwords</strong> for each app</>
+                  )}
+                </p>
+                {dataManagementSettings.useCommonPassword && (
+                  <div className="card-note">
+                    <strong>Note:</strong> Users with multiple app accounts will receive an email to set a common password.
+                  </div>
+                )}
+              </div>
+
+              {/* Extra Fields Data Setting */}
+              <div className="data-mgmt-card">
+                <div className="card-header">
+                  <h3>📋 Extra Fields Data</h3>
+                  <label className="toggle-container-small">
+                    <input
+                      type="checkbox"
+                      checked={dataManagementSettings.useCommonExtraFieldsData}
+                      onChange={(e) => handleDataManagementToggle('extra_fields_data', e.target.checked)}
+                      disabled={saving}
+                    />
+                    <span className="toggle-slider-small"></span>
+                  </label>
+                </div>
+                <p className="card-description">
+                  {dataManagementSettings.useCommonExtraFieldsData ? (
+                    <>✓ Users have the <strong>same extra field values</strong> across all apps</>
+                  ) : (
+                    <>Users can have <strong>different extra field values</strong> for each app</>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="data-mgmt-info">
+              <h3>ℹ️ How It Works</h3>
+              <ul>
+                <li>
+                  <strong>Common Mode (Enabled):</strong> When a user registers or logs into any app in this group, 
+                  their data is shared across all apps. If conflicts exist (e.g., different usernames), you'll be 
+                  asked to choose which value to keep.
+                </li>
+                <li>
+                  <strong>Per-App Mode (Disabled):</strong> Each app maintains its own user data. Users can have 
+                  different usernames, names, or passwords for each app (same email).
+                </li>
+                <li>
+                  <strong>Password Syncing:</strong> Enabling common password will send email notifications to users 
+                  who are registered in multiple apps, asking them to set a unified password.
+                </li>
+              </ul>
+            </div>
           </div>
         )}
 
@@ -1173,6 +1457,74 @@ export default function GroupSettings() {
                 Yes, Delete Data
               </button>
               <button className="btn-secondary" onClick={handleCancelAction}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Conflict Resolution Modal */}
+      {showConflictModal && (
+        <div className="modal-overlay" onClick={() => setShowConflictModal(false)}>
+          <div className="modal-content conflict-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>🔄 Resolve Data Conflicts</h2>
+              <button className="modal-close" onClick={() => setShowConflictModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p className="modal-intro">
+                Multiple values found for <strong>{currentField}</strong>. 
+                Please select which value to use for each user:
+              </p>
+              {conflicts.map((conflictGroup) => (
+                <div key={conflictGroup.field} className="conflict-group">
+                  <h4>{conflictGroup.field}</h4>
+                  {conflictGroup.conflicts.map((conflict, idx) => (
+                    <div key={idx} className="conflict-item">
+                      <div className="conflict-email">
+                        📧 <strong>{conflict.email}</strong>
+                      </div>
+                      <div className="conflict-options">
+                        {(conflictGroup.field === 'username' ? conflict.usernames : conflict.names).map((value, vIdx) => (
+                          <label key={vIdx} className="conflict-option">
+                            <input
+                              type="radio"
+                              name={`${conflictGroup.field}-${conflict.email}`}
+                              value={value}
+                              checked={resolutions[conflict.email] === value}
+                              onChange={(e) => setResolutions(prev => ({
+                                ...prev,
+                                [conflict.email]: e.target.value
+                              }))}
+                            />
+                            <span className="option-value">{value}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <div className="conflict-apps">
+                        <small>Apps: {conflict.apps.join(', ')}</small>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+            <div className="modal-footer">
+              <button 
+                className="btn-primary" 
+                onClick={() => enableCommonModeWithResolutions(currentField, resolutions)}
+                disabled={Object.keys(resolutions).length === 0}
+              >
+                ✓ Apply Selected Values
+              </button>
+              <button 
+                className="btn-secondary" 
+                onClick={() => {
+                  setShowConflictModal(false);
+                  setResolutions({});
+                }}
+              >
                 Cancel
               </button>
             </div>

@@ -322,7 +322,7 @@ const getGroupUsersWithStatus = async (req, res) => {
           da.app_name ILIKE $3
         )
         ${filterClause}
-    `, [groupId, developerId, searchPattern]);
+    `, countParams);
 
     res.json({
       success: true,
@@ -795,7 +795,7 @@ const detectCommonModeConflicts = async (req, res) => {
 
     // Verify group ownership
     const groupCheck = await pool.query(
-      'SELECT id, group_name FROM app_groups WHERE id = $1 AND developer_id = $2',
+      'SELECT id, name FROM app_groups WHERE id = $1 AND developer_id = $2',
       [groupId, developerId]
     );
 
@@ -881,7 +881,7 @@ const detectCommonModeConflicts = async (req, res) => {
     res.json({
       success: true,
       data: {
-        group_name: groupCheck.rows[0].group_name,
+        group_name: groupCheck.rows[0].name,
         conflicts,
         has_conflicts: conflicts.length > 0
       }

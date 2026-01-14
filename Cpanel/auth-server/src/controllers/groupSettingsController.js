@@ -1,0 +1,670 @@
+const pool = require('../config/db');
+
+/**
+ * Get group settings including OAuth, extra fields, and statistics
+ */
+const getGroupSettings = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { groupId } = req.params;
+
+    // Verify group ownership
+    const groupResult = await pool.query(`
+      SELECT 
+        g.*,
+        COUNT(DISTINCT da.id) as app_count,
+        COUNT(DISTINCT u.id) as total_users,
+        COALESCE(gbu_count.blocked_count, 0) as blocked_users_count
+      FROM app_groups g
+      LEFT JOIN dev_apps da ON da.group_id = g.id
+      LEFT JOIN users u ON u.app_id = da.id
+      LEFT JOIN (
+        SELECT group_id, COUNT(*) as blocked_count 
+        FROM group_blocked_users 
+        GROUP BY group_id
+      ) gbu_count ON gbu_count.group_id = g.id
+      WHERE g.id = $1 AND g.developer_id = $2
+      GROUP BY g.id, gbu_count.blocked_count
+    `, [groupId, developerId]);
+
+    if (groupResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Group not found'
+      });
+    }
+
+    const group = groupResult.rows[0];
+
+    // Get apps in this group with their OAuth settings
+    const appsResult = await pool.query(`
+      SELECT 
+        id, 
+        app_name, 
+        google_client_id, 
+        google_client_secret,
+        allow_google_signin,
+        extra_fields
+      FROM dev_apps
+      WHERE group_id = $1 AND developer_id = $2
+      ORDER BY app_name
+    `, [groupId, developerId]);
+
+    res.json({
+      success: true,
+      data: {
+        group,
+        apps: appsResult.rows
+      }
+    });
+  } catch (error) {
+    console.error('Get group settings error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch group settings',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Update group settings (OAuth, extra fields, etc.)
+ */
+const updateGroupSettings = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { groupId } = req.params;
+    const { 
+      use_common_google_oauth,
+      common_google_client_id,
+      common_google_client_secret,
+      use_common_extra_fields,
+      common_extra_fields
+    } = req.body;
+
+    // Verify group ownership
+    const groupCheck = await pool.query(
+      'SELECT id FROM app_groups WHERE id = $1 AND developer_id = $2',
+      [groupId, developerId]
+    );
+
+    if (groupCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Group not found'
+      });
+    }
+
+    const updates = [];
+    const values = [];
+    let paramCount = 1;
+
+    if (use_common_google_oauth !== undefined) {
+      updates.push(`use_common_google_oauth = $${paramCount++}`);
+      values.push(use_common_google_oauth);
+    }
+
+    if (common_google_client_id !== undefined) {
+      updates.push(`common_google_client_id = $${paramCount++}`);
+      values.push(common_google_client_id);
+    }
+
+    if (common_google_client_secret !== undefined) {
+      updates.push(`common_google_client_secret = $${paramCount++}`);
+      values.push(common_google_client_secret);
+    }
+
+    if (use_common_extra_fields !== undefined) {
+      updates.push(`use_common_extra_fields = $${paramCount++}`);
+      values.push(use_common_extra_fields);
+    }
+
+    if (common_extra_fields !== undefined) {
+      updates.push(`common_extra_fields = $${paramCount++}`);
+      values.push(JSON.stringify(common_extra_fields));
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No updates provided'
+      });
+    }
+
+    updates.push(`updated_at = NOW()`);
+    values.push(groupId, developerId);
+
+    const query = `
+      UPDATE app_groups 
+      SET ${updates.join(', ')}
+      WHERE id = $${paramCount++} AND developer_id = $${paramCount++}
+      RETURNING *
+    `;
+
+    const result = await pool.query(query, values);
+
+    // If enabling common OAuth, optionally apply to all apps in group
+    if (use_common_google_oauth && common_google_client_id) {
+      await pool.query(`
+        UPDATE dev_apps
+        SET 
+          google_client_id = $1,
+          google_client_secret = $2,
+          updated_at = NOW()
+        WHERE group_id = $3 AND developer_id = $4
+      `, [common_google_client_id, common_google_client_secret, groupId, developerId]);
+    }
+
+    // If enabling common extra fields, apply to all apps in group
+    if (use_common_extra_fields && common_extra_fields) {
+      await pool.query(`
+        UPDATE dev_apps
+        SET 
+          extra_fields = $1,
+          updated_at = NOW()
+        WHERE group_id = $2 AND developer_id = $3
+      `, [JSON.stringify(common_extra_fields), groupId, developerId]);
+    }
+
+    res.json({
+      success: true,
+      message: 'Group settings updated successfully',
+      data: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Update group settings error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update group settings',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get all users in a group with their block status
+ */
+const getGroupUsersWithStatus = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { groupId } = req.params;
+    const { page = 1, limit = 50, search = '' } = req.query;
+
+    // Verify group ownership
+    const groupCheck = await pool.query(
+      'SELECT id FROM app_groups WHERE id = $1 AND developer_id = $2',
+      [groupId, developerId]
+    );
+
+    if (groupCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Group not found'
+      });
+    }
+
+    const offset = (page - 1) * limit;
+    const searchPattern = `%${search}%`;
+
+    const usersResult = await pool.query(`
+      SELECT 
+        u.id,
+        u.email,
+        u.name,
+        u.username,
+        u.email_verified,
+        u.is_blocked as app_blocked,
+        u.last_login,
+        u.created_at,
+        u.app_id,
+        da.app_name,
+        gbu.id IS NOT NULL as group_blocked,
+        gbu.reason as block_reason,
+        gbu.blocked_at,
+        gbu.blocked_by
+      FROM users u
+      JOIN dev_apps da ON u.app_id = da.id
+      LEFT JOIN group_blocked_users gbu ON gbu.group_id = da.group_id AND gbu.user_id = u.id
+      WHERE da.group_id = $1 AND da.developer_id = $2
+        AND (
+          u.email ILIKE $3 OR 
+          u.name ILIKE $3 OR 
+          u.username ILIKE $3 OR
+          da.app_name ILIKE $3
+        )
+      ORDER BY u.created_at DESC
+      LIMIT $4 OFFSET $5
+    `, [groupId, developerId, searchPattern, limit, offset]);
+
+    // Get total count
+    const countResult = await pool.query(`
+      SELECT COUNT(DISTINCT u.id) as total
+      FROM users u
+      JOIN dev_apps da ON u.app_id = da.id
+      WHERE da.group_id = $1 AND da.developer_id = $2
+        AND (
+          u.email ILIKE $3 OR 
+          u.name ILIKE $3 OR 
+          u.username ILIKE $3 OR
+          da.app_name ILIKE $3
+        )
+    `, [groupId, developerId, searchPattern]);
+
+    res.json({
+      success: true,
+      data: {
+        users: usersResult.rows,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: parseInt(countResult.rows[0].total)
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get group users with status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch group users',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Block a single user from group
+ */
+const blockUserFromGroup = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { groupId, userId } = req.params;
+    const { reason } = req.body;
+
+    // Verify group ownership
+    const groupCheck = await pool.query(
+      'SELECT id FROM app_groups WHERE id = $1 AND developer_id = $2',
+      [groupId, developerId]
+    );
+
+    if (groupCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Group not found'
+      });
+    }
+
+    // Use the database function to block user
+    await pool.query(
+      'SELECT block_user_from_group($1, $2, $3, $4)',
+      [groupId, userId, developerId, reason || null]
+    );
+
+    res.json({
+      success: true,
+      message: 'User blocked from group successfully'
+    });
+  } catch (error) {
+    console.error('Block user from group error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to block user from group',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Unblock a single user from group
+ */
+const unblockUserFromGroup = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { groupId, userId } = req.params;
+
+    // Verify group ownership
+    const groupCheck = await pool.query(
+      'SELECT id FROM app_groups WHERE id = $1 AND developer_id = $2',
+      [groupId, developerId]
+    );
+
+    if (groupCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Group not found'
+      });
+    }
+
+    // Use the database function to unblock user
+    await pool.query(
+      'SELECT unblock_user_from_group($1, $2)',
+      [groupId, userId]
+    );
+
+    res.json({
+      success: true,
+      message: 'User unblocked from group successfully'
+    });
+  } catch (error) {
+    console.error('Unblock user from group error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to unblock user from group',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Bulk block users from group
+ */
+const bulkBlockUsers = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { groupId } = req.params;
+    const { user_ids, reason } = req.body;
+
+    if (!Array.isArray(user_ids) || user_ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'user_ids array is required and must not be empty'
+      });
+    }
+
+    // Verify group ownership
+    const groupCheck = await pool.query(
+      'SELECT id FROM app_groups WHERE id = $1 AND developer_id = $2',
+      [groupId, developerId]
+    );
+
+    if (groupCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Group not found'
+      });
+    }
+
+    // Create bulk operation record
+    const bulkOpResult = await pool.query(`
+      INSERT INTO bulk_operations (
+        developer_id, group_id, operation_type, target_count, status
+      ) VALUES ($1, $2, 'block_users', $3, 'in_progress')
+      RETURNING id
+    `, [developerId, groupId, user_ids.length]);
+
+    const bulkOpId = bulkOpResult.rows[0].id;
+
+    try {
+      // Use the database function to bulk block users
+      const result = await pool.query(
+        'SELECT bulk_block_users_in_group($1, $2, $3, $4) as blocked_count',
+        [groupId, user_ids, developerId, reason || null]
+      );
+
+      // Update bulk operation status
+      await pool.query(`
+        UPDATE bulk_operations 
+        SET status = 'completed', completed_at = NOW()
+        WHERE id = $1
+      `, [bulkOpId]);
+
+      res.json({
+        success: true,
+        message: `Successfully blocked ${result.rows[0].blocked_count} users from group`,
+        data: {
+          blocked_count: result.rows[0].blocked_count,
+          bulk_operation_id: bulkOpId
+        }
+      });
+    } catch (error) {
+      // Update bulk operation status on error
+      await pool.query(`
+        UPDATE bulk_operations 
+        SET status = 'failed', error_message = $1, completed_at = NOW()
+        WHERE id = $2
+      `, [error.message, bulkOpId]);
+      throw error;
+    }
+  } catch (error) {
+    console.error('Bulk block users error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to bulk block users',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Bulk unblock users from group
+ */
+const bulkUnblockUsers = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { groupId } = req.params;
+    const { user_ids } = req.body;
+
+    if (!Array.isArray(user_ids) || user_ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'user_ids array is required and must not be empty'
+      });
+    }
+
+    // Verify group ownership
+    const groupCheck = await pool.query(
+      'SELECT id FROM app_groups WHERE id = $1 AND developer_id = $2',
+      [groupId, developerId]
+    );
+
+    if (groupCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Group not found'
+      });
+    }
+
+    // Create bulk operation record
+    const bulkOpResult = await pool.query(`
+      INSERT INTO bulk_operations (
+        developer_id, group_id, operation_type, target_count, status
+      ) VALUES ($1, $2, 'unblock_users', $3, 'in_progress')
+      RETURNING id
+    `, [developerId, groupId, user_ids.length]);
+
+    const bulkOpId = bulkOpResult.rows[0].id;
+
+    try {
+      // Use the database function to bulk unblock users
+      const result = await pool.query(
+        'SELECT bulk_unblock_users_in_group($1, $2) as unblocked_count',
+        [groupId, user_ids]
+      );
+
+      // Update bulk operation status
+      await pool.query(`
+        UPDATE bulk_operations 
+        SET status = 'completed', completed_at = NOW()
+        WHERE id = $1
+      `, [bulkOpId]);
+
+      res.json({
+        success: true,
+        message: `Successfully unblocked ${result.rows[0].unblocked_count} users from group`,
+        data: {
+          unblocked_count: result.rows[0].unblocked_count,
+          bulk_operation_id: bulkOpId
+        }
+      });
+    } catch (error) {
+      // Update bulk operation status on error
+      await pool.query(`
+        UPDATE bulk_operations 
+        SET status = 'failed', error_message = $1, completed_at = NOW()
+        WHERE id = $2
+      `, [error.message, bulkOpId]);
+      throw error;
+    }
+  } catch (error) {
+    console.error('Bulk unblock users error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to bulk unblock users',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Add user to group (creates user or links existing user to group apps)
+ */
+const addUserToGroup = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { groupId } = req.params;
+    const { email, name, username, password, auto_apply_to_all_apps = true } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is required'
+      });
+    }
+
+    // Verify group ownership
+    const groupCheck = await pool.query(
+      'SELECT id FROM app_groups WHERE id = $1 AND developer_id = $2',
+      [groupId, developerId]
+    );
+
+    if (groupCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Group not found'
+      });
+    }
+
+    // Get all apps in the group
+    const appsResult = await pool.query(
+      'SELECT id FROM dev_apps WHERE group_id = $1 AND developer_id = $2',
+      [groupId, developerId]
+    );
+
+    if (appsResult.rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No apps found in this group. Add apps first.'
+      });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const createdUsers = [];
+
+      // Create user in each app if auto_apply_to_all_apps is true
+      if (auto_apply_to_all_apps) {
+        for (const app of appsResult.rows) {
+          // Check if user already exists in this app
+          const existingUser = await client.query(
+            'SELECT id FROM users WHERE app_id = $1 AND email = $2',
+            [app.id, email]
+          );
+
+          let userId;
+          if (existingUser.rows.length === 0) {
+            // Create new user (simplified - adjust based on your auth logic)
+            const userResult = await client.query(`
+              INSERT INTO users (app_id, email, name, username, email_verified, created_at, updated_at)
+              VALUES ($1, $2, $3, $4, false, NOW(), NOW())
+              RETURNING id
+            `, [app.id, email, name, username]);
+            userId = userResult.rows[0].id;
+          } else {
+            userId = existingUser.rows[0].id;
+          }
+
+          // Add to group_user_logins
+          await client.query(`
+            INSERT INTO group_user_logins (group_id, user_id, app_id, added_by, created_at)
+            VALUES ($1, $2, $3, $4, NOW())
+            ON CONFLICT (group_id, user_id, app_id) DO NOTHING
+          `, [groupId, userId, app.id, developerId]);
+
+          createdUsers.push({ app_id: app.id, user_id: userId });
+        }
+      }
+
+      await client.query('COMMIT');
+
+      res.json({
+        success: true,
+        message: `User added to ${createdUsers.length} apps in the group`,
+        data: { created_users: createdUsers }
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Add user to group error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to add user to group',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get bulk operations history for a group
+ */
+const getBulkOperations = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { groupId } = req.params;
+    const { limit = 20 } = req.query;
+
+    const result = await pool.query(`
+      SELECT 
+        id,
+        operation_type,
+        target_count,
+        status,
+        error_message,
+        metadata,
+        created_at,
+        completed_at
+      FROM bulk_operations
+      WHERE developer_id = $1 AND group_id = $2
+      ORDER BY created_at DESC
+      LIMIT $3
+    `, [developerId, groupId, limit]);
+
+    res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Get bulk operations error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch bulk operations',
+      error: error.message
+    });
+  }
+};
+
+module.exports = {
+  getGroupSettings,
+  updateGroupSettings,
+  getGroupUsersWithStatus,
+  blockUserFromGroup,
+  unblockUserFromGroup,
+  bulkBlockUsers,
+  bulkUnblockUsers,
+  addUserToGroup,
+  getBulkOperations
+};

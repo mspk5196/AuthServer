@@ -917,6 +917,8 @@ export default function GroupSettings() {
             <h2>Common Extra Fields</h2>
             <p className="tab-description">
               Define extra user fields that will be shared across all apps in this group.
+              <br />
+              <strong>Note:</strong> Enabling common extra fields will ADD these fields to all apps without deleting existing data. Only disabling will delete the extra field data.
             </p>
 
             <div className="fields-toggle-section">

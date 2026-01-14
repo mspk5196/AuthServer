@@ -58,7 +58,7 @@ export default function GroupSettings() {
   async function fetchGroupSettings() {
     setLoading(true);
     try {
-      const resp = await api.get(`/developer/group-settings/${groupId}`, token);
+      const resp = await api.get(`/group-settings/${groupId}`, token);
       if (resp.success) {
         const { group: groupData, apps: appsData } = resp.data;
         setGroup(groupData);
@@ -82,7 +82,7 @@ export default function GroupSettings() {
   async function fetchUsers() {
     try {
       const resp = await api.get(
-        `/developer/group-settings/${groupId}/users?page=${userPage}&limit=50&search=${userSearch}`,
+        `/group-settings/${groupId}/users?page=${userPage}&limit=50&search=${userSearch}`,
         token
       );
       if (resp.success) {
@@ -97,7 +97,7 @@ export default function GroupSettings() {
 
   async function fetchBulkOperations() {
     try {
-      const resp = await api.get(`/developer/group-settings/${groupId}/bulk-operations`, token);
+      const resp = await api.get(`/group-settings/${groupId}/bulk-operations`, token);
       if (resp.success) {
         setBulkOperations(resp.data);
       }
@@ -116,7 +116,7 @@ export default function GroupSettings() {
         common_google_client_id: commonClientId.trim(),
         common_google_client_secret: commonClientSecret.trim()
       };
-      const resp = await api.put(`/developer/group-settings/${groupId}`, body, token);
+      const resp = await api.put(`/group-settings/${groupId}`, body, token);
       if (resp.success) {
         setSuccess('OAuth settings saved successfully!');
         await fetchGroupSettings();
@@ -150,7 +150,7 @@ export default function GroupSettings() {
         use_common_extra_fields: useCommonExtraFields,
         common_extra_fields: commonExtraFields
       };
-      const resp = await api.put(`/developer/group-settings/${groupId}`, body, token);
+      const resp = await api.put(`/group-settings/${groupId}`, body, token);
       if (resp.success) {
         setSuccess('Extra fields saved successfully!');
         setFieldsDirty(false);
@@ -169,7 +169,7 @@ export default function GroupSettings() {
 
   async function blockUser(userId, reason = '') {
     try {
-      const resp = await api.post(`/developer/group-settings/${groupId}/users/${userId}/block`, { reason }, token);
+      const resp = await api.post(`/group-settings/${groupId}/users/${userId}/block`, { reason }, token);
       if (resp.success) {
         setSuccess('User blocked successfully');
         await fetchUsers();
@@ -185,7 +185,7 @@ export default function GroupSettings() {
 
   async function unblockUser(userId) {
     try {
-      const resp = await api.post(`/developer/group-settings/${groupId}/users/${userId}/unblock`, {}, token);
+      const resp = await api.post(`/group-settings/${groupId}/users/${userId}/unblock`, {}, token);
       if (resp.success) {
         setSuccess('User unblocked successfully');
         await fetchUsers();
@@ -209,7 +209,7 @@ export default function GroupSettings() {
     setSaving(true);
     try {
       const resp = await api.post(
-        `/developer/group-settings/${groupId}/users/bulk-block`,
+        `/group-settings/${groupId}/users/bulk-block`,
         { user_ids: selectedUsers },
         token
       );
@@ -239,7 +239,7 @@ export default function GroupSettings() {
     setSaving(true);
     try {
       const resp = await api.post(
-        `/developer/group-settings/${groupId}/users/bulk-unblock`,
+        `/group-settings/${groupId}/users/bulk-unblock`,
         { user_ids: selectedUsers },
         token
       );
@@ -267,7 +267,7 @@ export default function GroupSettings() {
 
     setSaving(true);
     try {
-      const resp = await api.post(`/developer/group-settings/${groupId}/users`, newUser, token);
+      const resp = await api.post(`/group-settings/${groupId}/users`, newUser, token);
       if (resp.success) {
         setSuccess('User added to group successfully');
         setShowAddUserModal(false);

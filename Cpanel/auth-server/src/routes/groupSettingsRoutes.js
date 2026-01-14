@@ -10,7 +10,8 @@ const {
   bulkBlockUsers,
   bulkUnblockUsers,
   addUserToGroup,
-  getBulkOperations
+  getBulkOperations,
+  deleteExtraFieldData
 } = require('../controllers/groupSettingsController');
 
 // All routes require developer authentication
@@ -32,5 +33,8 @@ router.post('/:groupId/users/:userId/unblock', unblockUserFromGroup);
 router.post('/:groupId/users/bulk-block', bulkBlockUsers);
 router.post('/:groupId/users/bulk-unblock', bulkUnblockUsers);
 router.get('/:groupId/bulk-operations', getBulkOperations);
+
+// Extra field data management
+router.delete('/:groupId/extra-field-data', deleteExtraFieldData);
 
 module.exports = router;

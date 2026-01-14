@@ -40,6 +40,22 @@ export default function GroupSettings() {
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [newUser, setNewUser] = useState({ email: '', name: '', username: '' });
 
+  // User filters
+  const [filters, setFilters] = useState({
+    appId: '',
+    email: '',
+    name: '',
+    loginMethod: '',
+    status: '',
+    lastLoginFrom: '',
+    lastLoginTo: ''
+  });
+
+  // Confirmation modal
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [confirmMessage, setConfirmMessage] = useState('');
+
   // Bulk operations
   const [bulkOperations, setBulkOperations] = useState([]);
 
@@ -53,7 +69,7 @@ export default function GroupSettings() {
     } else if (activeTab === 'bulk-ops') {
       fetchBulkOperations();
     }
-  }, [activeTab, userPage, userSearch]);
+  }, [activeTab, userPage, userSearch, filters]);
 
   async function fetchGroupSettings() {
     setLoading(true);
@@ -81,8 +97,15 @@ export default function GroupSettings() {
 
   async function fetchUsers() {
     try {
+      const params = new URLSearchParams({
+        page: userPage,
+        limit: 50,
+        search: userSearch,
+        ...Object.fromEntries(Object.entries(filters).filter(([_, v]) => v))
+      });
+      
       const resp = await api.get(
-        `/group-settings/${groupId}/users?page=${userPage}&limit=50&search=${userSearch}`,
+        `/group-settings/${groupId}/users?${params}`,
         token
       );
       if (resp.success) {
@@ -321,7 +344,8 @@ export default function GroupSettings() {
   function enableCommonOAuth() {
     if (apps.length === 0) {
       setError('No apps in this group');
-      return;
+      setUseCommonOAuth(false);
+      return false;
     }
 
     // Check if multiple apps have different OAuth credentials
@@ -329,9 +353,13 @@ export default function GroupSettings() {
     
     if (uniqueClientIds.length > 1) {
       // Multiple different credentials exist, ask user to choose
-      setShowOAuthPanel(true);
+      setShowOAuthPanel(false);
       setSelectedAppForOAuth('');
+      setCommonClientId('');
+      setCommonClientSecret('');
+      setUseCommonOAuth(true); // Keep toggle on but require selection
       setError('Multiple OAuth credentials detected. Please select which one to use for all apps.');
+      return false; // Don't show main panel yet
     } else if (uniqueClientIds.length === 1) {
       // One credential exists, use it
       setCommonClientId(uniqueClientIds[0]);
@@ -341,10 +369,14 @@ export default function GroupSettings() {
       }
       setUseCommonOAuth(true);
       setShowOAuthPanel(true);
+      setError('');
+      return true;
     } else {
       // No credentials, just enable
       setUseCommonOAuth(true);
       setShowOAuthPanel(true);
+      setError('');
+      return true;
     }
   }
 
@@ -354,10 +386,120 @@ export default function GroupSettings() {
     if (selectedApp) {
       setCommonClientId(selectedApp.google_client_id || '');
       setCommonClientSecret(selectedApp.google_client_secret || '');
+      setShowOAuthPanel(true); // Now show the main config panel
       setError('');
+      setSuccess('Credentials selected! You can now save or modify them.');
+      setTimeout(() => setSuccess(''), 3000);
+    }
+  }
+  async function deleteExtraFieldData() {
+    try {
+      const resp = await api.delete(`/group-settings/${groupId}/extra-field-data`, {}, token);
+      if (resp.success) {
+        setSuccess(`Deleted extra field data for ${resp.data.deletedCount} users`);
+        setTimeout(() => setSuccess(''), 3000);
+      } else {
+        setError(resp.message || 'Failed to delete extra field data');
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Failed to delete extra field data');
     }
   }
 
+  function clearFilters() {
+    setFilters({
+      appId: '',
+      email: '',
+      name: '',
+      loginMethod: '',
+      status: '',
+      lastLoginFrom: '',
+      lastLoginTo: ''
+    });
+    setUserPage(1);
+  }
+
+  function updateFilter(key, value) {
+    setFilters(prev => ({ ...prev, [key]: value }));
+    setUserPage(1);
+  }
+
+  async function exportUsersToCSV() {
+    try {
+      setLoading(true);
+      // Fetch ALL users with current filters (no pagination)
+      const params = new URLSearchParams({
+        page: 1,
+        limit: 999999,
+        search: userSearch,
+        ...Object.fromEntries(Object.entries(filters).filter(([_, v]) => v))
+      });
+
+      const resp = await api.get(`/group-settings/${groupId}/users?${params}`, token);
+      if (!resp.success) {
+        setError('Failed to export users');
+        return;
+      }
+
+      const allUsers = resp.data.users;
+      
+      // Build CSV content (excluding password)
+      const headers = ['ID', 'Email', 'Name', 'Username', 'App', 'Login Method', 'Email Verified', 'Status', 'Last Login', 'Created At'];
+      const csvRows = [headers.join(',')];
+
+      allUsers.forEach(user => {
+        const status = user.group_blocked || user.app_blocked ? 'Blocked' : 'Active';
+        const row = [
+          user.id,
+          `\"${user.email || ''}\"`,
+          `\"${user.name || ''}\"`,
+          `\"${user.username || ''}\"`,
+          `\"${user.app_name || ''}\"`,
+          user.login_method || 'email',
+          user.email_verified ? 'Yes' : 'No',
+          status,
+          user.last_login ? new Date(user.last_login).toLocaleString() : 'Never',
+          new Date(user.created_at).toLocaleString()
+        ];
+        csvRows.push(row.join(','));
+      });
+
+      const csvContent = csvRows.join('\\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `group_${groupId}_users_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setSuccess(`Exported ${allUsers.length} users to CSV`);
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to export users');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleConfirmAction() {
+    if (confirmAction) {
+      confirmAction();
+    }
+    setShowConfirmModal(false);
+    setConfirmAction(null);
+    setConfirmMessage('');
+  }
+
+  function handleCancelAction() {
+    setShowConfirmModal(false);
+    setConfirmAction(null);
+    setConfirmMessage('');
+  }
   if (loading) {
     return <div className="group-settings-loading">Loading group settings...</div>;
   }
@@ -373,7 +515,7 @@ export default function GroupSettings() {
         <button className="back-btn" onClick={() => navigate('/groups')}>
           ← Back to Groups
         </button>
-        <h1 className="settings-title">⚙️ {group.name} - Group Settings</h1>
+        <h1 className="settings-title">{group.name} - Group Settings</h1>
         <div className="group-stats">
           <span className="stat-badge">📱 {group.app_count} Apps</span>
           <span className="stat-badge">👥 {group.total_users} Users</span>
@@ -501,21 +643,29 @@ export default function GroupSettings() {
 
             {useCommonOAuth && (
               <>
-                {/* Show app selector if multiple credentials exist */}
-                {apps.filter(a => a.google_client_id).length > 1 && !commonClientId && (
+                {/* Show app selector if multiple credentials exist and none selected yet */}
+                {(() => {
+                  const appsWithOAuth = apps.filter(a => a.google_client_id);
+                  const uniqueClientIds = [...new Set(appsWithOAuth.map(a => a.google_client_id))];
+                  return uniqueClientIds.length > 1 && !commonClientId;
+                })() && (
                   <div className="oauth-selector">
-                    <h3>Select OAuth Credentials to Use</h3>
+                    <h3>⚠️ Multiple OAuth Credentials Detected</h3>
+                    <p className="selector-info">
+                      Your apps in this group are using different OAuth credentials. 
+                      Please select which credentials should be used for all apps:
+                    </p>
                     <select
                       value={selectedAppForOAuth}
                       onChange={(e) => setSelectedAppForOAuth(e.target.value)}
                       className="app-select"
                     >
-                      <option value="">-- Choose an app --</option>
+                      <option value="">-- Choose which credentials to keep --</option>
                       {apps
                         .filter(a => a.google_client_id)
                         .map(app => (
                           <option key={app.id} value={app.id}>
-                            {app.app_name} ({app.google_client_id.substring(0, 20)}...)
+                            {app.app_name} (Client ID: {app.google_client_id.substring(0, 30)}...)
                           </option>
                         ))}
                     </select>
@@ -524,7 +674,19 @@ export default function GroupSettings() {
                       onClick={selectOAuthFromApp}
                       disabled={!selectedAppForOAuth}
                     >
-                      Use Selected Credentials
+                      ✓ Use These Credentials for All Apps
+                    </button>
+                    <button
+                      className="btn-secondary"
+                      onClick={() => {
+                        setUseCommonOAuth(false);
+                        setShowOAuthPanel(false);
+                        setSelectedAppForOAuth('');
+                        setError('');
+                      }}
+                      style={{ marginLeft: '0.75rem' }}
+                    >
+                      Cancel
                     </button>
                   </div>
                 )}
@@ -608,8 +770,22 @@ export default function GroupSettings() {
                   type="checkbox"
                   checked={useCommonExtraFields}
                   onChange={(e) => {
-                    setUseCommonExtraFields(e.target.checked);
-                    setFieldsDirty(true);
+                    if (!e.target.checked && useCommonExtraFields) {
+                      // Disabling - show confirmation
+                      setConfirmMessage(
+                        'Disabling common extra fields will permanently delete ALL extra field data for users in this group. This action cannot be undone. Are you sure?'
+                      );
+                      setConfirmAction(() => async () => {
+                        await deleteExtraFieldData();
+                        setUseCommonExtraFields(false);
+                        setCommonExtraFields([]);
+                        setFieldsDirty(true);
+                      });
+                      setShowConfirmModal(true);
+                    } else {
+                      setUseCommonExtraFields(e.target.checked);
+                      setFieldsDirty(true);
+                    }
                   }}
                 />
                 <span className="toggle-slider"></span>
@@ -706,9 +882,94 @@ export default function GroupSettings() {
                     setUserPage(1);
                   }}
                 />
+                <button className="btn-secondary" onClick={exportUsersToCSV}>
+                  📥 Export CSV
+                </button>
                 <button className="btn-primary" onClick={() => setShowAddUserModal(true)}>
                   + Add User
                 </button>
+              </div>
+            </div>
+
+            {/* Filters Panel */}
+            <div className="filters-panel">
+              <div className="filters-header">
+                <h3>🔍 Filters</h3>
+                <button className="btn-ghost small" onClick={clearFilters}>
+                  Clear All
+                </button>
+              </div>
+              <div className="filters-grid">
+                <div className="filter-item">
+                  <label>App</label>
+                  <select
+                    value={filters.appId}
+                    onChange={(e) => updateFilter('appId', e.target.value)}
+                  >
+                    <option value="">All Apps</option>
+                    {apps.map(app => (
+                      <option key={app.id} value={app.id}>{app.app_name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="filter-item">
+                  <label>Email Contains</label>
+                  <input
+                    type="text"
+                    placeholder="user@example.com"
+                    value={filters.email}
+                    onChange={(e) => updateFilter('email', e.target.value)}
+                  />
+                </div>
+                <div className="filter-item">
+                  <label>Name Contains</label>
+                  <input
+                    type="text"
+                    placeholder="John Doe"
+                    value={filters.name}
+                    onChange={(e) => updateFilter('name', e.target.value)}
+                  />
+                </div>
+                <div className="filter-item">
+                  <label>Login Method</label>
+                  <select
+                    value={filters.loginMethod}
+                    onChange={(e) => updateFilter('loginMethod', e.target.value)}
+                  >
+                    <option value="">All Methods</option>
+                    <option value="email">Email/Password</option>
+                    <option value="google">Google OAuth</option>
+                  </select>
+                </div>
+                <div className="filter-item">
+                  <label>Status</label>
+                  <select
+                    value={filters.status}
+                    onChange={(e) => updateFilter('status', e.target.value)}
+                  >
+                    <option value="">All Statuses</option>
+                    <option value="active">Active</option>
+                    <option value="blocked">Blocked</option>
+                    <option value="verified">Email Verified</option>
+                    <option value="unverified">Email Unverified</option>
+                  </select>
+                </div>
+                <div className="filter-item">
+                  <label>Last Login From</label>
+                  <input
+                    type="date"
+                    value={filters.lastLoginFrom}
+                    onChange={(e) => updateFilter('lastLoginFrom', e.target.value)}
+                  />
+                </div>
+                <div className="filter-item">
+                  <label>Last Login To</label>
+                  <input
+                    type="date"
+                    value={filters.lastLoginTo}
+                    onChange={(e) => updateFilter('lastLoginTo', e.target.value)}
+                  />
+                </div>
               </div>
             </div>
 
@@ -889,6 +1150,29 @@ export default function GroupSettings() {
                 {saving ? 'Adding...' : 'Add User'}
               </button>
               <button className="btn-secondary" onClick={() => setShowAddUserModal(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      {showConfirmModal && (
+        <div className="modal-overlay" onClick={handleCancelAction}>
+          <div className="modal-content confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>⚠️ Confirm Action</h2>
+              <button className="modal-close" onClick={handleCancelAction}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p className="confirm-message">{confirmMessage}</p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-danger" onClick={handleConfirmAction}>
+                Yes, Delete Data
+              </button>
+              <button className="btn-secondary" onClick={handleCancelAction}>
                 Cancel
               </button>
             </div>

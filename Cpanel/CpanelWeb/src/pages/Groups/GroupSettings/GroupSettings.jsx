@@ -1131,7 +1131,7 @@ export default function GroupSettings() {
               </div>
 
               {/* Extra Fields Data Setting */}
-              <div className="data-mgmt-card">
+              {/* <div className="data-mgmt-card">
                 <div className="card-header">
                   <h3>📋 Extra Fields Data</h3>
                   <label className="toggle-container-small">
@@ -1151,7 +1151,7 @@ export default function GroupSettings() {
                     <>Users can have <strong>different extra field values</strong> for each app</>
                   )}
                 </p>
-              </div>
+              </div> */}
             </div>
 
             <div className="data-mgmt-info">

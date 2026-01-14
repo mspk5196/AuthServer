@@ -933,10 +933,33 @@ export default function GroupSettings() {
                         'Disabling common extra fields will permanently delete ALL extra field data for users in this group. This action cannot be undone. Are you sure?'
                       );
                       setConfirmAction(() => async () => {
-                        await deleteExtraFieldData();
-                        setUseCommonExtraFields(false);
-                        setCommonExtraFields([]);
-                        setFieldsDirty(true);
+                        try {
+                          setSaving(true);
+                          // Delete extra field data
+                          await deleteExtraFieldData();
+                          
+                          // Update database to disable common extra fields
+                          const body = {
+                            use_common_extra_fields: false,
+                            common_extra_fields: []
+                          };
+                          const resp = await api.put(`/group-settings/${groupId}`, body, token);
+                          if (resp.success) {
+                            setUseCommonExtraFields(false);
+                            setCommonExtraFields([]);
+                            setFieldsDirty(false);
+                            setSuccess('Common extra fields disabled and data deleted');
+                            await fetchGroupSettings();
+                            setTimeout(() => setSuccess(''), 3000);
+                          } else {
+                            setError(resp.message || 'Failed to disable common extra fields');
+                          }
+                        } catch (err) {
+                          console.error(err);
+                          setError('Failed to disable common extra fields');
+                        } finally {
+                          setSaving(false);
+                        }
                       });
                       setShowConfirmModal(true);
                     } else {

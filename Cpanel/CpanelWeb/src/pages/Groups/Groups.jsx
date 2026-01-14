@@ -17,6 +17,8 @@ const Groups = () => {
   const [groupUsers, setGroupUsers] = useState([]);
   const [viewUsersLoading, setViewUsersLoading] = useState(false);
 
+  const navigate = useNavigate();
+  
   useEffect(() => {
     fetchGroups();
   }, []);

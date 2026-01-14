@@ -414,7 +414,7 @@ export default function GroupSettings() {
   }
   async function deleteExtraFieldData() {
     try {
-      const resp = await api.delete(`/group-settings/${groupId}/extra-field-data`, {}, token);
+      const resp = await api.delete(`/group-settings/${groupId}/extra-field-data`, token);
       if (resp.success) {
         setSuccess(`Deleted extra field data for ${resp.data.deletedCount} users`);
         setTimeout(() => setSuccess(''), 3000);

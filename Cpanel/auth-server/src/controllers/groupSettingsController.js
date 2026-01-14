@@ -754,25 +754,22 @@ const deleteExtraFieldData = async (req, res) => {
 
     // Delete all extra field data for users in this group
     const deleteResult = await pool.query(`
-      DELETE FROM group_user_logins
-      WHERE group_id = $1
-        AND (extra_field_1 IS NOT NULL OR 
-             extra_field_2 IS NOT NULL OR 
-             extra_field_3 IS NOT NULL OR 
-             extra_field_4 IS NOT NULL OR 
-             extra_field_5 IS NOT NULL OR 
-             extra_field_6 IS NOT NULL OR 
-             extra_field_7 IS NOT NULL OR 
-             extra_field_8 IS NOT NULL OR 
-             extra_field_9 IS NOT NULL OR 
-             extra_field_10 IS NOT NULL)
-      RETURNING id
+      UPDATE users u
+      SET extra = '{}'::jsonb
+      FROM dev_apps da
+      WHERE u.app_id = da.id
+        AND da.group_id = $1
+        AND u.extra IS NOT NULL
+        AND u.extra != '{}'::jsonb
+      RETURNING u.id
     `, [groupId]);
 
     res.json({
       success: true,
       message: `Deleted extra field data for ${deleteResult.rowCount} users`,
-      deletedCount: deleteResult.rowCount
+      data: {
+        deletedCount: deleteResult.rowCount
+      }
     });
   } catch (error) {
     console.error('Delete extra field data error:', error);

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
 import { tokenService } from '../../services/tokenService';
 import '../Apps/AppHome/Apps.css';
@@ -165,14 +166,22 @@ const Groups = () => {
             <div key={group.id} className="app-card">
               <div className="app-card-header">
                 <h3>{group.name}</h3>
-                <button
-                  className="btn-link btn-danger"
-                  style={{ marginLeft: 'auto' }}
-                  onClick={() => handleDeleteGroup(group)}
-                  disabled={deletingId === group.id}
-                >
-                  {deletingId === group.id ? 'Deleting...' : 'Delete'}
-                </button>
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    className="btn-link"
+                    onClick={() => navigate(`/groups/${group.id}/settings`)}
+                    title="Group Settings"
+                  >
+                    ⚙️ Settings
+                  </button>
+                  <button
+                    className="btn-link btn-danger"
+                    onClick={() => handleDeleteGroup(group)}
+                    disabled={deletingId === group.id}
+                  >
+                    {deletingId === group.id ? 'Deleting...' : 'Delete'}
+                  </button>
+                </div>
               </div>
                 <div className="app-card-body">
                 <div className="app-info-row">

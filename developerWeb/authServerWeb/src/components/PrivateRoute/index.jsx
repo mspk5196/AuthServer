@@ -1,0 +1,39 @@
+import { Navigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import { authService } from '../../services/authService';
+
+const PrivateRoute = ({ children, requireVerification = false }) => {
+  const { developer, loading, initialized } = useAuth();
+  const location = useLocation();
+
+  // Show loading while checking auth
+  if (!initialized || loading) {
+    return (
+      <div className="loading">
+        <div className="spinner"></div>
+      </div>
+    );
+  }
+
+  // Check if user is authenticated (backend-driven via session cookie)
+  if (!developer) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // Check email verification if required (support multiple field names)
+  const isVerified = developer?.email_verified ?? developer?.is_verified ?? developer?.isVerified;
+  if (requireVerification && !isVerified) {
+    return (
+      <div className="container" style={{ marginTop: '2rem' }}>
+        <div className="alert alert-warning">
+          <strong>Email Verification Required</strong>
+          <p>Please verify your email address to access this feature.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return children;
+};
+
+export default PrivateRoute;

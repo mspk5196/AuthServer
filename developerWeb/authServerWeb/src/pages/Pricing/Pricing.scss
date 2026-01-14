@@ -1,0 +1,118 @@
+@use '../../styles/variables' as *;
+
+.pricing-page {
+  padding: 3rem 0 4rem;
+
+  .pricing-header {
+    text-align: center;
+    margin-bottom: 3rem;
+
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    p {
+      color: $text-secondary;
+      max-width: 640px;
+      margin: 0 auto;
+    }
+  }
+
+  .pricing-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 2rem;
+    margin-bottom: 2.5rem;
+  }
+
+  .pricing-card {
+    @include card;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    border-top: 3px solid $border-color;
+    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+
+    &.pricing-card-free {
+      border-top-color: $primary-color;
+    }
+
+    &:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+      border-top-color: $primary-color;
+    }
+
+    .pricing-card-header {
+      margin-bottom: 1.5rem;
+
+      h2 {
+        font-size: 1.5rem;
+        margin-bottom: 0.25rem;
+      }
+
+      .pricing-tagline {
+        color: $text-secondary;
+        font-size: 0.9375rem;
+        margin-bottom: 1rem;
+      }
+
+      .pricing-amount {
+        display: flex;
+        align-items: baseline;
+        gap: 0.5rem;
+
+        .amount {
+          font-size: 1.75rem;
+          font-weight: 600;
+        }
+
+        .duration {
+          font-size: 0.875rem;
+          color: $text-secondary;
+        }
+      }
+    }
+
+    .pricing-card-body {
+      flex: 1;
+
+      .feature-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+
+        li {
+          position: relative;
+          padding-left: 1.25rem;
+          margin-bottom: 0.5rem;
+          font-size: 0.9375rem;
+          color: $text-secondary;
+
+          &::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            top: 0;
+            color: $primary-color;
+          }
+        }
+      }
+    }
+
+    .pricing-card-footer {
+      margin-top: 1.75rem;
+    }
+  }
+
+  .pricing-note {
+    text-align: center;
+    font-size: 0.875rem;
+    color: $text-secondary;
+
+    a {
+      margin-left: 0.25rem;
+    }
+  }
+}

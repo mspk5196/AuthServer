@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateDeveloper } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 const {
   getGroupSettings,
   updateGroupSettings,
@@ -14,7 +14,7 @@ const {
 } = require('../controllers/groupSettingsController');
 
 // All routes require developer authentication
-router.use(authenticateDeveloper);
+router.use(authenticateToken);
 
 // Group settings management
 router.get('/:groupId', getGroupSettings);

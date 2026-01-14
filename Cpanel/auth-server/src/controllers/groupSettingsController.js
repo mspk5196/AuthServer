@@ -1063,9 +1063,9 @@ const disableCommonMode = async (req, res) => {
         await client.query(`
           UPDATE users u
           SET username = gul.common_username
-          FROM group_user_logins gul
-          JOIN dev_apps da ON u.app_id = da.id
+          FROM group_user_logins gul, dev_apps da
           WHERE u.id = gul.user_id
+            AND u.app_id = da.id
             AND da.group_id = $1
             AND gul.common_username IS NOT NULL
         `, [groupId]);
@@ -1073,9 +1073,9 @@ const disableCommonMode = async (req, res) => {
         await client.query(`
           UPDATE users u
           SET name = gul.common_name
-          FROM group_user_logins gul
-          JOIN dev_apps da ON u.app_id = da.id
+          FROM group_user_logins gul, dev_apps da
           WHERE u.id = gul.user_id
+            AND u.app_id = da.id
             AND da.group_id = $1
             AND gul.common_name IS NOT NULL
         `, [groupId]);
@@ -1083,9 +1083,9 @@ const disableCommonMode = async (req, res) => {
         await client.query(`
           UPDATE users u
           SET password_hash = gul.common_password_hash
-          FROM group_user_logins gul
-          JOIN dev_apps da ON u.app_id = da.id
+          FROM group_user_logins gul, dev_apps da
           WHERE u.id = gul.user_id
+            AND u.app_id = da.id
             AND da.group_id = $1
             AND gul.common_password_hash IS NOT NULL
         `, [groupId]);

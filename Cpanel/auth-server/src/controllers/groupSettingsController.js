@@ -206,6 +206,72 @@ const getGroupUsersWithStatus = async (req, res) => {
     const offset = (page - 1) * limit;
     const searchPattern = `%${search}%`;
 
+    // Build filter conditions
+    const filters = [];
+    const params = [groupId, developerId, searchPattern];
+    let paramIndex = 4;
+
+    // App filter
+    if (req.query.appId) {
+      filters.push(`u.app_id = $${paramIndex}`);
+      params.push(req.query.appId);
+      paramIndex++;
+    }
+
+    // Email filter
+    if (req.query.email) {
+      filters.push(`u.email ILIKE $${paramIndex}`);
+      params.push(`%${req.query.email}%`);
+      paramIndex++;
+    }
+
+    // Name filter
+    if (req.query.name) {
+      filters.push(`u.name ILIKE $${paramIndex}`);
+      params.push(`%${req.query.name}%`);
+      paramIndex++;
+    }
+
+    // Login method filter
+    if (req.query.loginMethod) {
+      const loginMethodMap = {
+        'google': `gul.google_id IS NOT NULL`,
+        'email': `gul.google_id IS NULL`
+      };
+      if (loginMethodMap[req.query.loginMethod]) {
+        filters.push(loginMethodMap[req.query.loginMethod]);
+      }
+    }
+
+    // Status filter
+    if (req.query.status) {
+      if (req.query.status === 'active') {
+        filters.push(`u.is_blocked = false AND (gbu.id IS NULL)`);
+      } else if (req.query.status === 'blocked') {
+        filters.push(`(u.is_blocked = true OR gbu.id IS NOT NULL)`);
+      } else if (req.query.status === 'verified') {
+        filters.push(`u.email_verified = true`);
+      } else if (req.query.status === 'unverified') {
+        filters.push(`u.email_verified = false`);
+      }
+    }
+
+    // Last login filter
+    if (req.query.lastLoginFrom) {
+      filters.push(`u.last_login >= $${paramIndex}`);
+      params.push(req.query.lastLoginFrom);
+      paramIndex++;
+    }
+    if (req.query.lastLoginTo) {
+      filters.push(`u.last_login <= $${paramIndex}`);
+      params.push(req.query.lastLoginTo);
+      paramIndex++;
+    }
+
+    const filterClause = filters.length > 0 ? `AND ${filters.join(' AND ')}` : '';
+
+    params.push(limit, offset);
+
     const usersResult = await pool.query(`
       SELECT 
         u.id,
@@ -221,10 +287,13 @@ const getGroupUsersWithStatus = async (req, res) => {
         gbu.id IS NOT NULL as group_blocked,
         gbu.reason as block_reason,
         gbu.blocked_at,
-        gbu.blocked_by
+        gbu.blocked_by,
+        gul.google_id,
+        CASE WHEN gul.google_id IS NOT NULL THEN 'google' ELSE 'email' END as login_method
       FROM users u
       JOIN dev_apps da ON u.app_id = da.id
       LEFT JOIN group_blocked_users gbu ON gbu.group_id = da.group_id AND gbu.user_id = u.id
+      LEFT JOIN group_user_logins gul ON gul.user_id = u.id AND gul.group_id = da.group_id
       WHERE da.group_id = $1 AND da.developer_id = $2
         AND (
           u.email ILIKE $3 OR 
@@ -232,15 +301,19 @@ const getGroupUsersWithStatus = async (req, res) => {
           u.username ILIKE $3 OR
           da.app_name ILIKE $3
         )
+        ${filterClause}
       ORDER BY u.created_at DESC
-      LIMIT $4 OFFSET $5
-    `, [groupId, developerId, searchPattern, limit, offset]);
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `, params);
 
-    // Get total count
+    // Get total count with same filters
+    const countParams = params.slice(0, -2); // Remove limit and offset
     const countResult = await pool.query(`
       SELECT COUNT(DISTINCT u.id) as total
       FROM users u
       JOIN dev_apps da ON u.app_id = da.id
+      LEFT JOIN group_blocked_users gbu ON gbu.group_id = da.group_id AND gbu.user_id = u.id
+      LEFT JOIN group_user_logins gul ON gul.user_id = u.id AND gul.group_id = da.group_id
       WHERE da.group_id = $1 AND da.developer_id = $2
         AND (
           u.email ILIKE $3 OR 
@@ -248,6 +321,7 @@ const getGroupUsersWithStatus = async (req, res) => {
           u.username ILIKE $3 OR
           da.app_name ILIKE $3
         )
+        ${filterClause}
     `, [groupId, developerId, searchPattern]);
 
     res.json({
@@ -657,6 +731,59 @@ const getBulkOperations = async (req, res) => {
   }
 };
 
+/**
+ * Delete all extra field data for users in a group
+ */
+const deleteExtraFieldData = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { groupId } = req.params;
+
+    // Verify group ownership
+    const groupResult = await pool.query(
+      'SELECT id FROM app_groups WHERE id = $1 AND developer_id = $2',
+      [groupId, developerId]
+    );
+
+    if (groupResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Group not found'
+      });
+    }
+
+    // Delete all extra field data for users in this group
+    const deleteResult = await pool.query(`
+      DELETE FROM group_user_logins
+      WHERE group_id = $1
+        AND (extra_field_1 IS NOT NULL OR 
+             extra_field_2 IS NOT NULL OR 
+             extra_field_3 IS NOT NULL OR 
+             extra_field_4 IS NOT NULL OR 
+             extra_field_5 IS NOT NULL OR 
+             extra_field_6 IS NOT NULL OR 
+             extra_field_7 IS NOT NULL OR 
+             extra_field_8 IS NOT NULL OR 
+             extra_field_9 IS NOT NULL OR 
+             extra_field_10 IS NOT NULL)
+      RETURNING id
+    `, [groupId]);
+
+    res.json({
+      success: true,
+      message: `Deleted extra field data for ${deleteResult.rowCount} users`,
+      deletedCount: deleteResult.rowCount
+    });
+  } catch (error) {
+    console.error('Delete extra field data error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete extra field data',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getGroupSettings,
   updateGroupSettings,
@@ -666,5 +793,6 @@ module.exports = {
   bulkBlockUsers,
   bulkUnblockUsers,
   addUserToGroup,
-  getBulkOperations
+  getBulkOperations,
+  deleteExtraFieldData
 };

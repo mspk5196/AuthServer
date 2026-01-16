@@ -298,7 +298,7 @@ const registerUser = async (req, res) => {
 
     // Check if email exists in any other app within the same group
     const groupCheck = await pool.query(`
-      SELECT ag.group_name, da.app_name
+      SELECT ag.name as group_name, da.app_name
       FROM users u
       JOIN dev_apps da ON u.app_id = da.id
       JOIN app_groups ag ON da.group_id = ag.id
@@ -313,7 +313,7 @@ const registerUser = async (req, res) => {
       return res.status(409).json({
         success: false,
         error: 'Email exists in group',
-        message: `User already registered with us in the "${groupInfo.group_name}" group. Please use the same credentials to log in.`,
+        message: `You already have an account with "${groupInfo.group_name}". Please use the same credentials to log in.`,
         group_name: groupInfo.group_name
       });
     }

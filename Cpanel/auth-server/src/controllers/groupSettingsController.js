@@ -155,15 +155,33 @@ const updateGroupSettings = async (req, res) => {
       `, [common_google_client_id, common_google_client_secret, groupId, developerId]);
     }
 
-    // If enabling common extra fields, apply to all apps in group
+    // If enabling common extra fields, merge with existing app fields
     if (use_common_extra_fields && common_extra_fields) {
-      await pool.query(`
-        UPDATE dev_apps
-        SET 
-          extra_fields = $1,
-          updated_at = NOW()
-        WHERE group_id = $2 AND developer_id = $3
-      `, [JSON.stringify(common_extra_fields), groupId, developerId]);
+      // Get all apps in the group
+      const appsResult = await pool.query(
+        'SELECT id, extra_fields FROM dev_apps WHERE group_id = $1 AND developer_id = $2',
+        [groupId, developerId]
+      );
+
+      // Update each app by merging common fields with existing fields
+      for (const app of appsResult.rows) {
+        const existingFields = app.extra_fields || [];
+        const commonFieldNames = common_extra_fields.map(f => f.name);
+        
+        // Keep existing app-specific fields that are not in common fields
+        const appSpecificFields = existingFields.filter(
+          f => !commonFieldNames.includes(f.name)
+        );
+        
+        // Merge: app-specific fields + common fields
+        const mergedFields = [...appSpecificFields, ...common_extra_fields];
+        
+        await pool.query(`
+          UPDATE dev_apps
+          SET extra_fields = $1, updated_at = NOW()
+          WHERE id = $2
+        `, [JSON.stringify(mergedFields), app.id]);
+      }
     }
 
     res.json({

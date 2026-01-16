@@ -184,6 +184,62 @@ const updateGroupSettings = async (req, res) => {
       }
     }
 
+    // If disabling common extra fields, remove common fields from apps
+    if (use_common_extra_fields === false) {
+      // Get the current common fields before disabling
+      const groupData = await pool.query(
+        'SELECT common_extra_fields FROM app_groups WHERE id = $1',
+        [groupId]
+      );
+      
+      const currentCommonFields = groupData.rows[0]?.common_extra_fields || [];
+      
+      if (currentCommonFields.length > 0) {
+        // Get all apps in the group
+        const appsResult = await pool.query(
+          'SELECT id, extra_fields FROM dev_apps WHERE group_id = $1 AND developer_id = $2',
+          [groupId, developerId]
+        );
+
+        const commonFieldNames = currentCommonFields.map(f => f.name);
+
+        // Remove common fields from each app, keeping only app-specific fields
+        for (const app of appsResult.rows) {
+          const existingFields = app.extra_fields || [];
+          
+          // Keep only fields that are NOT in common fields
+          const appSpecificFields = existingFields.filter(
+            f => !commonFieldNames.includes(f.name)
+          );
+          
+          await pool.query(`
+            UPDATE dev_apps
+            SET extra_fields = $1, updated_at = NOW()
+            WHERE id = $2
+          `, [JSON.stringify(appSpecificFields), app.id]);
+        }
+
+        // Delete extra field data from users
+        const commonFieldKeys = commonFieldNames.map(name => `'${name}'`).join(',');
+        
+        if (commonFieldKeys) {
+          await pool.query(`
+            UPDATE users u
+            SET extra = (
+              SELECT jsonb_object_agg(key, value)
+              FROM jsonb_each(u.extra)
+              WHERE key NOT IN (${commonFieldKeys})
+            )
+            FROM dev_apps da
+            WHERE u.app_id = da.id
+              AND da.group_id = $1
+              AND u.extra IS NOT NULL
+              AND u.extra != '{}'::jsonb
+          `, [groupId]);
+        }
+      }
+    }
+
     res.json({
       success: true,
       message: 'Group settings updated successfully',

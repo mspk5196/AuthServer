@@ -3032,7 +3032,9 @@ const getDeveloperGroups = async (req, res) => {
 
 /**
  * Get developer's apps
- * GET /:apiKey/developer/apps?group_id=123 (optional)
+ * GET /:apiKey/developer/apps?group_id=123 (optional - filter by group)
+ * GET /:apiKey/developer/apps?group_id=null (get apps without groups)
+ * Note: developer_id is automatically extracted from API key & secret via verifyAppCredentials middleware
  */
 const getDeveloperApps = async (req, res) => {
   try {
@@ -3058,10 +3060,18 @@ const getDeveloperApps = async (req, res) => {
     
     const params = [developerId];
     
-    if (group_id) {
-      query += ` AND da.group_id = $2`;
-      params.push(group_id);
+    // Filter by group_id if provided
+    if (group_id !== undefined) {
+      if (group_id === 'null' || group_id === null || group_id === '') {
+        // Get only apps that are NOT in any group
+        query += ` AND da.group_id IS NULL`;
+      } else {
+        // Get apps for specific group
+        query += ` AND da.group_id = $2`;
+        params.push(group_id);
+      }
     }
+    // If no group_id param provided, return all apps (with and without groups)
     
     query += ` ORDER BY da.created_at DESC`;
 

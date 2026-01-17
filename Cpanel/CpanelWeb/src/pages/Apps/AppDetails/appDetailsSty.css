@@ -153,9 +153,21 @@
     border-radius: 2px;
 }
 
+/* Users Section - Scrollable Container */
+.users-section {
+    background: white;
+    border-radius: 1rem;
+    padding: 2rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    overflow-x: auto;
+    max-width: 100%;
+}
+
 /* Users Table */
 .users-table {
     width: 100%;
+    min-width: 800px; /* Ensure minimum width */
+    table-layout: auto;
     border-collapse: separate;
     border-spacing: 0;
     border-radius: 0.75rem;
@@ -176,6 +188,10 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
     border-bottom: 2px solid #cbd5e1;
+    white-space: nowrap;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .users-table tbody tr {
@@ -195,12 +211,18 @@
     padding: 1.125rem 1.25rem;
     color: #334155;
     font-size: 0.9375rem;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .users-table tbody td:last-child {
     display: flex;
     gap: 0.625rem;
     align-items: center;
+    white-space: normal;
+    max-width: none;
 }
 
 /* Status Badges */

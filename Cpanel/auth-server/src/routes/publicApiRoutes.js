@@ -34,10 +34,10 @@ router.post('/:apiKey/auth/delete-account', publicApis.deleteAccount);
 router.get('/:apiKey/user/profile', publicApis.getUserProfile);
 router.patch('/:apiKey/user/profile', publicApis.patchUserProfile);
 
-// Developer data endpoints (fetch groups, apps, users)
-router.get('/:apiKey/developer/groups', publicApis.getDeveloperGroups);
-router.get('/:apiKey/developer/apps', publicApis.getDeveloperApps);
-router.get('/:apiKey/developer/users', publicApis.getAppUsers);
-router.get('/:apiKey/developer/user/:user_id', publicApis.getUserData);
+// Developer data endpoints (require X-Developer-Id header)
+router.get('/developer/groups', publicApis.verifyDeveloperCredentials, publicApis.getDeveloperGroups);
+router.get('/developer/apps', publicApis.verifyDeveloperCredentials, publicApis.getDeveloperApps);
+router.get('/developer/users', publicApis.verifyDeveloperCredentials, publicApis.getAppUsers);
+router.get('/developer/user/:user_id', publicApis.verifyDeveloperCredentials, publicApis.getUserData);
 
 module.exports = router;

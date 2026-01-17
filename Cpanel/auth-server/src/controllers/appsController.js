@@ -984,7 +984,7 @@ const listAppUsers = async (req, res) => {
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
 
     const users = await pool.query(`
-      SELECT id, name, username, email, email_verified, google_linked, is_blocked, last_login, created_at
+      SELECT id, name, username, email, email_verified, google_linked, is_blocked, last_login, created_at, extra
       FROM users
       ${where}
       ORDER BY created_at DESC

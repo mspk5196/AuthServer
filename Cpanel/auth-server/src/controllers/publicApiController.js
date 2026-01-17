@@ -20,6 +20,100 @@ const {
 const { log, error } = require('console');
 
 /**
+ * Middleware to verify developer credentials (dev_id)
+ * Used for developer-level APIs (fetching groups, apps, users)
+ */
+const verifyDeveloperCredentials = async (req, res, next) => {
+  try {
+    const devId = req.headers['x-developer-id'] || req.headers['x-dev-id'];
+
+    if (!devId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Missing developer credentials',
+        message: 'X-Developer-Id header is required'
+      });
+    }
+
+    // Verify dev_id and get developer details
+    const result = await pool.query(`
+      SELECT 
+        id,
+        name,
+        email,
+        email_verified,
+        is_blocked,
+        dev_id
+      FROM developers
+      WHERE dev_id = $1
+    `, [devId]);
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid developer credentials',
+        message: 'Developer ID is incorrect'
+      });
+    }
+
+    const developer = result.rows[0];
+
+    // Check if developer is blocked
+    if (developer.is_blocked) {
+      return res.status(403).json({
+        success: false,
+        error: 'Account blocked',
+        message: 'This developer account has been blocked'
+      });
+    }
+
+    // Check if developer's plan is active
+    const planCheck = await pool.query(`
+      SELECT 
+        p.features,
+        dpr.is_active,
+        dpr.end_date
+      FROM developer_plan_registrations dpr
+      JOIN dev_plans p ON dpr.plan_id = p.id
+      WHERE dpr.developer_id = $1
+      ORDER BY dpr.created_at DESC
+      LIMIT 1
+    `, [developer.id]);
+
+    if (planCheck.rows.length > 0) {
+      const plan = planCheck.rows[0];
+      
+      if (!plan.is_active) {
+        return res.status(403).json({
+          success: false,
+          error: 'Plan inactive',
+          message: 'Your plan is not active'
+        });
+      }
+
+      if (plan.end_date && new Date(plan.end_date) < new Date()) {
+        return res.status(403).json({
+          success: false,
+          error: 'Plan expired',
+          message: 'Your plan has expired'
+        });
+      }
+    }
+
+    // Attach developer to request
+    req.developer = developer;
+    next();
+  } catch (err) {
+    console.error('Developer credentials verification error:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to verify developer credentials'
+    });
+  }
+};
+
+/**
  * Middleware to verify app credentials (API Key + Secret)
  */
 const verifyAppCredentials = async (req, res, next) => {
@@ -2992,12 +3086,11 @@ const confirmUserUpdate = async (req, res) => {
 
 /**
  * Get developer's groups
- * GET /:apiKey/developer/groups
+ * GET /developer/groups
  */
 const getDeveloperGroups = async (req, res) => {
   try {
-    const app = req.app;
-    const developerId = app.developer_id;
+    const developerId = req.developer.id;
 
     const result = await pool.query(`
       SELECT 
@@ -3032,14 +3125,13 @@ const getDeveloperGroups = async (req, res) => {
 
 /**
  * Get developer's apps
- * GET /:apiKey/developer/apps?group_id=123 (optional - filter by group)
- * GET /:apiKey/developer/apps?group_id=null (get apps without groups)
- * Note: developer_id is automatically extracted from API key & secret via verifyAppCredentials middleware
+ * GET /developer/apps?group_id=123 (optional - filter by group)
+ * GET /developer/apps?group_id=null (get apps without groups)
+ * Note: developer_id is automatically extracted from dev_id header
  */
 const getDeveloperApps = async (req, res) => {
   try {
-    const app = req.app;
-    const developerId = app.developer_id;
+    const developerId = req.developer.id;
     const { group_id } = req.query;
 
     let query = `
@@ -3093,12 +3185,11 @@ const getDeveloperApps = async (req, res) => {
 
 /**
  * Get app users (by app_id from query param)
- * GET /:apiKey/developer/users?app_id=123&page=1&limit=50
+ * GET /developer/users?app_id=123&page=1&limit=50
  */
 const getAppUsers = async (req, res) => {
   try {
-    const app = req.app;
-    const developerId = app.developer_id;
+    const developerId = req.developer.id;
     const { app_id, page = 1, limit = 50 } = req.query;
 
     if (!app_id) {
@@ -3178,12 +3269,11 @@ const getAppUsers = async (req, res) => {
 /**
  * Get specific user data by user_id
  * GET /:apiKey/developer/user/:user_id
+ developer/user/:user_id
  */
 const getUserData = async (req, res) => {
   try {
-    const app = req.app;
-    const developerId = app.developer_id;
-    const { user_id } = req.params;
+    const developerId = req.developer.id;
 
     if (!user_id) {
       return res.status(400).json({
@@ -3240,6 +3330,7 @@ const getUserData = async (req, res) => {
 module.exports = {
   verifyAppCredentials,
   registerUser,
+  verifyDeveloperCredentials,
   loginUser,
   verifyEmail,
   getUserProfile,

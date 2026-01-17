@@ -1,0 +1,437 @@
+// ESM module
+import { AuthError } from './errors.js';
+
+export class AuthClient {
+  // Convenience: allow users to create with only key/secret
+  static create(apiKey, apiSecret, opts = {}) {
+    return new AuthClient({ apiKey, apiSecret, ...opts });
+  }
+
+  constructor({
+    apiKey,
+    apiSecret,
+    baseUrl = 'https://cpanel-backend.mspkapps.in/api/v1',
+    storage,
+    fetch: fetchFn,
+    keyInPath = true,
+    googleClientId = null,
+    developerId = null, // NEW: for developer-level APIs
+  } = {}) {
+    if (!apiKey) throw new Error('apiKey is required');
+    if (!apiSecret) throw new Error('apiSecret is required');
+    this.apiKey = apiKey;
+    this.apiSecret = apiSecret;
+    this.baseUrl = baseUrl.replace(/\/$/, '');
+    this.keyInPath = !!keyInPath;
+    this.googleClientId = googleClientId || null;
+    this.developerId = developerId || null; // Store developer ID
+
+    const f = fetchFn || (typeof window !== 'undefined' ? window.fetch : (typeof fetch !== 'undefined' ? fetch : null));
+    if (!f) throw new Error('No fetch available. Pass { fetch } or run on Node 18+/browsers.');
+    this.fetch = (...args) => f(...args);
+
+    this.storage = storage ?? (typeof window !== 'undefined' ? window.localStorage : null);
+    this.tokenKey = 'auth_user_token';
+    this.token = this._load(this.tokenKey);
+  }
+
+  // ---------- storage helpers ----------
+  _load(key) { if (!this.storage) return null; try { return this.storage.getItem(key); } catch { return null; } }
+  _save(key, val) { if (!this.storage) return; try { this.storage.setItem(key, val); } catch { } }
+  _clear(key) { if (!this.storage) return; try { this.storage.removeItem(key); } catch { } }
+
+  // ---------- internal builders ----------
+  _buildUrl(path) {
+    const p = path.startsWith('/') ? path.slice(1) : path;
+    return this.keyInPath
+      ? `${this.baseUrl}/${encodeURIComponent(this.apiKey)}/${p}`
+      : `${this.baseUrl}/${p}`;
+  }
+
+  _headers(extra = {}) {
+    return {
+      'Content-Type': 'application/json',
+      'X-API-Key': this.apiKey,
+      'X-API-Secret': this.apiSecret,
+      ...(this.googleClientId ? { 'X-Google-Client-Id': this.googleClientId } : {}),
+      ...(this.developerId ? { 'X-Developer-Id': this.developerId } : {}),
+      ...(this.token ? { Authorization: `UserToken ${this.token}` } : {}),
+      ...extra
+    };
+  }
+
+  setToken(token) {
+    this.token = token || null;
+    if (token) this._save(this.tokenKey, token);
+    else this._clear(this.tokenKey);
+  }
+
+  setDeveloperId(developerId) {
+    this.developerId = developerId || null;
+  }
+
+  getAuthHeader() { return this.token ? { Authorization: `UserToken ${this.token}` } : {}; }
+  logout() { this.setToken(null); }
+
+  // ---------- public API methods ----------
+  async register({ email, username, password, name, extra = {} }) {
+    const resp = await this.fetch(this._buildUrl('auth/register'), {
+      method: 'POST',
+      headers: this._headers(),
+      body: JSON.stringify({ email, username, password, name, ...extra })
+    });
+    const json = await safeJson(resp);
+    if (!resp.ok || json?.success === false) throw toError(resp, json, 'Register failed');
+    const token = json?.data?.user_token;
+    if (token) this.setToken(token);
+    return json;
+  }
+
+  async login({ email, username, password }) {
+    const payload = email ? { email, password } : { username, password };
+    const resp = await this.fetch(this._buildUrl('auth/login'), {
+      method: 'POST',
+      headers: this._headers(),
+      body: JSON.stringify(payload)
+    });
+    const json = await safeJson(resp);
+    if (!resp.ok || json?.success === false) throw toError(resp, json, 'Login failed');
+    const token = json?.data?.user_token;
+    if (token) this.setToken(token);
+    return json;
+  }
+
+  async googleAuth({ id_token }) {
+    if (!id_token) {
+      throw new AuthError(
+        'Either id_token or access_token is required for Google authentication',
+        400,
+        'MISSING_TOKEN',
+        null
+      );
+    }
+
+    const body = { id_token };
+    if (this.googleClientId) body.google_client_id = this.googleClientId;
+
+    const resp = await this.fetch(this._buildUrl('auth/google'), {
+      method: 'POST',
+      headers: this._headers(),
+      body: JSON.stringify(body)
+    });
+
+    const json = await safeJson(resp);
+    if (!resp.ok || json?.success === false) throw toError(resp, json, 'Google authentication failed');
+
+    const token = json?.data?.user_token;
+    if (token) this.setToken(token);
+
+    return json;
+  }
+
+  async requestPasswordReset({ email }) {
+    const resp = await this.fetch(this._buildUrl('auth/request-password-reset'), {
+      method: 'POST',
+      headers: this._headers(),
+      body: JSON.stringify({ email })
+    });
+    const json = await safeJson(resp);
+    if (!resp.ok || json?.success === false) throw toError(resp, json, 'Password reset request failed');
+    return json;
+  }
+
+  async requestChangePasswordLink({ email }) {
+    const resp = await this.fetch(this._buildUrl('auth/request-change-password-link'), {
+      method: 'POST',
+      headers: this._headers(),
+      body: JSON.stringify({ email })
+    });
+    const json = await safeJson(resp);
+    if (!resp.ok || json?.success === false) throw toError(resp, json, 'Request change password link failed');
+    return json;
+  }
+
+  async resendVerificationEmail({ email, purpose }) {
+    const resp = await this.fetch(this._buildUrl('auth/resend-verification'), {
+      method: 'POST',
+      headers: this._headers(),
+      body: JSON.stringify({ email, purpose })
+    });
+    const json = await safeJson(resp);
+    if (!resp.ok || json?.success === false) throw toError(resp, json, 'Resend verification failed');
+    return json;
+  }
+
+  async deleteAccount({ email, password }) {
+    const resp = await this.fetch(this._buildUrl('auth/delete-account'), {
+      method: 'POST',
+      headers: this._headers(),
+      body: JSON.stringify({ email, password })
+    });
+    const json = await safeJson(resp);
+    if (!resp.ok || json?.success === false) throw toError(resp, json, 'Delete account failed');
+    return json;
+  }
+
+  async getEditableProfileFields() {
+    const resp = await this.fetch(this._buildUrl('user/profile'), {
+      method: 'GET',
+      headers: this._headers()
+    });
+    const json = await safeJson(resp);
+    if (!resp.ok || json?.success === false) throw toError(resp, json, 'Get profile failed');
+    return json;
+  }
+
+  async updateProfile(updates = {}) {
+    const resp = await this.fetch(this._buildUrl('user/profile'), {
+      method: 'PATCH',
+      headers: this._headers(),
+      body: JSON.stringify(updates)
+    });
+    const json = await safeJson(resp);
+    if (!resp.ok || json?.success === false) throw toError(resp, json, 'Update profile failed');
+    return json;
+  }
+
+  async sendGoogleUserSetPasswordEmail({ email }) {
+    const resp = await this.fetch(this._buildUrl('auth/set-password-google-user'), {
+      method: 'POST',
+      headers: this._headers(),
+      body: JSON.stringify({ email })
+    });
+    const json = await safeJson(resp);
+    if (!resp.ok || json?.success === false) throw toError(resp, json, 'Send Google user set password email failed');
+    return json;
+  }
+
+  async getProfile() {
+    const resp = await this.fetch(this._buildUrl('user/profile'), {
+      method: 'GET',
+      headers: this._headers()
+    });
+    const json = await safeJson(resp);
+    if (!resp.ok || json?.success === false) throw toError(resp, json, 'Get profile failed');
+    return json;
+  }
+
+  async verifyToken(accessToken) {
+    const resp = await this.fetch(this._buildUrl('auth/verify-token'), {
+      method: 'POST',
+      headers: {
+        ...this._headers(),
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+    const json = await safeJson(resp);
+    if (!resp.ok || json?.success === false) throw toError(resp, json, 'Verify token failed');
+    return json?.data ?? json;
+  }
+
+  async authed(path, { method = 'GET', body, headers } = {}) {
+    const resp = await this.fetch(this._buildUrl(path), {
+      method,
+      headers: this._headers(headers),
+      body: body ? JSON.stringify(body) : undefined
+    });
+    const json = await safeJson(resp);
+    if (!resp.ok || json?.success === false) throw toError(resp, json, 'Request failed');
+    return json;
+  }
+
+  // ---------- Developer Data APIs ----------
+  // Note: Requires developerId to be set via constructor or setDeveloperId()
+  
+  async getDeveloperGroups() {
+    if (!this.developerId) {
+      throw new AuthError('Developer ID is required. Set it via constructor or setDeveloperId()', 400, 'MISSING_DEVELOPER_ID', null);
+    }
+    const resp = await this.fetch(`${this.baseUrl}/developer/groups`, {
+      method: 'GET',
+      headers: this._headers()
+    });
+    const json = await safeJson(resp);
+    if (!resp.ok || json?.success === false) throw toError(resp, json, 'Get developer groups failed');
+    return json;
+  }
+
+  /**
+   * Get developer's apps
+   * @param {number|string|null} groupId - Optional. Filter by group ID, pass null/'null' for apps without groups, omit for all apps
+   * @returns {Promise} API response with app data
+   * @example
+   * // Get all apps (with and without groups)
+   * await client.getDeveloperApps();
+   * 
+   * // Get apps in specific group
+   * await client.getDeveloperApps(123);
+   * 
+   * // Get only apps NOT in any group
+   * await client.getDeveloperApps(null);
+   */
+  async getDeveloperApps(groupId = undefined) {
+    if (!this.developerId) {
+      throw new AuthError('Developer ID is required. Set it via constructor or setDeveloperId()', 400, 'MISSING_DEVELOPER_ID', null);
+    }
+    
+    let url = `${this.baseUrl}/developer/apps`;
+    
+    if (groupId !== undefined) {
+      if (groupId === null || groupId === 'null') {
+        url += '?group_id=null';
+      } else {
+        url += `?group_id=${encodeURIComponent(groupId)}`;
+      }
+    }
+    
+    const resp = await this.fetch(url, {
+      method: 'GET',
+      headers: this._headers()
+    });
+    const json = await safeJson(resp);
+    if (!resp.ok || json?.success === false) throw toError(resp, json, 'Get developer apps failed');
+    return json;
+  }
+
+  async getAppUsers({ appId, page = 1, limit = 50 }) {
+    if (!this.developerId) {
+      throw new AuthError('Developer ID is required. Set it via constructor or setDeveloperId()', 400, 'MISSING_DEVELOPER_ID', null);
+    }
+    if (!appId) throw new AuthError('appId is required', 400, 'MISSING_APP_ID', null);
+    const url = `${this.baseUrl}/developer/users?app_id=${encodeURIComponent(appId)}&page=${page}&limit=${limit}`;
+    const resp = await this.fetch(url, {
+      method: 'GET',
+      headers: this._headers()
+    });
+    const json = await safeJson(resp);
+    if (!resp.ok || json?.success === false) throw toError(resp, json, 'Get app users failed');
+    return json;
+  }
+
+  async getUserData(userId) {
+    if (!this.developerId) {
+      throw new AuthError('Developer ID is required. Set it via constructor or setDeveloperId()', 400, 'MISSING_DEVELOPER_ID', null);
+    }
+    if (!userId) throw new AuthError('userId is required', 400, 'MISSING_USER_ID', null);
+    const resp = await this.fetch(`${this.baseUrl}/developer/user/${encodeURIComponent(userId)}`, {
+      method: 'GET',
+      headers: this._headers()
+    });
+    const json = await safeJson(resp);
+    if (!resp.ok || json?.success === false) throw toError(resp, json, 'Get user data failed');
+    return json;
+  }
+}
+
+// ---------- helpers ----------
+async function safeJson(resp) { try { return await resp.json(); } catch { return null; } }
+
+function toError(resp, json, fallback) {
+  return new AuthError(
+    json?.message || fallback || 'Request failed',
+    resp.status,
+    json?.code || json?.error || 'REQUEST_FAILED',
+    json
+  );
+}
+
+
+// ---- Singleton-style convenience API ----
+
+const _singleton = { client: null };
+
+function ensureClient() {
+  if (!_singleton.client) {
+    throw new Error(
+      'AuthClient not initialized. Call authclient.init({ apiKey, apiSecret, ... }) first.'
+    );
+  }
+  return _singleton.client;
+}
+
+function init({
+  apiKey = process.env.MSPK_AUTH_API_KEY,
+  apiSecret = process.env.MSPK_AUTH_API_SECRET,
+  googleClientId = process.env.GOOGLE_CLIENT_ID,
+  developerId = process.env.MSPK_DEVELOPER_ID, // NEW
+  baseUrl,
+  storage,
+  fetch: fetchFn,
+  keyInPath,
+} = {}) {
+  _singleton.client = new AuthClient({
+    apiKey,
+    apiSecret,
+    googleClientId,
+    developerId,
+    baseUrl,
+    storage,
+    fetch: fetchFn,
+    keyInPath,
+  });
+  return _singleton.client;
+}
+
+const authclient = {
+  init,
+  get client() {
+    return ensureClient();
+  },
+
+  // auth shortcuts
+  login(creds) {
+    return ensureClient().login(creds);
+  },
+  register(data) {
+    return ensureClient().register(data);
+  },
+  googleAuth(tokens) {
+    return ensureClient().googleAuth(tokens);
+  },
+
+  // profile helpers
+  getProfile() {
+    return ensureClient().getProfile();
+  },
+  updateProfile(updates) {
+    return ensureClient().updateProfile(updates);
+  },
+
+  // generic authed call
+  authed(path, opts) {
+    return ensureClient().authed(path, opts);
+  },
+
+  // token helpers
+  setToken(token) {
+    return ensureClient().setToken(token);
+  },
+  logout() {
+    return ensureClient().logout();
+  },
+  verifyToken(accessToken) {
+    return ensureClient().verifyToken(accessToken);
+  },
+
+  // developer ID management
+  setDeveloperId(developerId) {
+    return ensureClient().setDeveloperId(developerId);
+  },
+
+  // developer data APIs (requires developerId to be set)
+  getDeveloperGroups() {
+    return ensureClient().getDeveloperGroups();
+  },
+  getDeveloperApps(groupId = undefined) {
+    return ensureClient().getDeveloperApps(groupId);
+  },
+  getAppUsers({ appId, page, limit }) {
+    return ensureClient().getAppUsers({ appId, page, limit });
+  },
+  getUserData(userId) {
+    return ensureClient().getUserData(userId);
+  },
+};
+
+export { authclient, init };
+export default authclient;

@@ -59,6 +59,19 @@ export default function AppDetails(){
     }
   }
 
+  // Extract all unique extra field keys from users
+  const getExtraFieldKeys = () => {
+    const keysSet = new Set();
+    users.forEach(user => {
+      if (user.extra && typeof user.extra === 'object') {
+        Object.keys(user.extra).forEach(key => keysSet.add(key));
+      }
+    });
+    return Array.from(keysSet).sort();
+  };
+
+  const extraFieldKeys = getExtraFieldKeys();
+
   async function viewLogins(userId){
     try {
       const resp = await api.get(`/apps/users/${appId}/${userId}/logins`, token);
@@ -258,7 +271,11 @@ export default function AppDetails(){
           <thead>
             <tr>
               <th>Email</th>
+              <th>Name</th>
               <th>Username</th>
+              {extraFieldKeys.map(key => (
+                <th key={key}>{key}</th>
+              ))}
               <th>Verified</th>
               <th>Blocked</th>
               <th>Actions</th>
@@ -268,7 +285,20 @@ export default function AppDetails(){
             {users.map(u => (
               <tr key={u.id}>
                 <td>{u.email}</td>
+                <td>{u.name || '-'}</td>
                 <td>{u.username || '-'}</td>
+                {extraFieldKeys.map(key => {
+                  const value = u.extra?.[key];
+                  return (
+                    <td key={key}>
+                      {value !== undefined && value !== null
+                        ? typeof value === 'object'
+                          ? JSON.stringify(value)
+                          : String(value)
+                        : '-'}
+                    </td>
+                  );
+                })}
                 <td>
                   <span className={u.email_verified ? 'status-badge status-verified' : 'status-badge status-unverified'}>
                     {u.email_verified ? 'Yes' : 'No'}

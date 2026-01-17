@@ -136,6 +136,8 @@
     padding: 2rem;
     margin-bottom: 2rem;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    overflow-x: auto;
+    max-width: 100%;
 }
 
 .section-title {
@@ -156,20 +158,10 @@
     border-radius: 2px;
 }
 
-/* Users Section - Scrollable Container */
-.users-section {
-    background: white;
-    border-radius: 1rem;
-    padding: 2rem;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-    overflow-x: auto;
-    max-width: 100%;
-}
-
 /* Users Table */
 .users-table {
-    width: 100%;
-    min-width: 800px; /* Ensure minimum width */
+    width: max-content;
+    min-width: 100%;
     table-layout: auto;
     border-collapse: separate;
     border-spacing: 0;

@@ -4,7 +4,7 @@ pipeline {
 
   environment {
     APP = "auth-server"
-    EMAIL = "ci@mspkapps.in"
+    EMAIL = "praneshkarthims@gmail.com"
     IMAGE_TAG = "prod-${BUILD_NUMBER}"
   }
 
@@ -20,15 +20,15 @@ pipeline {
       steps {
         withCredentials([usernamePassword(
           credentialsId: 'github-ci-token',
-          usernameVariable: 'GIT_USER',
+          usernameVariable: 'GIT_USER', 
           passwordVariable: 'GIT_TOKEN'
         )]) {
           sh '''
-            set -e
+            set -e 
             git config user.name "Jenkins CI"
-            git config user.email "ci@mspkapps.in"
+            git config user.email "praneshkarthims@gmail.com"
 
-            git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@github.com/MSPK-APPS/auth-server.git
+            git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@github.com/mspk5196/AuthServer.git
 
             git fetch origin \
               +refs/heads/main:refs/remotes/origin/main \
@@ -72,44 +72,44 @@ pipeline {
     }
   }
 
-  post {
-    success {
-      emailext(
-        to: EMAIL,
-        subject: "✅ ${APP} deployed to PRODUCTION (Build #${BUILD_NUMBER})",
-        body: """
-              SUCCESS ✅
+  // post {
+    // success {
+      // emailext(
+      //   to: EMAIL,
+      //   subject: "✅ ${APP} deployed to PRODUCTION (Build #${BUILD_NUMBER})",
+      //   body: """
+      //         SUCCESS ✅
 
-              Application : ${APP}
-              Build Number: ${BUILD_NUMBER}
-              Image Tag   : ${IMAGE_TAG}
-              Branch      : main
+      //         Application : ${APP}
+      //         Build Number: ${BUILD_NUMBER}
+      //         Image Tag   : ${IMAGE_TAG}
+      //         Branch      : main
 
-              See attached Jenkins build log for details.
-              """,
-        attachLog: true,
-        compressLog: true
-      )
-    }
+      //         See attached Jenkins build log for details.
+      //         """,
+      //   attachLog: true,
+      //   compressLog: true
+      // )
+    // }
 
-    failure {
-      emailext(
-        to: EMAIL,
-        subject: "❌ ${APP} CI FAILED (Build #${BUILD_NUMBER})",
-        body: """
-              FAILURE ❌
+    // failure {
+      // emailext(
+      //   to: EMAIL,
+      //   subject: "❌ ${APP} CI FAILED (Build #${BUILD_NUMBER})",
+      //   body: """
+      //         FAILURE ❌
 
-              Application : ${APP}
-              Build Number: ${BUILD_NUMBER}
-              Branch      : test → main
+      //         Application : ${APP}
+      //         Build Number: ${BUILD_NUMBER}
+      //         Branch      : test → main
 
-              ❌ Production was NOT touched.
-              See attached Jenkins build log for exact error.
-              """,
-        attachLog: true,
-        compressLog: true
-      )
-    }
-  }
+      //         ❌ Production was NOT touched.
+      //         See attached Jenkins build log for exact error.
+      //         """,
+      //   attachLog: true,
+      //   compressLog: true
+      // )
+    // }
+  // }
 
 }

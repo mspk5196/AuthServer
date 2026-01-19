@@ -24,7 +24,7 @@ pipeline {
           passwordVariable: 'GIT_TOKEN'
         )]) {
           sh '''
-            set -e
+            set -e 
             git config user.name "Jenkins CI"
             git config user.email "praneshkarthims@gmail.com"
 

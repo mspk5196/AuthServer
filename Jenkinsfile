@@ -20,7 +20,7 @@ pipeline {
       steps {
         withCredentials([usernamePassword(
           credentialsId: 'github-ci-token',
-          usernameVariable: 'GIT_USER',
+          usernameVariable: 'GIT_USER', 
           passwordVariable: 'GIT_TOKEN'
         )]) {
           sh '''

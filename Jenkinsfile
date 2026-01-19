@@ -74,41 +74,41 @@ pipeline {
 
   post {
     success {
-      emailext(
-        to: EMAIL,
-        subject: "✅ ${APP} deployed to PRODUCTION (Build #${BUILD_NUMBER})",
-        body: """
-              SUCCESS ✅
+      // emailext(
+      //   to: EMAIL,
+      //   subject: "✅ ${APP} deployed to PRODUCTION (Build #${BUILD_NUMBER})",
+      //   body: """
+      //         SUCCESS ✅
 
-              Application : ${APP}
-              Build Number: ${BUILD_NUMBER}
-              Image Tag   : ${IMAGE_TAG}
-              Branch      : main
+      //         Application : ${APP}
+      //         Build Number: ${BUILD_NUMBER}
+      //         Image Tag   : ${IMAGE_TAG}
+      //         Branch      : main
 
-              See attached Jenkins build log for details.
-              """,
-        attachLog: true,
-        compressLog: true
-      )
+      //         See attached Jenkins build log for details.
+      //         """,
+      //   attachLog: true,
+      //   compressLog: true
+      // )
     }
 
     failure {
-      emailext(
-        to: EMAIL,
-        subject: "❌ ${APP} CI FAILED (Build #${BUILD_NUMBER})",
-        body: """
-              FAILURE ❌
+      // emailext(
+      //   to: EMAIL,
+      //   subject: "❌ ${APP} CI FAILED (Build #${BUILD_NUMBER})",
+      //   body: """
+      //         FAILURE ❌
 
-              Application : ${APP}
-              Build Number: ${BUILD_NUMBER}
-              Branch      : test → main
+      //         Application : ${APP}
+      //         Build Number: ${BUILD_NUMBER}
+      //         Branch      : test → main
 
-              ❌ Production was NOT touched.
-              See attached Jenkins build log for exact error.
-              """,
-        attachLog: true,
-        compressLog: true
-      )
+      //         ❌ Production was NOT touched.
+      //         See attached Jenkins build log for exact error.
+      //         """,
+      //   attachLog: true,
+      //   compressLog: true
+      // )
     }
   }
 

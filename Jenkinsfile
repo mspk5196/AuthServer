@@ -72,8 +72,8 @@ pipeline {
     }
   }
 
-  post {
-    success {
+  // post {
+    // success {
       // emailext(
       //   to: EMAIL,
       //   subject: "✅ ${APP} deployed to PRODUCTION (Build #${BUILD_NUMBER})",
@@ -90,9 +90,9 @@ pipeline {
       //   attachLog: true,
       //   compressLog: true
       // )
-    }
+    // }
 
-    failure {
+    // failure {
       // emailext(
       //   to: EMAIL,
       //   subject: "❌ ${APP} CI FAILED (Build #${BUILD_NUMBER})",
@@ -109,7 +109,7 @@ pipeline {
       //   attachLog: true,
       //   compressLog: true
       // )
-    }
-  }
+    // }
+  // }
 
 }

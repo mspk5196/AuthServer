@@ -257,6 +257,63 @@ const Settings = () => {
 
       <div className="settings-section">
         <div className="settings-section-header">
+          <h2 className="settings-section-title">Developer Credentials</h2>
+          <p className="settings-section-subtitle">Use these credentials to access developer-level APIs (fetch all apps, groups, and users)</p>
+        </div>
+
+        <div className="settings-row">
+          <div className="settings-label">
+            <div className="settings-label-title">Developer ID</div>
+            <div className="settings-label-desc">Your unique developer identifier for API authentication</div>
+          </div>
+          <div className="settings-value" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <code style={{ 
+              background: 'var(--surface-color)', 
+              padding: '0.5rem 1rem', 
+              borderRadius: '4px',
+              fontFamily: 'monospace',
+              fontSize: '0.875rem',
+              border: '1px solid var(--border-color)'
+            }}>
+              {developer?.dev_id || 'Loading...'}
+            </code>
+            <button
+              className="btn btn-secondary"
+              style={{ padding: '0.5rem 1rem' }}
+              onClick={() => {
+                navigator.clipboard.writeText(developer?.dev_id || '');
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => { btn.textContent = originalText; }, 2000);
+              }}
+            >
+              Copy
+            </button>
+          </div>
+        </div>
+
+        <div className="settings-row">
+          <div className="settings-label">
+            <div className="settings-label-title">API Documentation</div>
+            <div className="settings-label-desc">Learn how to use your Developer ID</div>
+          </div>
+          <div className="settings-value">
+            <a 
+              href="https://docs.mspkapps.in/developer-api" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="btn btn-secondary"
+              style={{ padding: '0.5rem 1rem' }}
+            >
+              View Docs
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div className="settings-section">
+        <div className="settings-section-header">
           <h2 className="settings-section-title">Account Information</h2>
           <p className="settings-section-subtitle">Your account details</p>
         </div>

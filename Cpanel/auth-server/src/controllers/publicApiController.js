@@ -20,6 +20,100 @@ const {
 const { log, error } = require('console');
 
 /**
+ * Middleware to verify developer credentials (dev_id)
+ * Used for developer-level APIs (fetching groups, apps, users)
+ */
+const verifyDeveloperCredentials = async (req, res, next) => {
+  try {
+    const devId = req.headers['x-developer-id'] || req.headers['x-dev-id'];
+
+    if (!devId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Missing developer credentials',
+        message: 'X-Developer-Id header is required'
+      });
+    }
+
+    // Verify dev_id and get developer details
+    const result = await pool.query(`
+      SELECT 
+        id,
+        name,
+        email,
+        email_verified,
+        is_blocked,
+        dev_id
+      FROM developers
+      WHERE dev_id = $1
+    `, [devId]);
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid developer credentials',
+        message: 'Developer ID is incorrect'
+      });
+    }
+
+    const developer = result.rows[0];
+
+    // Check if developer is blocked
+    if (developer.is_blocked) {
+      return res.status(403).json({
+        success: false,
+        error: 'Account blocked',
+        message: 'This developer account has been blocked'
+      });
+    }
+
+    // Check if developer's plan is active
+    const planCheck = await pool.query(`
+      SELECT 
+        p.features,
+        dpr.is_active,
+        dpr.end_date
+      FROM developer_plan_registrations dpr
+      JOIN dev_plans p ON dpr.plan_id = p.id
+      WHERE dpr.developer_id = $1
+      ORDER BY dpr.created_at DESC
+      LIMIT 1
+    `, [developer.id]);
+
+    if (planCheck.rows.length > 0) {
+      const plan = planCheck.rows[0];
+      
+      if (!plan.is_active) {
+        return res.status(403).json({
+          success: false,
+          error: 'Plan inactive',
+          message: 'Your plan is not active'
+        });
+      }
+
+      if (plan.end_date && new Date(plan.end_date) < new Date()) {
+        return res.status(403).json({
+          success: false,
+          error: 'Plan expired',
+          message: 'Your plan has expired'
+        });
+      }
+    }
+
+    // Attach developer to request
+    req.developer = developer;
+    next();
+  } catch (err) {
+    console.error('Developer credentials verification error:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to verify developer credentials'
+    });
+  }
+};
+
+/**
  * Middleware to verify app credentials (API Key + Secret)
  */
 const verifyAppCredentials = async (req, res, next) => {
@@ -298,7 +392,7 @@ const registerUser = async (req, res) => {
 
     // Check if email exists in any other app within the same group
     const groupCheck = await pool.query(`
-      SELECT ag.group_name, da.app_name
+      SELECT ag.name as group_name, da.app_name
       FROM users u
       JOIN dev_apps da ON u.app_id = da.id
       JOIN app_groups ag ON da.group_id = ag.id
@@ -313,7 +407,7 @@ const registerUser = async (req, res) => {
       return res.status(409).json({
         success: false,
         error: 'Email exists in group',
-        message: `User already registered with us in the "${groupInfo.group_name}" group. Please use the same credentials to log in.`,
+        message: `You already have an account with "${groupInfo.group_name}". Please use the same credentials to log in.`,
         group_name: groupInfo.group_name
       });
     }
@@ -2990,9 +3084,253 @@ const confirmUserUpdate = async (req, res) => {
   }
 };
 
+/**
+ * Get developer's groups
+ * GET /developer/groups
+ */
+const getDeveloperGroups = async (req, res) => {
+  try {
+    const developerId = req.developer.id;
+
+    const result = await pool.query(`
+      SELECT 
+        id,
+        name,
+        description,
+        use_common_google_oauth,
+        use_common_username,
+        use_common_name,
+        use_common_password,
+        use_common_extra_fields_data,
+        created_at,
+        updated_at
+      FROM app_groups
+      WHERE developer_id = $1
+      ORDER BY created_at DESC
+    `, [developerId]);
+
+    res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (err) {
+    console.error('Get developer groups error:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to fetch groups'
+    });
+  }
+};
+
+/**
+ * Get developer's apps
+ * GET /developer/apps?group_id=123 (optional - filter by group)
+ * GET /developer/apps?group_id=null (get apps without groups)
+ * Note: developer_id is automatically extracted from dev_id header
+ */
+const getDeveloperApps = async (req, res) => {
+  try {
+    const developerId = req.developer.id;
+    const { group_id } = req.query;
+
+    let query = `
+      SELECT 
+        da.id,
+        da.app_name,
+        da.api_key,
+        da.group_id,
+        da.google_client_id,
+        da.extra_fields,
+        da.created_at,
+        da.updated_at,
+        ag.name as group_name
+      FROM dev_apps da
+      LEFT JOIN app_groups ag ON da.group_id = ag.id
+      WHERE da.developer_id = $1
+    `;
+    
+    const params = [developerId];
+    
+    // Filter by group_id if provided
+    if (group_id !== undefined) {
+      if (group_id === 'null' || group_id === null || group_id === '') {
+        // Get only apps that are NOT in any group
+        query += ` AND da.group_id IS NULL`;
+      } else {
+        // Get apps for specific group
+        query += ` AND da.group_id = $2`;
+        params.push(group_id);
+      }
+    }
+    // If no group_id param provided, return all apps (with and without groups)
+    
+    query += ` ORDER BY da.created_at DESC`;
+
+    const result = await pool.query(query, params);
+
+    res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (err) {
+    console.error('Get developer apps error:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to fetch apps'
+    });
+  }
+};
+
+/**
+ * Get app users (by app_id from query param)
+ * GET /developer/users?app_id=123&page=1&limit=50
+ */
+const getAppUsers = async (req, res) => {
+  try {
+    const developerId = req.developer.id;
+    const { app_id, page = 1, limit = 50 } = req.query;
+
+    if (!app_id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing app_id',
+        message: 'app_id query parameter is required'
+      });
+    }
+
+    // Verify the app belongs to this developer
+    const appCheck = await pool.query(
+      'SELECT id FROM dev_apps WHERE id = $1 AND developer_id = $2',
+      [app_id, developerId]
+    );
+
+    if (appCheck.rows.length === 0) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied',
+        message: 'You do not have access to this app'
+      });
+    }
+
+    const offset = (page - 1) * limit;
+
+    // Get users with all data except password
+    const result = await pool.query(`
+      SELECT 
+        u.id,
+        u.app_id,
+        u.username,
+        u.email,
+        u.name,
+        u.extra,
+        u.is_email_verified,
+        u.google_id,
+        u.created_at,
+        u.updated_at,
+        da.app_name
+      FROM users u
+      JOIN dev_apps da ON u.app_id = da.id
+      WHERE u.app_id = $1
+      ORDER BY u.created_at DESC
+      LIMIT $2 OFFSET $3
+    `, [app_id, limit, offset]);
+
+    // Get total count
+    const countResult = await pool.query(
+      'SELECT COUNT(*) FROM users WHERE app_id = $1',
+      [app_id]
+    );
+
+    const totalUsers = parseInt(countResult.rows[0].count);
+    const totalPages = Math.ceil(totalUsers / limit);
+
+    res.json({
+      success: true,
+      data: result.rows,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages,
+        totalUsers,
+        limit: parseInt(limit)
+      }
+    });
+  } catch (err) {
+    console.error('Get app users error:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to fetch users'
+    });
+  }
+};
+
+/**
+ * Get specific user data by user_id
+ * GET /:apiKey/developer/user/:user_id
+ developer/user/:user_id
+ */
+const getUserData = async (req, res) => {
+  try {
+    const developerId = req.developer.id;
+
+    if (!user_id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing user_id',
+        message: 'user_id parameter is required'
+      });
+    }
+
+    // Get user with verification that they belong to this developer's app
+    const result = await pool.query(`
+      SELECT 
+        u.id,
+        u.app_id,
+        u.username,
+        u.email,
+        u.name,
+        u.extra,
+        u.is_email_verified,
+        u.google_id,
+        u.created_at,
+        u.updated_at,
+        da.app_name,
+        da.group_id,
+        ag.name as group_name
+      FROM users u
+      JOIN dev_apps da ON u.app_id = da.id
+      LEFT JOIN app_groups ag ON da.group_id = ag.id
+      WHERE u.id = $1 AND da.developer_id = $2
+    `, [user_id, developerId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+        message: 'User not found or you do not have access to this user'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: result.rows[0]
+    });
+  } catch (err) {
+    console.error('Get user data error:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to fetch user data'
+    });
+  }
+};
+
 module.exports = {
   verifyAppCredentials,
   registerUser,
+  verifyDeveloperCredentials,
   loginUser,
   verifyEmail,
   getUserProfile,
@@ -3011,5 +3349,9 @@ module.exports = {
   verifyEmailSetPasswordGoogleUser,
   verifyChangePassword,
   verifyAccessToken,
-  confirmUserUpdate
+  confirmUserUpdate,
+  getDeveloperGroups,
+  getDeveloperApps,
+  getAppUsers,
+  getUserData
 };

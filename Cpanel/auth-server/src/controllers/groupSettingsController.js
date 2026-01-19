@@ -134,6 +134,62 @@ const updateGroupSettings = async (req, res) => {
     updates.push(`updated_at = NOW()`);
     values.push(groupId, developerId);
 
+    // If disabling common extra fields, remove common fields from apps BEFORE updating
+    if (use_common_extra_fields === false) {
+      // Get the current common fields before disabling
+      const groupData = await pool.query(
+        'SELECT common_extra_fields FROM app_groups WHERE id = $1',
+        [groupId]
+      );
+      
+      const currentCommonFields = groupData.rows[0]?.common_extra_fields || [];
+      
+      if (currentCommonFields.length > 0) {
+        // Get all apps in the group
+        const appsResult = await pool.query(
+          'SELECT id, extra_fields FROM dev_apps WHERE group_id = $1 AND developer_id = $2',
+          [groupId, developerId]
+        );
+
+        const commonFieldNames = currentCommonFields.map(f => f.name);
+
+        // Remove common fields from each app, keeping only app-specific fields
+        for (const app of appsResult.rows) {
+          const existingFields = app.extra_fields || [];
+          
+          // Keep only fields that are NOT in common fields
+          const appSpecificFields = existingFields.filter(
+            f => !commonFieldNames.includes(f.name)
+          );
+          
+          await pool.query(`
+            UPDATE dev_apps
+            SET extra_fields = $1, updated_at = NOW()
+            WHERE id = $2
+          `, [JSON.stringify(appSpecificFields), app.id]);
+        }
+
+        // Delete extra field data from users
+        const commonFieldKeys = commonFieldNames.map(name => `'${name}'`).join(',');
+        
+        if (commonFieldKeys) {
+          await pool.query(`
+            UPDATE users u
+            SET extra = (
+              SELECT jsonb_object_agg(key, value)
+              FROM jsonb_each(u.extra)
+              WHERE key NOT IN (${commonFieldKeys})
+            )
+            FROM dev_apps da
+            WHERE u.app_id = da.id
+              AND da.group_id = $1
+              AND u.extra IS NOT NULL
+              AND u.extra != '{}'::jsonb
+          `, [groupId]);
+        }
+      }
+    }
+
     const query = `
       UPDATE app_groups 
       SET ${updates.join(', ')}
@@ -155,15 +211,91 @@ const updateGroupSettings = async (req, res) => {
       `, [common_google_client_id, common_google_client_secret, groupId, developerId]);
     }
 
-    // If enabling common extra fields, apply to all apps in group
+    // Detect removed common extra fields (when updating common_extra_fields array)
+    if (use_common_extra_fields !== false && common_extra_fields !== undefined) {
+      // Get the OLD common fields from database
+      const groupData = await pool.query(
+        'SELECT common_extra_fields FROM app_groups WHERE id = $1',
+        [groupId]
+      );
+      
+      const oldCommonFields = groupData.rows[0]?.common_extra_fields || [];
+      const newCommonFieldNames = common_extra_fields.map(f => f.name);
+      const oldCommonFieldNames = oldCommonFields.map(f => f.name);
+      
+      // Find which fields were removed
+      const removedFieldNames = oldCommonFieldNames.filter(
+        name => !newCommonFieldNames.includes(name)
+      );
+      
+      if (removedFieldNames.length > 0) {
+        // Remove these fields from all apps in the group
+        const appsResult = await pool.query(
+          'SELECT id, extra_fields FROM dev_apps WHERE group_id = $1 AND developer_id = $2',
+          [groupId, developerId]
+        );
+
+        for (const app of appsResult.rows) {
+          const existingFields = app.extra_fields || [];
+          
+          // Remove the deleted common fields
+          const filteredFields = existingFields.filter(
+            f => !removedFieldNames.includes(f.name)
+          );
+          
+          await pool.query(`
+            UPDATE dev_apps
+            SET extra_fields = $1, updated_at = NOW()
+            WHERE id = $2
+          `, [JSON.stringify(filteredFields), app.id]);
+        }
+
+        // Delete the removed field data from users
+        const removedFieldKeys = removedFieldNames.map(name => `'${name}'`).join(',');
+        
+        await pool.query(`
+          UPDATE users u
+          SET extra = (
+            SELECT jsonb_object_agg(key, value)
+            FROM jsonb_each(u.extra)
+            WHERE key NOT IN (${removedFieldKeys})
+          )
+          FROM dev_apps da
+          WHERE u.app_id = da.id
+            AND da.group_id = $1
+            AND u.extra IS NOT NULL
+            AND u.extra != '{}'::jsonb
+        `, [groupId]);
+      }
+    }
+
+    // If enabling common extra fields, merge with existing app fields
     if (use_common_extra_fields && common_extra_fields) {
-      await pool.query(`
-        UPDATE dev_apps
-        SET 
-          extra_fields = $1,
-          updated_at = NOW()
-        WHERE group_id = $2 AND developer_id = $3
-      `, [JSON.stringify(common_extra_fields), groupId, developerId]);
+      // Get all apps in the group
+      const appsResult = await pool.query(
+        'SELECT id, extra_fields FROM dev_apps WHERE group_id = $1 AND developer_id = $2',
+        [groupId, developerId]
+      );
+
+      // Update each app by merging common fields with existing fields
+      for (const app of appsResult.rows) {
+        const existingFields = app.extra_fields || [];
+        const commonFieldNames = common_extra_fields.map(f => f.name);
+        
+        // Keep existing app-specific fields that are not in common fields
+        const appSpecificFields = existingFields.filter(
+          f => !commonFieldNames.includes(f.name)
+        );
+        
+        // Merge: app-specific fields + common fields
+        const mergedFields = [...appSpecificFields, ...common_extra_fields];
+        
+        await pool.query(`
+          UPDATE dev_apps
+          SET extra_fields = $1, updated_at = NOW()
+          WHERE id = $2
+        `, [JSON.stringify(mergedFields), app.id]);
+      }
     }
 
     res.json({

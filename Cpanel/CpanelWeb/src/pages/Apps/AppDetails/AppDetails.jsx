@@ -50,7 +50,21 @@ export default function AppDetails(){
     try {
       setLoading(true);
       const resp = await api.get(`/apps/users/${appId}?limit=25`, token);
-      if (resp.success) setUsers(resp.data || []);
+      if (resp.success) {
+        // Parse extra field if it's a string
+        const parsedUsers = (resp.data || []).map(user => {
+          if (user.extra && typeof user.extra === 'string') {
+            try {
+              user.extra = JSON.parse(user.extra);
+            } catch (e) {
+              console.error('Failed to parse extra field for user:', user.id, e);
+            }
+          }
+          return user;
+        });
+        console.log('Fetched users with extra fields:', parsedUsers);
+        setUsers(parsedUsers);
+      }
     } catch (err) {
       console.error(err);
       setError('Failed to fetch users');
@@ -58,6 +72,21 @@ export default function AppDetails(){
       setLoading(false);
     }
   }
+
+  // Extract all unique extra field keys from users
+  const getExtraFieldKeys = () => {
+    const keysSet = new Set();
+    users.forEach(user => {
+      if (user.extra && typeof user.extra === 'object') {
+        Object.keys(user.extra).forEach(key => keysSet.add(key));
+      }
+    });
+    const keys = Array.from(keysSet).sort();
+    console.log('Extra field keys:', keys);
+    return keys;
+  };
+
+  const extraFieldKeys = getExtraFieldKeys();
 
   async function viewLogins(userId){
     try {
@@ -258,7 +287,11 @@ export default function AppDetails(){
           <thead>
             <tr>
               <th>Email</th>
+              <th>Name</th>
               <th>Username</th>
+              {extraFieldKeys.map(key => (
+                <th key={key}>{key}</th>
+              ))}
               <th>Verified</th>
               <th>Blocked</th>
               <th>Actions</th>
@@ -268,7 +301,20 @@ export default function AppDetails(){
             {users.map(u => (
               <tr key={u.id}>
                 <td>{u.email}</td>
+                <td>{u.name || '-'}</td>
                 <td>{u.username || '-'}</td>
+                {extraFieldKeys.map(key => {
+                  const value = u.extra?.[key];
+                  return (
+                    <td key={key}>
+                      {value !== undefined && value !== null
+                        ? typeof value === 'object'
+                          ? JSON.stringify(value)
+                          : String(value)
+                        : '-'}
+                    </td>
+                  );
+                })}
                 <td>
                   <span className={u.email_verified ? 'status-badge status-verified' : 'status-badge status-unverified'}>
                     {u.email_verified ? 'Yes' : 'No'}

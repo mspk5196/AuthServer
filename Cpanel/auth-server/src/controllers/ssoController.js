@@ -134,13 +134,26 @@ const me = async (req, res) => {
     if (!user) {
       return res.status(401).json({ success: false, message: 'Unauthorized', error: 'UNAUTHORIZED' });
     }
+
+    // Fetch dev_id from database
+    const pool = require('../config/db');
+    const result = await pool.query(
+      'SELECT dev_id, email_verified FROM developers WHERE id = $1',
+      [user.id || user.developerId]
+    );
+
+    const devId = result.rows[0]?.dev_id || null;
+    const emailVerified = result.rows[0]?.email_verified || false;
+
     return res.json({ success: true, developer: {
       id: user.id || user.developerId,
       email: user.email,
       name: user.name,
-      is_verified: user.is_verified !== false,
+      is_verified: user.is_verified !== false || emailVerified,
+      dev_id: devId,
     }});
   } catch (err) {
+    console.error('[ME] Error:', err);
     return res.status(500).json({ success: false, message: 'Failed to load user', error: 'ME_ERROR' });
   }
 };

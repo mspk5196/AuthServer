@@ -16,6 +16,12 @@ router.post('/auth/verify-email-set-password-google-user', publicApis.verifyEmai
 router.get('/auth/verify-change-password', publicApis.verifyChangePassword);
 router.post('/auth/verify-change-password', publicApis.verifyChangePassword);
 
+// Developer data endpoints (require X-Developer-Id header)
+router.get('/developer/groups', publicApis.verifyDeveloperCredentials, publicApis.getDeveloperGroups);
+router.get('/developer/apps', publicApis.verifyDeveloperCredentials, publicApis.getDeveloperApps);
+router.get('/developer/users', publicApis.verifyDeveloperCredentials, publicApis.getAppUsers);
+router.get('/developer/user/:user_id', publicApis.verifyDeveloperCredentials, publicApis.getUserData);
+
 // All routes below require API key and secret
 router.use(publicApis.verifyAppCredentials);
 // Auth endpoints
@@ -33,5 +39,6 @@ router.post('/:apiKey/auth/delete-account', publicApis.deleteAccount);
 // User profile (requires Bearer token)
 router.get('/:apiKey/user/profile', publicApis.getUserProfile);
 router.patch('/:apiKey/user/profile', publicApis.patchUserProfile);
+
 
 module.exports = router;

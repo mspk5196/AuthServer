@@ -1,16 +1,15 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { authService } from '../../services/authService';
 import './Navbar.scss';
 
 const Navbar = () => {
-  const { isAuthenticated, developer } = useAuth();
+  const { isAuthenticated, developer, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   const handleLogout = async () => {
-    await authService.logout();
-    navigate('/login');
+    await logout();
+    navigate('/login', { replace: true });
   };
 
   const isActive = (path) => location.pathname === path;

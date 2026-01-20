@@ -13,6 +13,11 @@ AuthServer is a developer-focused authentication and user management platform. I
 
 It aims to be a self-hostable and customizable alternative to modern auth platforms.
 
+## 📖 Documentation
+
+Full docs here:
+https://authservices.mspkapps.in/docs/
+
 ---
 
 ## ✨ Features

@@ -6,7 +6,7 @@
 }
 
 .doc-sidebar {
-  width: 240px;
+  /* width: 280px; */
   background: white;
   border-right: 1px solid #e2e8f0;
   position: fixed;
@@ -76,11 +76,12 @@
 
 .doc-main {
   flex: 1;
-  padding: 2rem 3rem;
+  padding: 2rem;
+  padding-left: 2rem;
   overflow-x: hidden;
-  max-width: calc(100vw - 490px);
+  max-width: calc(100vw - 530px);
   box-sizing: border-box;
-  margin-left: 490px;
+  margin-left: 530px;
 }
 
 .doc-header {

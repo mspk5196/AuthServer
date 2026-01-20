@@ -10,10 +10,12 @@
   background: white;
   border-right: 1px solid #e2e8f0;
   position: sticky;
-  top: 0;
+  top: 50%;
+  transform: translateY(-50%);
   height: 100vh;
   overflow-y: auto;
   flex-shrink: 0;
+  align-self: flex-start;
 }
 
 .sidebar-header {

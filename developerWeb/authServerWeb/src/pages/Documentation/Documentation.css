@@ -9,14 +9,14 @@
   /* width: 280px; */
   background: white;
   border-right: 1px solid #e2e8f0;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   position: fixed;
   top: 50%;
   transform: translateY(-50%);
-  left: 280px;
+  left: 100px;
   /* height: 80vh; */
-  max-height: 90vh;
+  max-height: 75vh;
   overflow-y: auto;
   flex-shrink: 0;
   z-index: 100;
@@ -79,16 +79,15 @@
 .doc-main {
   flex: 1;
   padding: 2rem;
-  /* padding-left: 2rem; */
+  padding-left: 2rem;
   overflow-x: hidden;
   max-width: calc(100vw - 530px);
   box-sizing: border-box;
-  margin-left: 290px;
+  margin-left: 530px;
 }
 
 .doc-header {
   margin-bottom: 3rem;
-  text-align: center;
 }
 
 .doc-header .eyebrow {

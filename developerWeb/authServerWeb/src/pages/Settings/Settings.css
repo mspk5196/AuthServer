@@ -143,6 +143,47 @@
   box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
 }
 
+.password-options .option-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.password-options .option-card h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+.password-options .option-card p {
+  color: #64748b;
+  margin-bottom: 1rem;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+.password-options .divider-text {
+  text-align: center;
+  margin: 2rem 0;
+  position: relative;
+  color: #64748b;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.password-options .divider-text::before, .password-options .divider-text::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 45%;
+  height: 1px;
+  background: #e2e8f0;
+}
+.password-options .divider-text::before {
+  left: 0;
+}
+.password-options .divider-text::after {
+  right: 0;
+}
+
 .plan-info-card {
   border: 1px solid #e2e8f0;
   border-radius: 0.75rem;

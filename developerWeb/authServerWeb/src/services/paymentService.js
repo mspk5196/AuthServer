@@ -28,7 +28,7 @@ const paymentService = {
   /**
    * Initialize Razorpay checkout
    */
-  initiatePayment: (orderData, onSuccess, onError) => {
+  initiatePayment: (orderData, onSuccess, onError, onDismiss) => {
     if (!window.Razorpay) { 
       onError(new Error('Razorpay SDK not loaded'));
       return;
@@ -43,6 +43,21 @@ const paymentService = {
       order_id: orderData.orderId,
       handler: function (response) {
         onSuccess(response);
+      },
+      modal: {
+        ondismiss: function () {
+          // User closed/cancelled the Razorpay modal. Razorpay does not
+          // trigger payment.failed for this case.
+          if (typeof onDismiss === 'function') {
+            onDismiss();
+          } else {
+            onError({
+              code: 'PAYMENT_CANCELLED',
+              description: 'Payment cancelled',
+              reason: 'cancelled'
+            });
+          }
+        }
       },
       prefill: {
         name: '',

@@ -9,12 +9,14 @@
   /* width: 280px; */
   background: white;
   border-right: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   position: fixed;
   top: 50%;
   transform: translateY(-50%);
-  left: 280px;
+  left: 100px;
   /* height: 80vh; */
-  max-height: 90vh;
+  max-height: 75vh;
   overflow-y: auto;
   flex-shrink: 0;
   z-index: 100;

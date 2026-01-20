@@ -276,11 +276,9 @@
 
 .doc-section h3 {
   font-size: 1.5rem;
-  font-weight: 0f172a;
-  border-radius: 10px;
-  overflow: hidden;
+  font-weight: 600;
+  color: #0f172a;
   margin: 1.5rem 0;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .code-header {
@@ -333,7 +331,7 @@
   line-height: 1.7;
   color: #e2e8f0;
   display: block;
-  white-space: pre
+  white-space: pre;
 }
 
 /* Step Cards */

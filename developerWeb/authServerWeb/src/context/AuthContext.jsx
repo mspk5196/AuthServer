@@ -40,7 +40,13 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (credentials) => {
     const data = await authService.login(credentials);
-    setDeveloper(data.developer);
+    // Login response may not include full developer profile; refresh from backend
+    // (session cookie based) so UI has complete data without requiring a reload.
+    try {
+      await checkAuth();
+    } catch (e) {
+      setDeveloper(data.developer);
+    }
     return data;
   };
 

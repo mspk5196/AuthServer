@@ -2,19 +2,18 @@
   display: flex;
   min-height: 100vh;
   background: #f8fafc;
+  position: relative;
 }
 
 .doc-sidebar {
   width: 280px;
   background: white;
   border-right: 1px solid #e2e8f0;
-  position: fixed;
+  position: sticky;
   top: 0;
-  left: 0;
   height: 100vh;
   overflow-y: auto;
   flex-shrink: 0;
-  z-index: 100;
 }
 
 .sidebar-header {
@@ -78,7 +77,6 @@
   overflow-x: hidden;
   max-width: calc(100vw - 280px);
   box-sizing: border-box;
-  margin-left: 280px;
 }
 
 .doc-header {

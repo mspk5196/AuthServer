@@ -1,0 +1,15 @@
+.plans-page {
+  padding: 2rem 0 3rem;
+}
+.plans-page .plans-header {
+  margin-bottom: 2rem;
+}
+.plans-page .plans-header h1 {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+.plans-page .plans-header p {
+  font-size: 0.95rem;
+  color: #6b7280;
+  max-width: 640px;
+}/*# sourceMappingURL=Plans.css.map */

@@ -9,6 +9,8 @@
   /* width: 280px; */
   background: white;
   border-right: 1px solid #e2e8f0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border-radius: 12px;
   position: fixed;
   top: 50%;
   transform: translateY(-50%);
@@ -86,6 +88,7 @@
 
 .doc-header {
   margin-bottom: 3rem;
+  text-align: center;
 }
 
 .doc-header .eyebrow {

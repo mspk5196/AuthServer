@@ -73,6 +73,9 @@
   flex: 1;
   padding: 2rem;
   padding-left: 2rem;
+  overflow-x: hidden;
+  max-width: calc(100vw - 280px);
+  box-sizing: border-box;
 }
 
 .doc-header {
@@ -167,6 +170,8 @@
 /* Content */
 .doc-content {
   background: transparent;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .doc-section {
@@ -175,6 +180,9 @@
   padding: 2.5rem;
   margin-bottom: 2rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  max-width: 100%;
+  overflow-x: auto;
+  box-sizing: border-box;
 }
 
 .section-title {
@@ -323,6 +331,7 @@
   padding: 1.25rem;
   overflow-x: auto;
   background: #0f172a;
+  max-width: 100%;
 }
 
 .code-block code {
@@ -709,6 +718,17 @@
 /* Responsive */
 @media (max-width: 768px) {
   .documentation-page {
+    flex-direction: column;
+  }
+
+  .doc-sidebar {
+    width: 100%;
+    height: auto;
+    position: relative;
+  }
+
+  .doc-main {
+    max-width: 100%;
     padding: 1rem;
   }
 
@@ -721,7 +741,7 @@
     overflow-x: auto;
   }
 
-  .doc-content {
+  .doc-section {
     padding: 1.5rem;
   }
 

@@ -51,11 +51,6 @@ https://authservices.mspkapps.in/docs/
 
 ---
 
-## 📸 Screenshots (Coming Soon)
-> This is where I’ll add UI + developer portal screenshots once polished.
-
----
-
 ## 🗺️ Timeline (Commit-Backed)
 
 AuthServer was built over multiple phases totaling **200+ commits** of iteration.

@@ -2,28 +2,28 @@ version: "3.8"
 
 services:
   cpanel-backend:
-    image: mspk/cpanel-backend:${IMAGE_TAG}
+    image: mspkapps/cpanel-backend:${IMAGE_TAG}
     env_file:
       - /opt/envs/cpanel-backend.env
     restart: always
     networks: [webnet]
 
   cpanel-frontend:
-    image: mspk/cpanel-frontend:${IMAGE_TAG}
+    image: mspkapps/cpanel-frontend:${IMAGE_TAG}
     env_file:
       - /opt/envs/cpanel-frontend.env
     restart: always
     networks: [webnet]
 
   developer-backend:
-    image: mspk/dev-backend:${IMAGE_TAG}
+    image: mspkapps/dev-backend:${IMAGE_TAG}
     env_file:
       - /opt/envs/dev-backend.env
     restart: always
     networks: [webnet]
 
   developer-frontend:
-    image: mspk/dev-frontend:${IMAGE_TAG}
+    image: mspkapps/dev-frontend:${IMAGE_TAG}
     env_file:
       - /opt/envs/dev-frontend.env
     restart: always

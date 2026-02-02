@@ -68,6 +68,22 @@ pipeline {
       }
     }
 
+    stage('Sync Infra Files') {
+      steps {
+        sshagent(['prod-server-ssh']) {
+          sh '''
+            set -e
+
+            ssh mspkapps@prod "mkdir -p /opt/auth-server"
+
+            scp docker/docker-compose.base.yml \
+                docker/docker-compose.prod.yml \
+                mspkapps@prod:/opt/auth-server/
+          '''
+        }
+      }
+    }
+
   }
 
   post {

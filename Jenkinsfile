@@ -72,7 +72,6 @@ pipeline {
       steps {
         sh '''
           set -e
-          mkdir -p /opt/auth-server
           cp docker/docker-compose.base.yml docker/docker-compose.prod.yml /opt/auth-server/
         '''
       }
@@ -82,14 +81,14 @@ pipeline {
       steps {
         sh '''
           set -e
-    
+
           export IMAGE_TAG=prod-${BUILD_NUMBER}
-    
+
           docker pull mspkapps/cpanel-backend:$IMAGE_TAG
           docker pull mspkapps/cpanel-frontend:$IMAGE_TAG
           docker pull mspkapps/dev-backend:$IMAGE_TAG
           docker pull mspkapps/dev-frontend:$IMAGE_TAG
-    
+
           cd /opt/auth-server
           docker compose \
             -f docker-compose.base.yml \

@@ -2,6 +2,7 @@ version: "3.8"
 
 services:
   cpanel-backend:
+    container_name: cpanel-backend
     image: mspkapps/cpanel-backend:${IMAGE_TAG}
     env_file:
       - /opt/envs/cpanel-backend.env
@@ -9,6 +10,7 @@ services:
     networks: [webnet]
 
   cpanel-frontend:
+    container_name: cpanel-frontend
     image: mspkapps/cpanel-frontend:${IMAGE_TAG}
     env_file:
       - /opt/envs/cpanel-frontend.env
@@ -16,6 +18,7 @@ services:
     networks: [webnet]
 
   developer-backend:
+    container_name: developer-backend
     image: mspkapps/dev-backend:${IMAGE_TAG}
     env_file:
       - /opt/envs/dev-backend.env
@@ -23,6 +26,7 @@ services:
     networks: [webnet]
 
   developer-frontend:
+    container_name: developer-frontend
     image: mspkapps/dev-frontend:${IMAGE_TAG}
     env_file:
       - /opt/envs/dev-frontend.env

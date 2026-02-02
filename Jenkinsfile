@@ -70,19 +70,35 @@ pipeline {
 
     stage('Sync Infra Files') {
       steps {
-        sshagent(['prod-server-ssh']) {
-          sh '''
-            set -e
-
-            ssh mspkapps@prod "mkdir -p /opt/auth-server"
-
-            scp docker/docker-compose.base.yml \
-                docker/docker-compose.prod.yml \
-                mspkapps@prod:/opt/auth-server/
-          '''
-        }
+        sh '''
+          set -e
+          mkdir -p /opt/auth-server
+          cp docker/docker-compose.base.yml docker/docker-compose.prod.yml /opt/auth-server/
+        '''
       }
     }
+
+    stage('Deploy to Production') {
+      steps {
+        sh '''
+          set -e
+    
+          export IMAGE_TAG=prod-${BUILD_NUMBER}
+    
+          docker pull mspkapps/cpanel-backend:$IMAGE_TAG
+          docker pull mspkapps/cpanel-frontend:$IMAGE_TAG
+          docker pull mspkapps/dev-backend:$IMAGE_TAG
+          docker pull mspkapps/dev-frontend:$IMAGE_TAG
+    
+          cd /opt/auth-server
+          docker compose \
+            -f docker-compose.base.yml \
+            -f docker-compose.prod.yml \
+            up -d
+        '''
+      }
+    }
+
 
   }
 

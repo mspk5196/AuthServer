@@ -4,6 +4,7 @@ pipeline {
 
   environment {
     APP = "auth-server"
+    RUNTIME_ROOT = "/opt/runtime/${APP}"
     EMAIL = "ci@mspkapps.in"
     IMAGE_TAG = "prod-${BUILD_NUMBER}"
   }
@@ -54,8 +55,6 @@ pipeline {
 
             echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
 
-            export IMAGE_TAG=prod-${BUILD_NUMBER}
-
             docker compose \
               -f docker/docker-compose.ci.yml \
               build
@@ -72,7 +71,11 @@ pipeline {
       steps {
         sh '''
           set -e
-          cp docker/docker-compose.base.yml docker/docker-compose.prod.yml /opt/auth-server/
+          mkdir -p ${RUNTIME_ROOT}
+
+          cp docker/docker-compose.base.yml \
+             docker/docker-compose.prod.yml \
+             ${RUNTIME_ROOT}/
         '''
       }
     }
@@ -82,14 +85,13 @@ pipeline {
         sh '''
           set -e
 
-          export IMAGE_TAG=prod-${BUILD_NUMBER}
+          docker pull mspkapps/cpanel-backend:${IMAGE_TAG}
+          docker pull mspkapps/cpanel-frontend:${IMAGE_TAG}
+          docker pull mspkapps/dev-backend:${IMAGE_TAG}
+          docker pull mspkapps/dev-frontend:${IMAGE_TAG}
 
-          docker pull mspkapps/cpanel-backend:$IMAGE_TAG
-          docker pull mspkapps/cpanel-frontend:$IMAGE_TAG
-          docker pull mspkapps/dev-backend:$IMAGE_TAG
-          docker pull mspkapps/dev-frontend:$IMAGE_TAG
+          cd ${RUNTIME_ROOT}
 
-          cd /opt/auth-server
           docker compose \
             -f docker-compose.base.yml \
             -f docker-compose.prod.yml \
@@ -97,8 +99,6 @@ pipeline {
         '''
       }
     }
-
-
   }
 
   post {
@@ -107,15 +107,13 @@ pipeline {
         to: EMAIL,
         subject: "✅ ${APP} deployed to PRODUCTION (Build #${BUILD_NUMBER})",
         body: """
-              SUCCESS ✅
+SUCCESS ✅
 
-              Application : ${APP}
-              Build Number: ${BUILD_NUMBER}
-              Image Tag   : ${IMAGE_TAG}
-              Branch      : main
-
-              See attached Jenkins build log for details.
-              """,
+Application : ${APP}
+Build Number: ${BUILD_NUMBER}
+Image Tag   : ${IMAGE_TAG}
+Branch      : main
+""",
         attachLog: true,
         compressLog: true
       )
@@ -126,19 +124,17 @@ pipeline {
         to: EMAIL,
         subject: "❌ ${APP} CI FAILED (Build #${BUILD_NUMBER})",
         body: """
-              FAILURE ❌
+FAILURE ❌
 
-              Application : ${APP}
-              Build Number: ${BUILD_NUMBER}
-              Branch      : test → main
+Application : ${APP}
+Build Number: ${BUILD_NUMBER}
+Branch      : test → main
 
-              ❌ Production was NOT touched.
-              See attached Jenkins build log for exact error.
-              """,
+❌ Production was NOT touched.
+""",
         attachLog: true,
         compressLog: true
       )
     }
   }
-
 }

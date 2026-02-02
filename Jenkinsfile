@@ -42,34 +42,32 @@ pipeline {
       }
     }
 
-    stage('Build & Deploy (PRODUCTION)') {
+    stage('Build & Push Images') {
       steps {
-        sh '''
-          bash -lc '
+        withCredentials([usernamePassword(
+          credentialsId: 'dockerhub-creds',
+          usernameVariable: 'DOCKER_USER',
+          passwordVariable: 'DOCKER_PASS'
+        )]) {
+          sh '''
             set -e
-            set -a
 
-            source /opt/envs/frontend.prod.env
-            source /opt/envs/cpanel-backend.env
-            source /opt/envs/cpanel-frontend.env
-            source /opt/envs/dev-backend.env
-            source /opt/envs/dev-frontend.env
+            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
 
-            set +a
+            export IMAGE_TAG=prod-${BUILD_NUMBER}
 
-            docker compose -p auth-server \
-              -f docker/docker-compose.base.yml \
-              -f docker/docker-compose.prod.yml \
+            docker compose \
+              -f docker/docker-compose.ci.yml \
               build
 
-            docker compose -p auth-server \
-              -f docker/docker-compose.base.yml \
-              -f docker/docker-compose.prod.yml \
-              up -d
-          '
-        '''
+            docker compose \
+              -f docker/docker-compose.ci.yml \
+              push
+          '''
+        }
       }
     }
+
   }
 
   post {

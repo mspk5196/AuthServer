@@ -51,25 +51,29 @@ pipeline {
           passwordVariable: 'DOCKER_PASS'
         )]) {
           sh '''
-            set -e
-    
-            # 🔑 Load ALL envs (frontend + backend)
-            source scripts/load-env.sh
-    
-            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-    
-            docker compose \
-              -f docker/docker-compose.ci.yml \
-              build
-    
-            docker compose \
-              -f docker/docker-compose.ci.yml \
-              push
+            bash -lc '
+              set -e
+
+              echo "🔐 Loading environment variables..."
+              source scripts/load-env.sh
+
+              echo "🔐 Logging into Docker Hub..."
+              echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+
+              echo "🏗️ Building images..."
+              docker compose \
+                -f docker/docker-compose.ci.yml \
+                build
+
+              echo "📦 Pushing images..."
+              docker compose \
+                -f docker/docker-compose.ci.yml \
+                push
+            '
           '''
         }
       }
     }
-
 
     stage('Sync Infra Files') {
       steps {

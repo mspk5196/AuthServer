@@ -52,13 +52,16 @@ pipeline {
         )]) {
           sh '''
             set -e
-
+    
+            # 🔑 Load ALL envs (frontend + backend)
+            source scripts/load-env.sh
+    
             echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-
+    
             docker compose \
               -f docker/docker-compose.ci.yml \
               build
-
+    
             docker compose \
               -f docker/docker-compose.ci.yml \
               push
@@ -66,6 +69,7 @@ pipeline {
         }
       }
     }
+
 
     stage('Sync Infra Files') {
       steps {

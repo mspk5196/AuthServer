@@ -16,7 +16,7 @@ app.get('/', (req, res) => {
   res.send('✅ OK - Auth Server Running with no problems');
 });
 app.get('/health', (req, res) => {
-  res.send({ status: 'ok', timestamp: new Date().toISOString() });
+  res.status(200).send('ok');
 });
 
 // Start scheduled jobs

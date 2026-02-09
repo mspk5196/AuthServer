@@ -15,7 +15,7 @@ app.get('/', (req, res) => {
   res.send('✅ OK - Auth Server Running');
 });
 app.get('/health', (req, res) => {
-  res.send({ status: 'ok', timestamp: new Date().toISOString() });
+  res.status(200).send('ok');
 });
 
 server.listen(PORT, '0.0.0.0', () => {

@@ -15,6 +15,7 @@ app.set('trust proxy', 1);
 app.get('/', (req, res) => {
   res.send('✅ OK - Auth Server Running with no problems');
 });
+
 app.get('/health', (req, res) => {
   res.status(200).send('ok');
 });

@@ -6,7 +6,7 @@ const app = require('./src/app.js');
 const db = require('./src/config/db.js');
 
 // Default to 5001 to align with cPanel Web dev config; override with PORT env as needed
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT;
 const server = http.createServer(app);
 
 app.set('trust proxy', 1);

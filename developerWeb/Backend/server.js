@@ -7,7 +7,7 @@ const db = require('./src/config/db.js');
 const { schedulePlanStatusJob } = require('./src/jobs/planStatusJob.js');
 const { scheduleUsageReminderJob } = require('./src/jobs/usageReminderJob.js');
 
-const PORT = process.env.PORT || 5050;
+const PORT = process.env.PORT;
 const server = http.createServer(app);
 
 app.set('trust proxy', 1);

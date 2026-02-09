@@ -14,6 +14,9 @@ app.set('trust proxy', 1);
 app.get('/', (req, res) => {
   res.send('✅ OK - Auth Server Running');
 });
+app.get('/health', (req, res) => {
+  res.send('✅ OK - Auth Server Running, checked by /health');
+});
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);

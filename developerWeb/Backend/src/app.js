@@ -34,9 +34,17 @@ app.use('/api/developer', authRoutes);
 app.use('/api/cpanel', cPanelRoutes);
 // block all non-API routes
 app.use((req, res, next) => {
+  if (
+    req.path === '/health' ||
+    req.path === '/'
+  ) {
+    return next();
+  }
+
   if (!req.path.startsWith('/api')) {
     return res.status(404).json({ error: 'Not found' });
   }
+
   next();
 });
 

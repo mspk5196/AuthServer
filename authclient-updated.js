@@ -181,7 +181,7 @@ export class AuthClient {
     const json = await safeJson(resp);
     if (!resp.ok || json?.success === false) throw toError(resp, json, 'Get profile failed');
     return json;
-  }
+  } 
 
   async updateProfile(updates = {}) {
     const resp = await this.fetch(this._buildUrl('user/profile'), {

@@ -394,7 +394,7 @@ const handleWebhook = async (req, res) => {
     const event = req.body.event;
     const payload = req.body.payload.payment.entity;
 
-    console.log('Razorpay webhook event:', event);
+    // console.log    console.log('Razorpay webhook event:', event);
 
     // Handle different events
     switch (event) {
@@ -422,7 +422,7 @@ const handleWebhook = async (req, res) => {
         break;
 
       default:
-        console.log('Unhandled webhook event:', event);
+        // console.log        console.log('Unhandled webhook event:', event);
     }
 
     res.status(200).json({ success: true });

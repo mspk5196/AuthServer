@@ -31,9 +31,16 @@ const consumeTicket = async (req, res) => {
   } else {
     redeemUrl = `${baseAuth}/api/cpanel/redeem-cpanel-ticket`;
   }
-  console.log('[SSO] Redeem URL:', redeemUrl, 'AUTH_API_BASE_URL:', AUTH_API_BASE_URL);
-  const redeemResp = await postJson(redeemUrl, { token: ticket });
-  console.log('[SSO] Redeem response:', JSON.stringify(redeemResp));
+  // console.log  console.log('[SSO] Redeem URL:', redeemUrl, 'AUTH_API_BASE_URL:', AUTH_API_BASE_URL);
+  let redeemResp;
+  try {
+    // use a slightly larger timeout for external SSO redemption
+    redeemResp = await postJson(redeemUrl, { token: ticket }, {}, { timeout: 12000, retries: 2 });
+    // console.log    console.log('[SSO] Redeem response:', JSON.stringify(redeemResp));
+  } catch (err) {
+    console.error('[SSO] Redeem error details:', err);
+    return res.status(502).json({ success: false, message: 'Failed to reach redeem endpoint', error: err?.message || 'REDEEM_ERROR' });
+  }
 
     if (!redeemResp || !redeemResp.success) {
       return res.status(401).json({
@@ -122,18 +129,31 @@ const me = async (req, res) => {
   try {
     // req.user populated by authenticateToken
     const user = req.user;
-    console.log('[ME] incoming cookies:', req.headers.cookie);
-    console.log('[ME] req.user:', user);
+    // console.log    console.log('[ME] incoming cookies:', req.headers.cookie);
+    // console.log    console.log('[ME] req.user:', user);
     if (!user) {
       return res.status(401).json({ success: false, message: 'Unauthorized', error: 'UNAUTHORIZED' });
     }
+
+    // Fetch dev_id from database
+    const pool = require('../config/db');
+    const result = await pool.query(
+      'SELECT dev_id, email_verified FROM developers WHERE id = $1',
+      [user.id || user.developerId]
+    );
+
+    const devId = result.rows[0]?.dev_id || null;
+    const emailVerified = result.rows[0]?.email_verified || false;
+
     return res.json({ success: true, developer: {
       id: user.id || user.developerId,
       email: user.email,
       name: user.name,
-      is_verified: user.is_verified !== false,
+      is_verified: user.is_verified !== false || emailVerified,
+      dev_id: devId,
     }});
   } catch (err) {
+    console.error('[ME] Error:', err);
     return res.status(500).json({ success: false, message: 'Failed to load user', error: 'ME_ERROR' });
   }
 };

@@ -14,6 +14,7 @@ import Privacy from '../../pages/Legal/Privacy';
 import Refund from '../../pages/Legal/Refund';
 import Contact from '../../pages/Legal/Contact';
 import Policies from '../../pages/Legal/Policies';
+import Documentation from '../../pages/Documentation/Documentation';
 
 const AppLayout = () => {
   return (
@@ -26,6 +27,7 @@ const AppLayout = () => {
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/pricing" element={<Pricing />} />
+          <Route path="/docs" element={<Documentation />} />
           <Route path="/policies" element={<Policies />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />

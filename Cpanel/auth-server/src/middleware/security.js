@@ -18,7 +18,7 @@ const createRateLimiter = (windowMs, max, message) => {
     standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
     legacyHeaders: false, // Disable the `X-RateLimit-*` headers
     handler: (req, res) => {
-      console.log(`Rate limit exceeded for IP: ${req.ip}`);
+      // console.log      console.log(`Rate limit exceeded for IP: ${req.ip}`);
       res.status(429).json({
         success: false,
         message: 'Too many requests from this IP, please try again later.',
@@ -192,11 +192,11 @@ const securityLogger = (req, res, next) => {
   const ip = req.ip || req.connection.remoteAddress;
   const userAgent = req.get('User-Agent') || 'Unknown';
   
-  console.log(`[${timestamp}] ${req.method} ${req.url} - IP: ${ip} - User-Agent: ${userAgent}`);
+  // console.log  console.log(`[${timestamp}] ${req.method} ${req.url} - IP: ${ip} - User-Agent: ${userAgent}`);
   
   // Log sensitive endpoint access
   if (req.url.includes('/auth') || req.url.includes('/admin')) {
-    console.log(`[SECURITY] Sensitive endpoint accessed: ${req.method} ${req.url} from ${ip}`);
+    // console.log    console.log(`[SECURITY] Sensitive endpoint accessed: ${req.method} ${req.url} from ${ip}`);
   }
   
   next();

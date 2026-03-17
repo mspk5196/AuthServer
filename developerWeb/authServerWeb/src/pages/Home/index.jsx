@@ -2,11 +2,12 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useEffect } from 'react';
 import './Home.scss';
-
+// import { API_URL } from '../../utils/api';
 const Home = () => {
     const { developer, loading } = useAuth();
     const navigate = useNavigate();
-
+    // console.log(API_URL);
+    
     // Redirect authenticated users to dashboard
     useEffect(() => {
       if (!loading && developer) {
@@ -32,7 +33,7 @@ const Home = () => {
     <div className="home-page">
       <div className="region-banner">
         <div className="container">
-          <p>This developer platform is currently available only in India.</p>
+          <p>This developer platform is currently available only in India🛜.</p>
         </div>
       </div>
       <section className="hero">
@@ -181,7 +182,7 @@ const Home = () => {
         <div className="container">
           <div className="footer-content">
             <div className="footer-section">
-              <h4>MSPK Auth Platform</h4>
+              <h4>MSPK™ Auth Platform</h4>
               <p>Complete authentication solution for developers</p>
             </div>
             <div className="footer-section">
@@ -202,7 +203,7 @@ const Home = () => {
             </div>
           </div>
           <div className="footer-bottom">
-            <p>&copy; {new Date().getFullYear()} MSPK Apps. All rights reserved.</p>
+            <p>&copy; {new Date().getFullYear()} MSPK™ Apps. All rights reserved.</p>
           </div>
         </div>
       </footer>

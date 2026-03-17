@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from './context/AuthContext';
 import { api } from './services/api';
+import { useAuth } from './context/AuthContext';
+import { authService } from './services/authService';
 import DashboardLayout from './components/Layout/DashboardLayout';
 import Home from './pages/Home/Home';
 import Apps from './pages/Apps/AppHome/Apps';
 import AppDetails from './pages/Apps/AppDetails/AppDetails';
 import AppSettings from './pages/Apps/AppSettings/AppSettings';
+// import AllUsers from './pages/Apps/AllUsers/AllUsers';
 import Settings from './pages/Settings/Settings';
 import Documentation from './pages/Documentation/Documentation';
+import Groups from './pages/Groups/Groups';
+import GroupSettings from './pages/Groups/GroupSettings/GroupSettings';
 import './App.css';
 import VerifyAppEmail from './pages/Apps/VerifyAppEmail/VerifyAppEmail';
 
@@ -66,15 +70,14 @@ function App() {
           }
           
           window.history.replaceState({}, '', newUrl);
-        } else {
+          } else {
           // Check current session via backend (httpOnly cookies)
           try {
-            const me = await api.get('/me');
-            if (me && (me.developer || me.data?.developer)) {
-              setDeveloper(me.developer || me.data.developer);
-            }
+            const dev = await authService.getCurrentDeveloper();
+            if (dev) setDeveloper(dev);
           } catch (e) {
-            // no session
+            // unexpected failure - rethrow so error surfaces
+            console.error('Auth check failed:', e);
           }
         }
       } catch (err) {
@@ -135,6 +138,9 @@ function App() {
         <Route path="apps" element={<Apps />} />
         <Route path="apps/:appId" element={<AppDetails />} />
         <Route path="apps/:appId/settings" element={<AppSettings />} />
+        {/* <Route path="apps/all-users" element={<AllUsers />} /> */}
+        <Route path="groups" element={<Groups />} />
+        <Route path="groups/:groupId/settings" element={<GroupSettings />} />
         <Route path="settings" element={<Settings />} />
         <Route path="documentation" element={<Documentation />} />
         <Route path="*" element={<Navigate to="/" replace />} />

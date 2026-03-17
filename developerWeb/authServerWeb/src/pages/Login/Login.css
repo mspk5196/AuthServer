@@ -57,6 +57,50 @@
 .auth-page .auth-card .auth-form .form-footer .forgot-link:hover {
   text-decoration: underline;
 }
+.auth-page .auth-card .auth-form .divider {
+  position: relative;
+  text-align: center;
+  margin: 1.5rem 0;
+}
+.auth-page .auth-card .auth-form .divider::before, .auth-page .auth-card .auth-form .divider::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 45%;
+  height: 1px;
+  background: #e5e7eb;
+}
+.auth-page .auth-card .auth-form .divider::before {
+  left: 0;
+}
+.auth-page .auth-card .auth-form .divider::after {
+  right: 0;
+}
+.auth-page .auth-card .auth-form .divider span {
+  background: white;
+  padding: 0 1rem;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+.auth-page .auth-card .auth-form .btn-google {
+  background: white;
+  color: #444;
+  border: 1px solid #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  font-weight: 500;
+}
+.auth-page .auth-card .auth-form .btn-google:hover {
+  background: #f8f8f8;
+  border-color: #ccc;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+.auth-page .auth-card .auth-form .btn-google:active {
+  transform: translateY(0);
+}
 .auth-page .auth-card .auth-footer {
   margin-top: 1.5rem;
   padding-top: 1.5rem;

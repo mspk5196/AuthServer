@@ -631,7 +631,7 @@ const resendVerificationEmail = async (req, res) => {
       });
     }
 
-    console.log("Verification email resent:", developer.email);
+    // console.log    console.log("Verification email resent:", developer.email);
 
     res.status(200).json({
       success: true,
@@ -850,14 +850,14 @@ const changePasswordWithToken = async (req, res) => {
 
     // Handle POST request to change password
     if (req.method === 'POST') {
-      console.log('POST request received for change password');
-      console.log('req.body:', req.body);
-      console.log('req.headers:', req.headers);
+      // console.log      console.log('POST request received for change password');
+      // console.log      console.log('req.body:', req.body);
+      // console.log      console.log('req.headers:', req.headers);
 
       const { currentPassword, newPassword } = req.body || {};
 
       if (!currentPassword || !newPassword) {
-        console.log('Missing passwords. currentPassword:', currentPassword, 'newPassword:', newPassword);
+        // console.log        console.log('Missing passwords. currentPassword:', currentPassword, 'newPassword:', newPassword);
         return res.status(400).json({
           success: false,
           message: 'Current password and new password are required',
@@ -1066,14 +1066,14 @@ const changePasswordWithToken = async (req, res) => {
         </div>
 
         <script>
-          console.log('Script loaded successfully');
+          // console.log          console.log('Script loaded successfully');
           const form = document.getElementById('changePasswordForm');
           const messageDiv = document.getElementById('message');
           const submitBtn = document.getElementById('submitBtn');
           
-          console.log('Form element:', form);
-          console.log('Message div:', messageDiv);
-          console.log('Submit button:', submitBtn);
+          // console.log          console.log('Form element:', form);
+          // console.log          console.log('Message div:', messageDiv);
+          // console.log          console.log('Submit button:', submitBtn);
 
           if (!form || !messageDiv || !submitBtn) {
             console.error('Missing required elements!');
@@ -1081,10 +1081,10 @@ const changePasswordWithToken = async (req, res) => {
 
           form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            console.log('Form submit event triggered');
+            // console.log            console.log('Form submit event triggered');
             
             const token = document.getElementById('token').value;
-            console.log('Token value:', token ? 'present' : 'missing');
+            // console.log            console.log('Token value:', token ? 'present' : 'missing');
             const currentPassword = document.getElementById('currentPassword').value;
             const newPassword = document.getElementById('newPassword').value;
             const confirmPassword = document.getElementById('confirmPassword').value;
@@ -1108,9 +1108,9 @@ const changePasswordWithToken = async (req, res) => {
             submitBtn.textContent = 'Changing...';
 
             try {
-              console.log('About to fetch POST to:', window.location.pathname);
+              // console.log              console.log('About to fetch POST to:', window.location.pathname);
               const body = { token, currentPassword, newPassword };
-              console.log('Request body keys:', Object.keys(body));
+              // console.log              console.log('Request body keys:', Object.keys(body));
               
               const response = await fetch(window.location.pathname, {
                 method: 'POST',
@@ -1120,9 +1120,9 @@ const changePasswordWithToken = async (req, res) => {
                 body: JSON.stringify(body),
               });
 
-              console.log('Response status:', response.status);
+              // console.log              console.log('Response status:', response.status);
               const data = await response.json();
-              console.log('Response data:', data);
+              // console.log              console.log('Response data:', data);
 
               if (data.success) {
                 showMessage('Password changed successfully! You can close this window.', 'success');
@@ -1144,7 +1144,7 @@ const changePasswordWithToken = async (req, res) => {
           });
 
           function showMessage(text, type) {
-            console.log('Showing message:', text);
+            // console.log            console.log('Showing message:', text);
             messageDiv.textContent = text;
             messageDiv.className = 'message ' + type;
             messageDiv.style.display = 'block';

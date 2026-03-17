@@ -14,7 +14,7 @@ RUN npm install --production
 COPY . .
 
 # Expose the port internally to Docker network
-EXPOSE 5001
+EXPOSE 5000
 
 # Start the server
 CMD ["node", "server.js"]

@@ -25,9 +25,16 @@ ORDER BY
   price ASC;`
     );
 
+    // Filter out internal/admin-only plans that should never be publicly listed
+    // e.g. names like 'unlimited_admin' or common misspellings.
+    const filtered = result.rows.filter(p => {
+      const n = (p.name || '').toString().toLowerCase().trim();
+      return n !== 'unlimited_admin' && n !== 'unlimited admin' && n !== 'unlimeted_admin';
+    });
+
     res.status(200).json({
       success: true,
-      data: { plans: result.rows }
+      data: { plans: filtered }
     });
   } catch (error) {
     console.error('Get plans error:', error);
@@ -263,7 +270,7 @@ const selectPlan = async (req, res) => {
         }),
       });
 
-      console.log('Plan change notification sent to:', devRes.rows[0].email);
+      // console.log      console.log('Plan change notification sent to:', devRes.rows[0].email);
     } catch (emailError) {
       console.error('Failed to send plan change notification:', emailError);
       // Don't fail the plan selection, just log the error

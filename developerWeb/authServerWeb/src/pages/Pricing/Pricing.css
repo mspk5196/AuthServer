@@ -1,0 +1,101 @@
+@charset "UTF-8";
+.pricing-page {
+  padding: 3rem 0 4rem;
+}
+.pricing-page .pricing-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+.pricing-page .pricing-header h1 {
+  font-size: 2.5rem;
+  margin-bottom: 0.75rem;
+}
+.pricing-page .pricing-header p {
+  color: #6b7280;
+  max-width: 640px;
+  margin: 0 auto;
+}
+.pricing-page .pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 2rem;
+  margin-bottom: 2.5rem;
+}
+.pricing-page .pricing-card {
+  background: #ffffff;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border-top: 3px solid #e5e7eb;
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+}
+.pricing-page .pricing-card.pricing-card-free {
+  border-top-color: #6366f1;
+}
+.pricing-page .pricing-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+  border-top-color: #6366f1;
+}
+.pricing-page .pricing-card .pricing-card-header {
+  margin-bottom: 1.5rem;
+}
+.pricing-page .pricing-card .pricing-card-header h2 {
+  font-size: 1.5rem;
+  margin-bottom: 0.25rem;
+}
+.pricing-page .pricing-card .pricing-card-header .pricing-tagline {
+  color: #6b7280;
+  font-size: 0.9375rem;
+  margin-bottom: 1rem;
+}
+.pricing-page .pricing-card .pricing-card-header .pricing-amount {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.pricing-page .pricing-card .pricing-card-header .pricing-amount .amount {
+  font-size: 1.75rem;
+  font-weight: 600;
+}
+.pricing-page .pricing-card .pricing-card-header .pricing-amount .duration {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+.pricing-page .pricing-card .pricing-card-body {
+  flex: 1;
+}
+.pricing-page .pricing-card .pricing-card-body .feature-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.pricing-page .pricing-card .pricing-card-body .feature-list li {
+  position: relative;
+  padding-left: 1.25rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.9375rem;
+  color: #6b7280;
+}
+.pricing-page .pricing-card .pricing-card-body .feature-list li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: #6366f1;
+}
+.pricing-page .pricing-card .pricing-card-footer {
+  margin-top: 1.75rem;
+}
+.pricing-page .pricing-note {
+  text-align: center;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+.pricing-page .pricing-note a {
+  margin-left: 0.25rem;
+}/*# sourceMappingURL=Pricing.css.map */

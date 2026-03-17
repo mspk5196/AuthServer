@@ -95,6 +95,9 @@ const Settings = () => {
     ? (planInfo.api_calls_used / planInfo.max_api_calls) * 100
     : 0;
 
+  const groupsUsed = planInfo?.app_groups_used || 0;
+  const groupsPercentage = planInfo?.max_app_groups ? (groupsUsed / planInfo.max_app_groups) * 100 : 0;
+
   // Convert features object to array for display
   const featuresArray = planInfo?.features
     ? Object.values(planInfo.features)
@@ -206,6 +209,21 @@ const Settings = () => {
               />
             </div>
           </div>
+          <div className="usage-stat">
+            <div className="usage-stat-label">App Groups</div>
+            <div className="usage-stat-value">{groupsUsed}</div>
+            <div className="usage-stat-limit">
+              {planInfo?.max_app_groups === null || planInfo?.max_app_groups === undefined
+                ? 'Unlimited groups'
+                : `of ${planInfo.max_app_groups} groups`}
+            </div>
+            <div className="progress-bar">
+              <div
+                className={`progress-bar-fill ${getProgressColor(groupsPercentage)}`}
+                style={{ width: `${Math.min(groupsPercentage, 100)}%` }}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -235,6 +253,63 @@ const Settings = () => {
             </div>
           </div>
         )}
+      </div>
+
+      <div className="settings-section">
+        <div className="settings-section-header">
+          <h2 className="settings-section-title">Developer Credentials</h2>
+          <p className="settings-section-subtitle">Use these credentials to access developer-level APIs (fetch all apps, groups, and users)</p>
+        </div>
+
+        <div className="settings-row">
+          <div className="settings-label">
+            <div className="settings-label-title">Developer ID</div>
+            <div className="settings-label-desc">Your unique developer identifier for API authentication</div>
+          </div>
+          <div className="settings-value" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <code style={{ 
+              background: 'var(--surface-color)', 
+              padding: '0.5rem 1rem', 
+              borderRadius: '4px',
+              fontFamily: 'monospace',
+              fontSize: '0.875rem',
+              border: '1px solid var(--border-color)'
+            }}>
+              {developer?.dev_id || 'Loading...'}
+            </code>
+            <button
+              className="btn btn-secondary"
+              style={{ padding: '0.5rem 1rem' }}
+              onClick={() => {
+                navigator.clipboard.writeText(developer?.dev_id || '');
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => { btn.textContent = originalText; }, 2000);
+              }}
+            >
+              Copy
+            </button>
+          </div>
+        </div>
+
+        <div className="settings-row">
+          <div className="settings-label">
+            <div className="settings-label-title">API Documentation</div>
+            <div className="settings-label-desc">Learn how to use your Developer ID</div>
+          </div>
+          <div className="settings-value">
+            <a 
+              href="https://docs.mspkapps.in/developer-api" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="btn btn-secondary"
+              style={{ padding: '0.5rem 1rem' }}
+            >
+              View Docs
+            </a>
+          </div>
+        </div>
       </div>
 
       <div className="settings-section">

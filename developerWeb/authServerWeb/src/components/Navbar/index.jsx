@@ -1,16 +1,15 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { authService } from '../../services/authService';
 import './Navbar.scss';
 
 const Navbar = () => {
-  const { isAuthenticated, developer } = useAuth();
+  const { isAuthenticated, developer, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   const handleLogout = async () => {
-    await authService.logout();
-    navigate('/login');
+    await logout();
+    navigate('/login', { replace: true });
   };
 
   const isActive = (path) => location.pathname === path;
@@ -22,7 +21,7 @@ const Navbar = () => {
           <span className="logo">
             <img
               src="/logo.png"
-              alt="MSPK Apps"
+              alt="MSPK™ Apps"
               style={{ height: '40px', width: '40px', borderRadius: '8px' }}
             />
           </span>
@@ -63,6 +62,12 @@ const Navbar = () => {
               className={`nav-link ${isActive('/pricing') ? 'active' : ''}`}
             >
               Pricing
+            </Link>
+            <Link 
+              to="/docs" 
+              className={`nav-link ${isActive('/docs') ? 'active' : ''}`}
+            >
+              Documentation
             </Link>
             <Link 
               to="/policies" 

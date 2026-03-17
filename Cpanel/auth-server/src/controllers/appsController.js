@@ -18,16 +18,34 @@ function generateApiCredentials() {
   return { apiKey, apiSecret };
 }
 
+function generatePublicApiKey() {
+  return 'pg_' + crypto.randomBytes(24).toString('hex');
+}
+
+/**
+ * Safely parse numeric limits from plan features.
+ * Returns a number, or null when unlimited/not set.
+ */
+function parsePlanLimit(raw) {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw === 'number') return raw;
+  if (typeof raw === 'string') {
+    const n = parseInt(raw, 10);
+    if (!Number.isNaN(n)) return n;
+  }
+  return null;
+}
+
 /**
  * Create a new app
  */
 const createApp = async (req, res) => {
   try {
     const developerId = req.user.developerId;
-    const { app_name, support_email, allow_google_signin = false, allow_email_signin = true } = req.body;
+    const { app_name, support_email, allow_google_signin = false, allow_email_signin = true, group_id = null } = req.body;
 
-    console.log('Create app request from developer:', developerId);
-    console.log('Form data:', { app_name, support_email, allow_google_signin, allow_email_signin });
+    // console.log('Create app request from developer:', developerId);
+    // console.log('Form data:', { app_name, support_email, allow_google_signin, allow_email_signin });
 
     // Validation
     if (!app_name) {
@@ -56,7 +74,7 @@ const createApp = async (req, res) => {
       LIMIT 1
     `, [developerId]);
 
-    console.log('Plan check result:', planCheck.rows);
+    // console.log('Plan check result:', planCheck.rows);
 
     if (planCheck.rows.length === 0) {
       return res.status(403).json({
@@ -65,34 +83,22 @@ const createApp = async (req, res) => {
       });
     }
 
-    const planFeatures = planCheck.rows[0].features;
-    console.log('Plan features:', planFeatures);
-
-    // Extract max_apps from features (handle different JSONB structures)
-    // 0 means unlimited
-    let maxApps = null; // null or 0 means unlimited
-    if (planFeatures) {
-      let rawLimit = null;
-
-      if (planFeatures.apps_limit !== undefined && planFeatures.apps_limit !== null) {
-        rawLimit = planFeatures.apps_limit;
-      } else if (planFeatures.max_apps !== undefined && planFeatures.max_apps !== null) {
-        rawLimit = planFeatures.max_apps;
-      }
-
-      if (rawLimit !== null) {
-        if (typeof rawLimit === 'number') {
-          maxApps = rawLimit;
-        } else if (typeof rawLimit === 'string') {
-          const match = rawLimit.match(/(\d+)/);
-          if (match) {
-            maxApps = parseInt(match[1], 10);
-          }
-        }
-      }
+    const planFeatures = planCheck.rows[0].features || {};
+    // console.log('Plan features:', planFeatures);
+    
+    // Extract app limits from features JSONB
+    // 0 or null (or missing) means unlimited
+    let maxApps = null; // total apps (standalone + in groups)
+    if (planFeatures.apps_limit !== undefined && planFeatures.apps_limit !== null) {
+      maxApps = parsePlanLimit(planFeatures.apps_limit);
+    } else if (planFeatures.max_apps !== undefined && planFeatures.max_apps !== null) {
+      maxApps = parsePlanLimit(planFeatures.max_apps);
     }
 
-    console.log('Max apps allowed (0 or null = unlimited):', maxApps);
+    const maxStandaloneApps = parsePlanLimit(planFeatures.max_standalone_apps);
+    const maxAppsPerGroup = parsePlanLimit(planFeatures.max_apps_per_group);
+
+    // console.log('Max apps (total):', maxApps, 'Max standalone apps:', maxStandaloneApps, 'Max apps per group:', maxAppsPerGroup);
 
     // Count existing apps
     const appCount = await pool.query(
@@ -101,14 +107,65 @@ const createApp = async (req, res) => {
     );
 
     const currentAppCount = parseInt(appCount.rows[0].count, 10);
-    console.log('Current app count:', currentAppCount);
+    // console.log('Current app count:', currentAppCount);
 
-    // Check if app limit is exceeded (0 or null means unlimited)
+    // Check total apps limit (0 or null means unlimited)
     if (maxApps !== null && maxApps !== 0 && currentAppCount >= maxApps) {
       return res.status(403).json({
         success: false,
-        message: `Plan limit reached. You can create maximum ${maxApps} apps. Please upgrade your plan.`
+        message: `Plan limit reached. You can create maximum ${maxApps} apps in total. Please upgrade your plan.`
       });
+    }
+
+    // Optional: validate and attach app group (if provided)
+    let resolvedGroupId = null;
+    if (group_id !== null && group_id !== undefined && String(group_id).trim() !== '') {
+      resolvedGroupId = String(group_id).trim();
+
+      // Ensure the group belongs to this developer
+      const groupCheck = await pool.query(
+        'SELECT id FROM app_groups WHERE id = $1 AND developer_id = $2',
+        [resolvedGroupId, developerId]
+      );
+
+      if (groupCheck.rows.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid app group selected. Please choose a group that belongs to your account.'
+        });
+      }
+
+      // If there is a per-group app limit, enforce it
+      if (maxAppsPerGroup !== null && maxAppsPerGroup !== 0) {
+        const groupAppCountRes = await pool.query(
+          'SELECT COUNT(*) as count FROM dev_apps WHERE group_id = $1',
+          [resolvedGroupId]
+        );
+        const currentGroupApps = parseInt(groupAppCountRes.rows[0].count, 10);
+        // console.log('Current apps in group', resolvedGroupId, ':', currentGroupApps);
+        if (currentGroupApps >= maxAppsPerGroup) {
+          return res.status(403).json({
+            success: false,
+            message: `Plan limit reached for this group. Each group can have a maximum of ${maxAppsPerGroup} apps.`
+          });
+        }
+      }
+    } else {
+      // Standalone app: enforce standalone app limit if configured
+      if (maxStandaloneApps !== null && maxStandaloneApps !== 0) {
+        const standaloneCountRes = await pool.query(
+          'SELECT COUNT(*) as count FROM dev_apps WHERE developer_id = $1 AND group_id IS NULL',
+          [developerId]
+        );
+        const currentStandaloneCount = parseInt(standaloneCountRes.rows[0].count, 10);
+        // console.log        console.log('Current standalone app count:', currentStandaloneCount);
+        if (currentStandaloneCount >= maxStandaloneApps) {
+          return res.status(403).json({
+            success: false,
+            message: `Plan limit reached. You can create a maximum of ${maxStandaloneApps} standalone apps. Please upgrade your plan or create apps inside groups.`
+          });
+        }
+      }
     }
 
     // Generate credentials
@@ -117,22 +174,22 @@ const createApp = async (req, res) => {
     // Hash the secret BEFORE storing
     const hashedSecret = crypto.createHash('sha256').update(apiSecret).digest('hex');
 
-    console.log('Creating app with credentials...');
+    // console.log    console.log('Creating app with credentials...');
 
     // Create app with hashed secret and email pending verification
     const result = await pool.query(`
       INSERT INTO dev_apps (
         developer_id, app_name, support_email, api_key, api_secret_hash,
         allow_google_signin, allow_email_signin, support_email_verified,
-        created_at, updated_at
+        group_id, created_at, updated_at
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, false, NOW(), NOW()
+        $1, $2, $3, $4, $5, $6, $7, false, $8, NOW(), NOW()
       )
-      RETURNING id, app_name, support_email, api_key, allow_google_signin, allow_email_signin, support_email_verified, created_at
-    `, [developerId, app_name, support_email, apiKey, hashedSecret, allow_google_signin, allow_email_signin]);
+      RETURNING id, app_name, support_email, api_key, allow_google_signin, allow_email_signin, support_email_verified, group_id, created_at
+    `, [developerId, app_name, support_email, apiKey, hashedSecret, allow_google_signin, allow_email_signin, resolvedGroupId]);
 
     const app = result.rows[0];
-    console.log('App created successfully:', app.id);
+    // console.log    console.log('App created successfully:', app.id);
 
     // Generate verification token
     const verificationToken = crypto.randomBytes(32).toString('hex');
@@ -146,7 +203,7 @@ const createApp = async (req, res) => {
     sendMail({
       to: support_email,
       subject: `Verify Your App Support Email - ${app_name}`,
-      html: buildAppSupportEmailVerificationEmail({ appName: app_name, verificationUrl }),
+      html: buildAppSupportEmailVerificationEmail({ appName: app_name, verificationUrl, supportEmail: support_email }),
     }).catch(err => console.error('Send verification email error:', err));
 
     // Return response with plaintext secret and pending verification status
@@ -186,14 +243,27 @@ const getMyApps = async (req, res) => {
         a.allow_google_signin,
         a.allow_email_signin,
         a.google_client_id,
+        a.group_id,
+        g.name as group_name,
         a.created_at,
         a.updated_at,
         COUNT(DISTINCT u.id) as total_users,
         COUNT(DISTINCT CASE WHEN u.created_at >= NOW() - INTERVAL '30 days' THEN u.id END) as active_users
       FROM dev_apps a
       LEFT JOIN users u ON u.app_id = a.id
+      LEFT JOIN app_groups g ON a.group_id = g.id
       WHERE a.developer_id = $1
-      GROUP BY a.id
+      GROUP BY 
+        a.id,
+        a.app_name,
+        a.api_key,
+        a.allow_google_signin,
+        a.allow_email_signin,
+        a.google_client_id,
+        a.group_id,
+        g.name,
+        a.created_at,
+        a.updated_at
       ORDER BY a.created_at DESC
     `, [developerId]);
 
@@ -212,6 +282,167 @@ const getMyApps = async (req, res) => {
 };
 
 /**
+ * Get all app groups for the developer
+ */
+const getAppGroups = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+
+    const result = await pool.query(`
+      SELECT id, name, created_at, updated_at
+      FROM app_groups
+      WHERE developer_id = $1
+      ORDER BY created_at DESC, name ASC
+    `, [developerId]);
+
+    res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Get app groups error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch app groups',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Delete an app group for the developer.
+ * Business rule: groups that still have apps cannot be deleted.
+ */
+const deleteAppGroup = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { groupId } = req.params;
+
+    if (!groupId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Group ID is required',
+      });
+    }
+
+    // Ensure the group exists and belongs to this developer
+    const groupRes = await pool.query(
+      'SELECT id, name FROM app_groups WHERE id = $1 AND developer_id = $2',
+      [groupId, developerId]
+    );
+
+    if (groupRes.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Group not found',
+      });
+    }
+
+    // Enforce business rule: a group with apps cannot be removed
+    const appCountRes = await pool.query(
+      'SELECT COUNT(*) AS count FROM dev_apps WHERE group_id = $1',
+      [groupId]
+    );
+    const appCount = parseInt(appCountRes.rows[0].count, 10);
+
+    if (appCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'This group still has apps. Delete or re-create those apps before deleting the group.',
+      });
+    }
+
+    await pool.query('DELETE FROM app_groups WHERE id = $1 AND developer_id = $2', [groupId, developerId]);
+
+    return res.json({
+      success: true,
+      message: 'Group deleted successfully',
+    });
+  } catch (error) {
+    console.error('Delete app group error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to delete app group',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Create a new app group for the developer
+ */
+const createAppGroup = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { name } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Group name is required'
+      });
+    }
+
+    // Check plan limits for app groups
+    const planCheck = await pool.query(`
+      SELECT 
+        p.features,
+        dpr.plan_id,
+        p.name as plan_name
+      FROM developer_plan_registrations dpr
+      JOIN dev_plans p ON dpr.plan_id = p.id
+      WHERE dpr.developer_id = $1 AND dpr.is_active = true
+      LIMIT 1
+    `, [developerId]);
+
+    if (planCheck.rows.length === 0) {
+      return res.status(403).json({
+        success: false,
+        message: 'No active plan found. Please subscribe to a plan first.'
+      });
+    }
+
+    const planFeatures = planCheck.rows[0].features || {};
+    const maxAppGroups = parsePlanLimit(planFeatures.max_app_groups);
+
+    if (maxAppGroups !== null && maxAppGroups !== 0) {
+      const groupCountRes = await pool.query(
+        'SELECT COUNT(*) as count FROM app_groups WHERE developer_id = $1',
+        [developerId]
+      );
+      const currentGroups = parseInt(groupCountRes.rows[0].count, 10);
+      if (currentGroups >= maxAppGroups) {
+        return res.status(403).json({
+          success: false,
+          message: `Plan limit reached. You can create a maximum of ${maxAppGroups} app groups. Please upgrade your plan.`,
+        });
+      }
+    }
+
+    const publicApiKey = generatePublicApiKey();
+
+    const insertRes = await pool.query(`
+      INSERT INTO app_groups (developer_id, name, public_api_key, created_at, updated_at)
+      VALUES ($1, $2, $3, NOW(), NOW())
+      RETURNING id, name, public_api_key, created_at, updated_at
+    `, [developerId, name.trim(), publicApiKey]);
+
+    return res.status(201).json({
+      success: true,
+      message: 'App group created successfully',
+      data: insertRes.rows[0],
+    });
+  } catch (error) {
+    console.error('Create app group error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to create app group',
+      error: error.message,
+    });
+  }
+};
+
+/**
  * Get single app details with stats
  */
 const getAppDetails = async (req, res) => {
@@ -223,13 +454,15 @@ const getAppDetails = async (req, res) => {
     const appResult = await pool.query(`
       SELECT 
         a.*,
+        g.name as group_name,
         COUNT(DISTINCT u.id) as total_users,
         COUNT(DISTINCT CASE WHEN u.created_at >= NOW() - INTERVAL '30 days' THEN u.id END) as active_users,
         COUNT(DISTINCT CASE WHEN u.email_verified = true THEN u.id END) as verified_users
       FROM dev_apps a
       LEFT JOIN users u ON u.app_id = a.id
+      LEFT JOIN app_groups g ON a.group_id = g.id
       WHERE a.id = $1 AND a.developer_id = $2
-      GROUP BY a.id
+      GROUP BY a.id, g.name
     `, [appId, developerId]);
 
     if (appResult.rows.length === 0) {
@@ -267,7 +500,7 @@ const getAppDetails = async (req, res) => {
         ORDER BY date DESC
       `, [appId]);
     } catch (err) {
-      console.log('dev_api_calls table not found, skipping usage stats');
+      // console.log      console.log('dev_api_calls table not found, skipping usage stats');
     }
 
     res.json({
@@ -303,8 +536,10 @@ const updateApp = async (req, res) => {
       allow_google_signin, 
       allow_email_signin,
       google_client_id,
-      google_client_secret 
+      google_client_secret,
+      extra_fields
     } = req.body;
+    const { user_edit_permissions } = req.body;
 
     // Verify ownership
     const checkOwner = await pool.query(
@@ -343,6 +578,66 @@ const updateApp = async (req, res) => {
     if (google_client_secret !== undefined) {
       updates.push(`google_client_secret = $${paramCount++}`);
       values.push(google_client_secret);
+    }
+
+    // Handle extra custom fields configuration (array of { name, label, type })
+    if (extra_fields !== undefined) {
+      // Validate basic shape
+      if (!Array.isArray(extra_fields)) {
+        return res.status(400).json({ success: false, message: 'extra_fields must be an array' });
+      }
+      if (extra_fields.length > 10) {
+        return res.status(400).json({ success: false, message: 'Maximum 10 custom fields allowed' });
+      }
+
+      // Validate each field
+      for (const f of extra_fields) {
+        if (!f || typeof f !== 'object') {
+          return res.status(400).json({ success: false, message: 'Each custom field must be an object' });
+        }
+        if (!f.name || typeof f.name !== 'string') {
+          return res.status(400).json({ success: false, message: 'Each custom field must have a name' });
+        }
+        // name must be alphanumeric + underscores
+        if (!/^[a-zA-Z0-9_]+$/.test(f.name)) {
+          return res.status(400).json({ success: false, message: 'Field name may only contain letters, numbers and underscores' });
+        }
+        if (!f.type || typeof f.type !== 'string') {
+          return res.status(400).json({ success: false, message: 'Each custom field must have a type' });
+        }
+        // Optional label
+        if (f.label !== undefined && typeof f.label !== 'string') {
+          return res.status(400).json({ success: false, message: 'Field label must be a string' });
+        }
+      }
+
+      updates.push(`extra_fields = $${paramCount++}::jsonb`);
+      // store as JSONB (Postgres). Pass stringified JSON to be safe.
+      values.push(JSON.stringify(extra_fields));
+    }
+
+    if (user_edit_permissions !== undefined) {
+      // basic validation: must be an object with boolean values for name, username, email
+      if (typeof user_edit_permissions !== 'object' || Array.isArray(user_edit_permissions) || user_edit_permissions === null) {
+        return res.status(400).json({ success: false, message: 'user_edit_permissions must be an object' });
+      }
+      const allowedKeys = ['name', 'username', 'email'];
+      const sanitized = {};
+      for (const k of allowedKeys) {
+        if (user_edit_permissions[k] !== undefined) sanitized[k] = !!user_edit_permissions[k];
+      }
+      updates.push(`user_edit_permissions = $${paramCount++}::jsonb`);
+      values.push(JSON.stringify(sanitized));
+    }
+
+    // Access token TTL (in seconds) per app
+    if (req.body.access_token_expires_seconds !== undefined) {
+      const ttl = parseInt(req.body.access_token_expires_seconds, 10);
+      if (Number.isNaN(ttl) || ttl < 60) {
+        return res.status(400).json({ success: false, message: 'access_token_expires_seconds must be a number (seconds), minimum 60' });
+      }
+      updates.push(`access_token_expires_seconds = $${paramCount++}`);
+      values.push(ttl);
     }
 
     if (updates.length === 0) {
@@ -395,6 +690,16 @@ const deleteApp = async (developerId, appId) => {
     throw error;
   }
 
+  // Clean up dependent records that reference this app but do NOT have
+  // ON DELETE CASCADE configured at the database level.
+  // This avoids foreign key violations during app deletion.
+  try {
+    await pool.query('DELETE FROM user_deletion_history WHERE app_id = $1', [appId]);
+  } catch (err) {
+    console.error('Error cleaning up user_deletion_history for app deletion:', err);
+    // Let the main delete continue; if this fails due to FK, the error will surface.
+  }
+
   // Delete app (cascade will handle related records if configured)
   await pool.query('DELETE FROM dev_apps WHERE id = $1', [appId]);
 };
@@ -409,7 +714,7 @@ const requestAppDeletion = async (req, res) => {
 
     // Fetch app and developer email
     const result = await pool.query(
-      `SELECT a.app_name, d.email, d.name
+      `SELECT a.app_name, a.support_email as app_support_email, d.email, d.name
        FROM dev_apps a
        JOIN developers d ON a.developer_id = d.id
        WHERE a.id = $1 AND a.developer_id = $2`,
@@ -423,7 +728,7 @@ const requestAppDeletion = async (req, res) => {
       });
     }
 
-    const { app_name, email, name } = result.rows[0];
+    const { app_name, app_support_email, email, name } = result.rows[0];
 
     // Create a short-lived JWT for deletion confirmation
     const token = jwt.sign(
@@ -451,6 +756,7 @@ const requestAppDeletion = async (req, res) => {
         appName: app_name,
         developerName: name,
         confirmationUrl,
+        supportEmail: app_support_email
       }),
     }).catch((err) => console.error('Send app delete confirmation email error:', err));
 
@@ -526,9 +832,9 @@ const confirmAppDeletion = async (req, res) => {
             <h1>Application deleted successfully</h1>
             <p>Your app and its related authentication data have been <span class="highlight">permanently deleted</span>.</p>
             <p>If you did not perform this action, please contact support immediately at <a href="mailto:${process.env.SUPPORT_EMAIL}">${process.env.SUPPORT_EMAIL}</a>.</p>
-            <a class="button" href="https://authservices.mspkapps.in/">Return to MSPK Auth Portal</a>
+            <a class="button" href="https://authservices.mspkapps.in/">Return to MSPK™ Auth Portal</a>
             <div class="footer">
-              MSPK Apps Authentication Platform (mspkapps.in)
+              MSPK™ Apps Authentication Platform (mspkapps.in)
             </div>
           </div>
         </body>
@@ -678,7 +984,7 @@ const listAppUsers = async (req, res) => {
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
 
     const users = await pool.query(`
-      SELECT id, name, username, email, email_verified, google_linked, is_blocked, last_login, created_at
+      SELECT id, name, username, email, email_verified, google_linked, is_blocked, last_login, created_at, extra
       FROM users
       ${where}
       ORDER BY created_at DESC
@@ -837,21 +1143,23 @@ const getDashboard = async (req, res) => {
     `, [developerId]);
     const totalUsers = parseInt(usersResult.rows[0].count);
 
-    // Get today's API calls
+    // Get today's API calls (across all apps for this developer)
     const todayCallsResult = await pool.query(`
       SELECT COUNT(*) as count
-      FROM dev_api_calls
-      WHERE developer_id = $1 
-      AND DATE(created_at) = CURRENT_DATE
+      FROM dev_api_calls dac
+      JOIN dev_apps a ON dac.app_id = a.id
+      WHERE a.developer_id = $1 
+      AND DATE(dac.created_at) = CURRENT_DATE
     `, [developerId]);
     const todayApiCalls = parseInt(todayCallsResult.rows[0].count);
 
-    // Get this month's API calls
+    // Get this month's API calls (across all apps for this developer)
     const monthCallsResult = await pool.query(`
       SELECT COUNT(*) as count
-      FROM dev_api_calls
-      WHERE developer_id = $1 
-      AND DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE)
+      FROM dev_api_calls dac
+      JOIN dev_apps a ON dac.app_id = a.id
+      WHERE a.developer_id = $1 
+      AND DATE_TRUNC('month', dac.created_at) = DATE_TRUNC('month', CURRENT_DATE)
     `, [developerId]);
     const monthApiCalls = parseInt(monthCallsResult.rows[0].count);
 
@@ -868,13 +1176,31 @@ const getDashboard = async (req, res) => {
       WHERE dpr.developer_id = $1 AND dpr.is_active = true
       LIMIT 1
     `, [developerId]);
+    // Compute group usage and limits
+    const groupCountRes = await pool.query('SELECT COUNT(*) AS count FROM app_groups WHERE developer_id = $1', [developerId]);
+    const groupsUsed = parseInt(groupCountRes.rows[0].count || 0);
+
+    const planFeatures = planResult.rows[0] ? planResult.rows[0].features || {} : {};
+    const parseLimit = (value, fallback) => {
+      if (value === null || value === undefined) return fallback;
+      if (typeof value === 'number') return value;
+      const n = Number(value);
+      return Number.isNaN(n) ? fallback : n;
+    };
+    const maxAppGroups = parseLimit(planFeatures.max_app_groups, null);
+    const maxAppsPerGroup = parseLimit(planFeatures.max_apps_per_group, null);
+    const maxStandaloneApps = parseLimit(planFeatures.max_standalone_apps, null);
 
     const planInfo = planResult.rows.length > 0 ? {
       name: planResult.rows[0].plan_name,
       features: planResult.rows[0].features,
       isActive: planResult.rows[0].is_active,
       startDate: planResult.rows[0].start_date,
-      endDate: planResult.rows[0].end_date
+      endDate: planResult.rows[0].end_date,
+      max_app_groups: maxAppGroups,
+      app_groups_used: groupsUsed,
+      max_apps_per_group: maxAppsPerGroup,
+      max_standalone_apps: maxStandaloneApps
     } : null;
 
     // Format recent apps with status
@@ -895,7 +1221,8 @@ const getDashboard = async (req, res) => {
           totalApps,
           totalUsers,
           todayApiCalls,
-          monthApiCalls
+          monthApiCalls,
+          groupsUsed
         },
         recentApps,
         planInfo
@@ -918,7 +1245,7 @@ const verifyAppEmail = async (req, res) => {
   try {
     const { token } = req.params;
 
-    console.log('Verifying app email with token:', token);
+    // console.log    console.log('Verifying app email with token:', token);
 
     // Find the verification record
     const tokenResult = await pool.query(
@@ -1027,7 +1354,7 @@ const updateAppSupportEmail = async (req, res) => {
     sendMail({
       to: support_email,
       subject: `Verify Updated Support Email - ${app.app_name}`,
-      html: buildAppSupportEmailUpdateEmail({ appName: app.app_name, verificationUrl }),
+      html: buildAppSupportEmailUpdateEmail({ appName: app.app_name, verificationUrl, supportEmail: support_email }),
     }).catch(err => console.error('Send verification email error:', err));
 
     res.json({
@@ -1119,12 +1446,259 @@ const exportUsersCSV = async (req, res) => {
   }
 };
 
+// module.exports moved to bottom after additional functions are defined
+
+/**
+ * List all users across all apps for the authenticated developer.
+ * Returns users, duplicate groups by email, and username conflicts.
+ */
+const listAllUsersAcrossApps = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    // Get app ids for this developer
+    const appsRes = await pool.query('SELECT id, app_name FROM dev_apps WHERE developer_id = $1', [developerId]);
+    const appIds = appsRes.rows.map(r => r.id);
+    if (appIds.length === 0) return res.json({ success: true, data: { users: [], groupsByEmail: [], usernameConflicts: [] } });
+
+    // Fetch users for these apps
+    const usersRes = await pool.query(`
+      SELECT u.id, u.email, u.username, u.name, u.app_id, u.email_verified, u.created_at, a.app_name
+      FROM users u
+      JOIN dev_apps a ON a.id = u.app_id
+      WHERE u.app_id = ANY($1::uuid[])
+      ORDER BY u.email NULLS LAST, u.created_at DESC
+    `, [appIds]);
+
+    const users = usersRes.rows;
+
+    // Group by email to find duplicates
+    const groupsByEmailMap = {};
+    for (const u of users) {
+      const e = (u.email || '').toLowerCase();
+      if (!e) continue;
+      groupsByEmailMap[e] = groupsByEmailMap[e] || [];
+      groupsByEmailMap[e].push(u);
+    }
+    const groupsByEmail = Object.values(groupsByEmailMap).filter(g => g.length > 1);
+
+    // Find username conflicts (same username, different email)
+    const usernameMap = {};
+    for (const u of users) {
+      if (!u.username) continue;
+      const key = u.username.toLowerCase();
+      usernameMap[key] = usernameMap[key] || [];
+      usernameMap[key].push(u);
+    }
+    const usernameConflicts = Object.values(usernameMap).filter(g => {
+      const emails = new Set(g.map(x => (x.email || '').toLowerCase()));
+      return emails.size > 1;
+    });
+
+    // Also include developer-level flag
+    const devRes = await pool.query('SELECT combine_users_across_apps FROM developers WHERE id = $1', [developerId]);
+    const combineFlag = devRes.rows[0] ? devRes.rows[0].combine_users_across_apps : false;
+
+    res.json({ success: true, data: { users, groupsByEmail, usernameConflicts, combineUsersAcrossApps: combineFlag } });
+  } catch (err) {
+    console.error('listAllUsersAcrossApps error', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/**
+ * Toggle developer-level combine users flag
+ */
+const setCombineUsersFlag = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { enabled } = req.body;
+    if (typeof enabled !== 'boolean') return res.status(400).json({ success: false, message: 'enabled must be boolean' });
+    await pool.query('UPDATE developers SET combine_users_across_apps = $1 WHERE id = $2', [enabled, developerId]);
+    res.json({ success: true, message: 'Setting updated' });
+  } catch (err) {
+    console.error('setCombineUsersFlag error', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/**
+ * Merge users across apps according to developer decisions.
+ * Payload: { merges: [ { email, keepUserId, otherUserIds: [...], usernameChanges: { userId: newUsername } } ] }
+ */
+const mergeUsersAcrossApps = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const developerId = req.user.developerId;
+    const { merges } = req.body;
+    if (!Array.isArray(merges)) return res.status(400).json({ success: false, message: 'merges must be an array' });
+
+    // Validate that all referenced user IDs belong to apps owned by this developer
+    const referencedIdsSet = new Set();
+    for (const m of merges) {
+      const { keepUserId, otherUserIds = [], usernameChanges = {} } = m;
+      if (keepUserId) referencedIdsSet.add(keepUserId);
+      for (const oid of otherUserIds || []) if (oid) referencedIdsSet.add(oid);
+      for (const uid of Object.keys(usernameChanges || {})) if (uid) referencedIdsSet.add(uid);
+    }
+    const referencedIds = Array.from(referencedIdsSet);
+    if (referencedIds.length > 0) {
+      const check = await client.query(`
+        SELECT u.id FROM users u
+        JOIN dev_apps a ON a.id = u.app_id
+        WHERE u.id = ANY($1::uuid[]) AND a.developer_id = $2
+      `, [referencedIds, developerId]);
+      if (check.rows.length !== referencedIds.length) {
+        return res.status(400).json({ success: false, message: 'One or more provided user IDs do not belong to your apps' });
+      }
+    }
+
+    await client.query('BEGIN');
+
+    for (const m of merges) {
+      const { keepUserId, otherUserIds = [], usernameChanges = {} } = m;
+      const copyFromUserId = m.copyFromUserId || null;
+      if (!keepUserId) continue;
+
+      // If developer requested copying fields from a particular user record into the kept user, do that first
+      if (copyFromUserId) {
+        // Only allow copying from IDs that were validated earlier as belonging to this developer
+        const copyRes = await client.query(`SELECT id, name, username, extra, password_hash, google_linked, google_id, email_verified, last_login FROM users WHERE id = $1`, [copyFromUserId]);
+        if (copyRes.rows.length) {
+          const src = copyRes.rows[0];
+          // Update kept user with selected fields (merge extras: prefer existing keys on kept user)
+          const keptResNow = await client.query('SELECT extra FROM users WHERE id = $1', [keepUserId]);
+          const keptExtra = (keptResNow.rows[0] && keptResNow.rows[0].extra) || {};
+          const newExtra = Object.assign({}, src.extra || {}, keptExtra);
+          await client.query(`UPDATE users SET name = $1, username = $2, extra = $3::jsonb, password_hash = $4, google_linked = $5, google_id = $6, email_verified = $7, last_login = $8, updated_at = NOW() WHERE id = $9`, [src.name, src.username, JSON.stringify(newExtra), src.password_hash, src.google_linked, src.google_id, src.email_verified, src.last_login, keepUserId]);
+        }
+      }
+
+      // Transfer references from otherUserIds to keepUserId
+      if (otherUserIds.length) {
+        await client.query(`UPDATE user_login_history SET user_id = $1 WHERE user_id = ANY($2::uuid[])`, [keepUserId, otherUserIds]);
+        await client.query(`UPDATE user_email_verifications SET user_id = $1 WHERE user_id = ANY($2::uuid[])`, [keepUserId, otherUserIds]);
+        // Record merges and delete old user rows
+        for (const oldId of otherUserIds) {
+          await client.query(`INSERT INTO user_merges (developer_id, kept_user_id, merged_user_id) VALUES ($1, $2, $3)`, [developerId, keepUserId, oldId]);
+          await client.query(`DELETE FROM users WHERE id = $1`, [oldId]);
+        }
+      }
+
+      // Apply username changes
+      for (const [uid, newUsername] of Object.entries(usernameChanges || {})) {
+        const sanitized = ('' + newUsername).trim();
+        if (!sanitized) continue;
+        // Ensure uniqueness across all users of this developer
+        const exists = await client.query(`
+          SELECT 1 FROM users u JOIN dev_apps a ON a.id = u.app_id WHERE a.developer_id = $1 AND LOWER(u.username) = LOWER($2) LIMIT 1
+        `, [developerId, sanitized]);
+        if (exists.rows.length) {
+          // append suffix
+          const suffix = Math.floor(Math.random() * 9000) + 1000;
+          const newName = `${sanitized}_${suffix}`;
+          await client.query(`UPDATE users SET username = $1 WHERE id = $2`, [newName, uid]);
+          // notify user
+          const userRes = await client.query('SELECT email FROM users WHERE id = $1', [uid]);
+          if (userRes.rows[0] && userRes.rows[0].email) {
+            sendMail({ to: userRes.rows[0].email, subject: 'Your username was updated', html: `<p>Your username has been changed to <strong>${newName}</strong> by the application owner.</p>` }).catch(e => console.error('sendMail error', e));
+          }
+        } else {
+          await client.query(`UPDATE users SET username = $1 WHERE id = $2`, [sanitized, uid]);
+          const userRes = await client.query('SELECT email FROM users WHERE id = $1', [uid]);
+          if (userRes.rows[0] && userRes.rows[0].email) {
+            sendMail({ to: userRes.rows[0].email, subject: 'Your username was updated', html: `<p>Your username has been changed to <strong>${sanitized}</strong> by the application owner.</p>` }).catch(e => console.error('sendMail error', e));
+          }
+        }
+      }
+
+      // Notify kept user about merge
+      const keptRes = await client.query('SELECT email FROM users WHERE id = $1', [keepUserId]);
+      if (keptRes.rows[0] && keptRes.rows[0].email) {
+        sendMail({ to: keptRes.rows[0].email, subject: 'Accounts merged', html: `<p>Your accounts across multiple applications owned by the same developer have been consolidated. If you have questions, contact support.</p>` }).catch(e => console.error('sendMail error', e));
+      }
+    }
+
+    await client.query('COMMIT');
+    res.json({ success: true, message: 'Merges applied' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('mergeUsersAcrossApps error', err);
+    res.status(500).json({ success: false, message: err.message });
+  } finally {
+    client.release();
+  }
+};
+
+/**
+ * Get all users across all apps within a group (developer-owned)
+ */
+const getGroupUsers = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { groupId } = req.params;
+
+    if (!groupId) return res.status(400).json({ success: false, message: 'Group ID required' });
+
+    // Verify group ownership
+    const groupCheck = await pool.query('SELECT id FROM app_groups WHERE id = $1 AND developer_id = $2', [groupId, developerId]);
+    if (groupCheck.rows.length === 0) return res.status(404).json({ success: false, message: 'Group not found' });
+
+    const usersRes = await pool.query(`
+      SELECT u.id, u.email, u.name, u.username, u.email_verified, u.is_blocked, u.last_login, u.app_id, a.app_name
+      FROM users u
+      JOIN dev_apps a ON u.app_id = a.id
+      WHERE a.group_id = $1
+      ORDER BY LOWER(u.email) NULLS LAST, a.app_name
+    `, [groupId]);
+
+    res.json({ success: true, data: usersRes.rows });
+  } catch (err) {
+    console.error('getGroupUsers error', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch group users', error: err.message });
+  }
+};
+
+/**
+ * Get apps in which a user (by user id) has login records within the group
+ */
+const getGroupUserLogins = async (req, res) => {
+  try {
+    const developerId = req.user.developerId;
+    const { groupId, userId } = req.params;
+
+    if (!groupId || !userId) return res.status(400).json({ success: false, message: 'Group ID and User ID required' });
+
+    // Verify group ownership
+    const groupCheck = await pool.query('SELECT id FROM app_groups WHERE id = $1 AND developer_id = $2', [groupId, developerId]);
+    if (groupCheck.rows.length === 0) return res.status(404).json({ success: false, message: 'Group not found' });
+
+    const loginsRes = await pool.query(`
+      SELECT gul.app_id, a.app_name, gul.last_login
+      FROM group_user_logins gul
+      JOIN dev_apps a ON a.id = gul.app_id
+      WHERE gul.group_id = $1 AND gul.user_id = $2
+      ORDER BY gul.last_login DESC
+    `, [groupId, userId]);
+
+    res.json({ success: true, data: loginsRes.rows });
+  } catch (err) {
+    console.error('getGroupUserLogins error', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch user logins for group', error: err.message });
+  }
+};
+
+
+
 module.exports = {
   createApp,
   getMyApps,
+  getAppGroups,
+  createAppGroup,
+  deleteAppGroup,
+  getGroupUsers,
+  getGroupUserLogins,
   getAppDetails,
   updateApp,
-  // deleteApp is now used internally by the confirmation flow
   regenerateApiKey,
   getAppSummary,
   listAppUsers,
@@ -1138,4 +1712,8 @@ module.exports = {
   exportUsersCSV,
   requestAppDeletion,
   confirmAppDeletion,
+  // new developer-level functions
+  listAllUsersAcrossApps,
+  mergeUsersAcrossApps,
+  setCombineUsersFlag,
 };

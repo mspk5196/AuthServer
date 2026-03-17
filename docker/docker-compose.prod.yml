@@ -1,0 +1,36 @@
+services:
+  cpanel-backend:
+    ports: ["5002:5000"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  cpanel-frontend:
+    ports: ["4002:4000"]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://127.0.0.1:4000"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  developer-backend:
+    ports: ["5001:5000"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  developer-frontend:
+    ports: ["4001:4000"]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://127.0.0.1:4000"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s

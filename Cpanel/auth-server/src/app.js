@@ -6,6 +6,7 @@ const authRoutes = require('./routes/authRoutes.js');
 const settingsRoutes = require('./routes/settingsRoutes.js');
 const appRoutes = require('./routes/appRoutes.js');
 const publicApiRoutes = require('./routes/publicApiRoutes.js');
+const groupSettingsRoutes = require('./routes/groupSettingsRoutes.js');
 
 const app = express();
 
@@ -28,6 +29,7 @@ app.use((req, res, next) => {
 app.use('/api/developer', authRoutes);
 app.use('/api/developer', settingsRoutes);
 app.use('/api/developer/apps', appRoutes);
+app.use('/api/developer/group-settings', groupSettingsRoutes);
 app.use('/api/v1', publicApiRoutes);
 
 // error handler (simple)

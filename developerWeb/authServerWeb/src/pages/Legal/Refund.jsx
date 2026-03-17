@@ -54,7 +54,8 @@ const Refund = () => {
             <h2>Cancellation</h2>
             <p>
               You can cancel your plan at any time from your account settings. Cancellation stops
-              future renewals, but access may continue until the end of the current period.
+              future renewals, and also access to paid feature stops immediately. You will notretain
+              access to paid features until the end of your current billing period.
             </p>
           </>
         )}

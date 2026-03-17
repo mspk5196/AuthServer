@@ -9,19 +9,28 @@ const Apps = () => {
   const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [groups, setGroups] = useState([]);
+  const [groupsLoading, setGroupsLoading] = useState(false);
+  const [groupsError, setGroupsError] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+    const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+    const [groupFormName, setGroupFormName] = useState('');
+    const [creatingGroup, setCreatingGroup] = useState(false);
+    const [groupModalError, setGroupModalError] = useState('');
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const [newAppCredentials, setNewAppCredentials] = useState(null);
   const [formData, setFormData] = useState({
     app_name: '',
     support_email: '',
     allow_google_signin: false,
-    allow_email_signin: true
+    allow_email_signin: true,
+    group_id: ''
   });
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     fetchApps();
+    fetchGroups();
   }, []);
 
   const fetchApps = async () => {
@@ -40,6 +49,53 @@ const Apps = () => {
       setError('Failed to load apps. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchGroups = async () => {
+    try {
+      setGroupsLoading(true);
+      setGroupsError('');
+      const token = tokenService.get();
+      const data = await api.get('/apps/groups', token);
+      if (data.success) {
+        setGroups(data.data || []);
+      } else {
+        setGroupsError(data.message || 'Failed to load app groups');
+      }
+    } catch (err) {
+      console.error('Fetch groups error:', err);
+      setGroupsError('Failed to load app groups. Please try again.');
+    } finally {
+      setGroupsLoading(false);
+    }
+  };
+
+  const handleCreateGroup = async (e) => {
+    e.preventDefault();
+
+    if (!groupFormName.trim()) {
+      setGroupModalError('Group name is required');
+      return;
+    }
+
+    try {
+      setCreatingGroup(true);
+      setGroupModalError('');
+      const token = tokenService.get();
+      const data = await api.post('/apps/groups', { name: groupFormName.trim() }, token);
+      if (data.success) {
+        setGroupFormName('');
+        setShowCreateGroupModal(false);
+        await fetchGroups();
+      } else {
+        setGroupModalError(data.message || 'Failed to create group');
+      }
+    } catch (err) {
+      console.error('Create group error:', err);
+      setGroupModalError('Failed to create group. Please try again.');
+    } finally {
+      setCreatingGroup(false);
     }
   };
 
@@ -62,6 +118,9 @@ const Apps = () => {
         allow_google_signin: formData.allow_google_signin,
         allow_email_signin: formData.allow_email_signin
       };
+      if (formData.group_id) {
+        payload.group_id = formData.group_id;
+      }
       const data = await api.post('/apps/createApp', payload, token);
       if (data.success) {
         // Show credentials modal
@@ -74,7 +133,8 @@ const Apps = () => {
           app_name: '',
           support_email: '',
           allow_google_signin: false,
-          allow_email_signin: true
+          allow_email_signin: true,
+          group_id: ''
         });
 
         // Refresh apps list
@@ -119,12 +179,21 @@ const Apps = () => {
           <h1>📱 My Applications</h1>
           <p>Create and manage your applications</p>
         </div>
-        <button 
-          className="btn-primary"
-          onClick={() => setShowCreateModal(true)}
-        >
-          + Create New App
-        </button>
+        <div>
+          <button
+            className="btn-secondary"
+            style={{ marginRight: '0.5rem' }}
+            onClick={() => setShowCreateGroupModal(true)}
+          >
+            + Create Group
+          </button>
+          <button 
+            className="btn-primary"
+            onClick={() => setShowCreateModal(true)}
+          >
+            + Create New App
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -169,6 +238,11 @@ const Apps = () => {
                       📋
                     </button>
                   </div>
+                </div>
+
+                <div className="app-info-row">
+                  <span className="label">Group:</span>
+                  <span className="value">{app.group_name || 'Standalone app'}</span>
                 </div>
 
                 <div className="app-features">
@@ -247,6 +321,31 @@ const Apps = () => {
                 />
               </div>
 
+              <div className="form-group">
+                <label>App Group (optional)</label>
+                <select
+                  value={formData.group_id}
+                  onChange={(e) => setFormData({ ...formData, group_id: e.target.value })}
+                >
+                  <option value="">Standalone app (no group)</option>
+                  {groups.map(group => (
+                    <option key={group.id} value={group.id}>
+                      {group.name}
+                    </option>
+                  ))}
+                </select>
+                {groupsLoading && (
+                  <p style={{ fontSize: '0.8rem', marginTop: '0.25rem', color: '#64748b' }}>
+                    Loading groups...
+                  </p>
+                )}
+                {groupsError && (
+                  <p style={{ fontSize: '0.8rem', marginTop: '0.25rem', color: '#b91c1c' }}>
+                    {groupsError}
+                  </p>
+                )}
+              </div>
+
               <div className="form-group-checkbox">
                 <label>
                   <input
@@ -284,6 +383,61 @@ const Apps = () => {
                   disabled={creating}
                 >
                   {creating ? 'Creating...' : 'Create App'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create Group Modal */}
+      {showCreateGroupModal && (
+        <div className="modal-overlay" onClick={() => setShowCreateGroupModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Create New App Group</h2>
+              <button
+                className="modal-close"
+                onClick={() => setShowCreateGroupModal(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateGroup}>
+              <div className="form-group">
+                <label>Group Name *</label>
+                <input
+                  type="text"
+                  placeholder="My Customer Group"
+                  value={groupFormName}
+                  onChange={(e) => setGroupFormName(e.target.value)}
+                  required
+                />
+              </div>
+
+              {groupModalError && (
+                <div className="alert alert-error">
+                  <span>⚠️</span>
+                  <p>{groupModalError}</p>
+                </div>
+              )}
+
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowCreateGroupModal(false)}
+                  disabled={creatingGroup}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={creatingGroup}
+                >
+                  {creatingGroup ? 'Creating...' : 'Create Group'}
                 </button>
               </div>
             </form>

@@ -57,6 +57,16 @@
     gap: 0.75rem;
   }
 }
+.home-page .region-banner {
+  background: #fef3c7;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 0.5rem 0;
+}
+.home-page .region-banner p {
+  font-size: 0.875rem;
+  color: #6b7280;
+  text-align: center;
+}
 .home-page .features {
   background: white;
 }
@@ -188,4 +198,59 @@
   .home-page .cta p {
     font-size: 1rem;
   }
+}
+.home-page .home-footer {
+  background: #1e293b;
+  color: white;
+  padding: 3rem 0 1.5rem;
+}
+.home-page .home-footer .footer-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+@media (max-width: 767px) {
+  .home-page .home-footer .footer-content {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+}
+.home-page .home-footer .footer-section h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: white;
+}
+.home-page .home-footer .footer-section p {
+  font-size: 0.875rem;
+  color: #cbd5e1;
+  line-height: 1.6;
+}
+.home-page .home-footer .footer-section ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.home-page .home-footer .footer-section ul li {
+  margin-bottom: 0.5rem;
+}
+.home-page .home-footer .footer-section ul li a {
+  color: #cbd5e1;
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: color 0.2s;
+}
+.home-page .home-footer .footer-section ul li a:hover {
+  color: white;
+}
+.home-page .home-footer .footer-bottom {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 1.5rem;
+  text-align: center;
+}
+.home-page .home-footer .footer-bottom p {
+  font-size: 0.875rem;
+  color: #94a3b8;
+  margin: 0;
 }/*# sourceMappingURL=Home.css.map */

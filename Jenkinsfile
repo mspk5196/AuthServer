@@ -4,6 +4,7 @@ pipeline {
 
   environment {
     APP = "auth-server"
+    RUNTIME_ROOT = "/opt/runtime/${APP}"
     EMAIL = "ci@mspkapps.in"
     IMAGE_TAG = "prod-${BUILD_NUMBER}"
   }
@@ -42,31 +43,67 @@ pipeline {
       }
     }
 
-    stage('Build & Deploy (PRODUCTION)') {
+    stage('Build & Push Images') {
+      steps {
+        withCredentials([usernamePassword(
+          credentialsId: 'dockerhub-creds',
+          usernameVariable: 'DOCKER_USER',
+          passwordVariable: 'DOCKER_PASS'
+        )]) {
+          sh '''
+            bash -lc '
+              set -e
+
+              echo "🔐 Loading environment variables..."
+              source scripts/load-env.sh
+
+              echo "🔐 Logging into Docker Hub..."
+              echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+
+              echo "🏗️ Building images..."
+              docker compose \
+                -f docker/docker-compose.ci.yml \
+                build
+
+              echo "📦 Pushing images..."
+              docker compose \
+                -f docker/docker-compose.ci.yml \
+                push
+            '
+          '''
+        }
+      }
+    }
+
+    stage('Sync Infra Files') {
       steps {
         sh '''
-          bash -lc '
-            set -e
-            set -a
+          set -e
+          mkdir -p ${RUNTIME_ROOT}
 
-            source /opt/envs/frontend.prod.env
-            source /opt/envs/cpanel-backend.env
-            source /opt/envs/cpanel-frontend.env
-            source /opt/envs/dev-backend.env
-            source /opt/envs/dev-frontend.env
+          cp docker/docker-compose.base.yml \
+             docker/docker-compose.prod.yml \
+             ${RUNTIME_ROOT}/
+        '''
+      }
+    }
 
-            set +a
+    stage('Deploy to Production') {
+      steps {
+        sh '''
+          set -e
 
-            docker compose -p auth-server \
-              -f docker/docker-compose.base.yml \
-              -f docker/docker-compose.prod.yml \
-              build
+          docker pull mspkapps/cpanel-backend:${IMAGE_TAG}
+          docker pull mspkapps/cpanel-frontend:${IMAGE_TAG}
+          docker pull mspkapps/dev-backend:${IMAGE_TAG}
+          docker pull mspkapps/dev-frontend:${IMAGE_TAG}
 
-            docker compose -p auth-server \
-              -f docker/docker-compose.base.yml \
-              -f docker/docker-compose.prod.yml \
-              up -d
-          '
+          cd ${RUNTIME_ROOT}
+
+          docker compose \
+            -f docker-compose.base.yml \
+            -f docker-compose.prod.yml \
+            up -d
         '''
       }
     }
@@ -78,15 +115,13 @@ pipeline {
         to: EMAIL,
         subject: "✅ ${APP} deployed to PRODUCTION (Build #${BUILD_NUMBER})",
         body: """
-              SUCCESS ✅
+SUCCESS ✅
 
-              Application : ${APP}
-              Build Number: ${BUILD_NUMBER}
-              Image Tag   : ${IMAGE_TAG}
-              Branch      : main
-
-              See attached Jenkins build log for details.
-              """,
+Application : ${APP}
+Build Number: ${BUILD_NUMBER}
+Image Tag   : ${IMAGE_TAG}
+Branch      : main
+""",
         attachLog: true,
         compressLog: true
       )
@@ -97,15 +132,14 @@ pipeline {
         to: EMAIL,
         subject: "❌ ${APP} CI FAILED (Build #${BUILD_NUMBER})",
         body: """
-              FAILURE ❌
+FAILURE ❌
 
-              Application : ${APP}
-              Build Number: ${BUILD_NUMBER}
-              Branch      : test → main
+Application : ${APP}
+Build Number: ${BUILD_NUMBER}
+Branch      : test → main
 
-              ❌ Production was NOT touched.
-              See attached Jenkins build log for exact error.
-              """,
+❌ Production was NOT touched.
+""",
         attachLog: true,
         compressLog: true
       )

@@ -7,7 +7,7 @@ import PlanFeatures from '../../components/PlanFeatures/PlanFeatures';
 import './Settings.scss';
 
 const Settings = () => {
-  const { developer, updateDeveloper } = useAuth();
+  const { developer, updateDeveloper, logout } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('profile');
   const [loading, setLoading] = useState(false);
@@ -106,7 +106,7 @@ const Settings = () => {
         
         // Logout after 3 seconds
         setTimeout(() => {
-          window.location.href = '/login';
+          logout().finally(() => navigate('/login', { replace: true }));
         }, 3000);
       }
     } catch (error) {

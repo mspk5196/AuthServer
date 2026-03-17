@@ -6,7 +6,7 @@ import PlanSelection from '../../components/PlanSelection';
 import './Dashboard.scss';
 
 const Dashboard = () => {
-  const { developer, updateDeveloper } = useAuth();
+  const { developer, updateDeveloper, checkAuth } = useAuth();
   const [openingCpanel, setOpeningCpanel] = useState(false);
   const [cpanelError, setCpanelError] = useState('');
   const [loadingPlan, setLoadingPlan] = useState(true);
@@ -48,16 +48,15 @@ const Dashboard = () => {
     }
   };
 
-  const handlePlanSelected = async (planData) => {
-    setHasPlan(true);
-    setCurrentPlan(planData.plan || planData);
-
-    // After selecting/upgrading a plan, immediately refresh stats
+  const handlePlanSelected = async () => {
+    // After selecting/upgrading a plan, re-fetch fresh state from backend.
+    // This avoids rendering with partial/null plan payloads.
     try {
-      await fetchDashboardStats();
-    } catch (err) {
-      console.error('Failed to refresh stats after plan change:', err);
+      await checkAuth();
+    } catch (e) {
+      // best-effort: plan fetch below will still determine UI
     }
+    await checkDeveloperPlan();
   };
 
   const handleOpenCpanel = async () => {

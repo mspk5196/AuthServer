@@ -141,6 +141,11 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
           setError(error.description || 'Payment failed. Please try again.');
           setSelecting(false);
           setSelectedPlanId(null);
+        },
+        () => {
+          // User closed/cancelled the Razorpay checkout
+          setSelecting(false);
+          setSelectedPlanId(null);
         }
       );
     } catch (err) {

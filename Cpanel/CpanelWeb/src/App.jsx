@@ -12,6 +12,10 @@ import AppSettings from './pages/Apps/AppSettings/AppSettings';
 import Settings from './pages/Settings/Settings';
 import Documentation from './pages/Documentation/Documentation';
 import Groups from './pages/Groups/Groups';
+<<<<<<< HEAD
+=======
+import GroupSettings from './pages/Groups/GroupSettings/GroupSettings';
+>>>>>>> acefa4a709a56e3c493373a376cedc45c45d8131
 import './App.css';
 import VerifyAppEmail from './pages/Apps/VerifyAppEmail/VerifyAppEmail';
 
@@ -139,6 +143,10 @@ function App() {
         <Route path="apps/:appId/settings" element={<AppSettings />} />
         {/* <Route path="apps/all-users" element={<AllUsers />} /> */}
         <Route path="groups" element={<Groups />} />
+<<<<<<< HEAD
+=======
+        <Route path="groups/:groupId/settings" element={<GroupSettings />} />
+>>>>>>> acefa4a709a56e3c493373a376cedc45c45d8131
         <Route path="settings" element={<Settings />} />
         <Route path="documentation" element={<Documentation />} />
         <Route path="*" element={<Navigate to="/" replace />} />

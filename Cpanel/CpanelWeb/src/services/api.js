@@ -13,7 +13,7 @@ const handleAuthError = (status, data) => {
       // ignore storage errors
     }
 
-    const base = MAIN_PORTAL_URL || 'https://authservices.mspkapps.in';
+    const base = MAIN_PORTAL_URL || 'https://authservices.mspk.in';
     const redirectUrl = `${base.replace(/\/$/, '')}/login?error=session_expired`;
     window.location.href = redirectUrl;
   }

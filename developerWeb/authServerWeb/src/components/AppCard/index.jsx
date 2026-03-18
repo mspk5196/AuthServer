@@ -18,7 +18,7 @@ const AppCard = ({ app, onUpdate, onDelete }) => {
     googleClientSecret: app.google_client_secret || '',
   });
 
-  const baseUrl = `https://auth.mspkapps.in/${app.developer_username}/${app.name}`;
+  const baseUrl = `https://auth.mspk.in/${app.developer_username}/${app.name}`;
 
   const handleCopy = (text, field) => {
     navigator.clipboard.writeText(text);

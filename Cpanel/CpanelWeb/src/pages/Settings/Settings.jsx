@@ -57,7 +57,7 @@ const Settings = () => {
   };
 
   const handleUpgradePlanClick = () => {
-    window.open('https://authservices.mspkapps.in/plans', '_blank', 'noopener');
+    window.open('https://authservices.mspk.in/plans', '_blank', 'noopener');
   };
 
   if (loading) {
@@ -120,7 +120,7 @@ const Settings = () => {
           <div className="info-banner-title">Account Management</div>
           <div className="info-banner-text">
             To edit your profile, enable two-factor authentication, or reset your password,
-            please visit the <a href="https://authservices.mspkapps.in/" target="_blank" rel="noopener noreferrer">main developer portal</a>.
+            please visit the <a href="https://authservices.mspk.in/" target="_blank" rel="noopener noreferrer">main developer portal</a>.
           </div>
         </div>
       </div>
@@ -300,7 +300,7 @@ const Settings = () => {
           </div>
           <div className="settings-value">
             <a 
-              href="https://docs.mspkapps.in/developer-api" 
+              href="https://docs.mspk.in/developer-api" 
               target="_blank" 
               rel="noopener noreferrer"
               className="btn btn-secondary"

@@ -1,7 +1,7 @@
-const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'support.mspk@mspkapps.in';
+const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'support@mspk.in';
 
 const buildVerifyAccountEmail = ({ name, verifyLink }) => `
-  <img src="https://mspkapps.in/logo.png" alt="MSPK™ Apps" style="height:40px;margin-bottom:16px;" />
+  <img src="https://mspk.in/logo.png" alt="MSPK™ Apps" style="height:40px;margin-bottom:16px;" />
   <h2>Verify your Developer Account</h2>
   <p>Hello ${name},</p>
   <p>Click the link below to verify your account (valid for <b>5 minutes</b>):</p>
@@ -14,7 +14,7 @@ const buildVerifyAccountEmail = ({ name, verifyLink }) => `
 `;
 
 const buildEmailUpdateVerificationEmail = ({ name, verifyLink }) => `
-  <img src="https://mspkapps.in/logo.png" alt="MSPK™ Apps" style="height:40px;margin-bottom:16px;" />
+  <img src="https://mspk.in/logo.png" alt="MSPK™ Apps" style="height:40px;margin-bottom:16px;" />
   <h2>Verify Your New Email Address</h2>
   <p>Hello ${name},</p>
   <p>You recently changed your email address. Please verify your new email by clicking the link below (valid for 5 minutes):</p>
@@ -27,7 +27,7 @@ const buildEmailUpdateVerificationEmail = ({ name, verifyLink }) => `
 `;
 
 const buildPasswordChangedEmail = ({ name, changedAt }) => `
-  <img src="https://mspkapps.in/logo.png" alt="MSPK™ Apps" style="height:40px;margin-bottom:16px;" />
+  <img src="https://mspk.in/logo.png" alt="MSPK™ Apps" style="height:40px;margin-bottom:16px;" />
   <h2>Password Changed Successfully</h2>
   <p>Hello ${name},</p>
   <p>Your password was recently changed for your developer account.</p>
@@ -42,7 +42,7 @@ const buildPasswordChangedEmail = ({ name, changedAt }) => `
 `;
 
 const buildPlanSelectionEmail = ({ name, changedAt }) => `
-  <img src="https://mspkapps.in/logo.png" alt="MSPK™ Apps" style="height:40px;margin-bottom:16px;" />
+  <img src="https://mspk.in/logo.png" alt="MSPK™ Apps" style="height:40px;margin-bottom:16px;" />
   <h2>Plan Selected Successfully</h2>
   <p>Hello ${name},</p>
   <p>Your plan has been successfully selected for your developer account.</p>
@@ -67,7 +67,7 @@ const buildPlanChangeEmail = ({ name, planName, action, startDate, endDate, chan
   const startDateText = startDate ? new Date(startDate).toLocaleString() : 'Now';
 
   return `
-  <img src="https://mspkapps.in/logo.png" alt="MSPK™ Apps" style="height:40px;margin-bottom:16px;" />
+  <img src="https://mspk.in/logo.png" alt="MSPK™ Apps" style="height:40px;margin-bottom:16px;" />
   <h2>Plan ${actionLabel}</h2>
   <p>Hello ${name},</p>
   <p>Your plan has been ${actionLabel}: <strong>${planName}</strong>.</p>
@@ -90,7 +90,7 @@ const buildPlanCancelledEmail = ({ name, planName, cancelledAt, endDate }) => {
   const endDateText = endDate ? new Date(endDate).toLocaleString() : 'Immediately';
 
   return `
-  <img src="https://mspkapps.in/logo.png" alt="MSPK™ Apps" style="height:40px;margin-bottom:16px;" />
+  <img src="https://mspk.in/logo.png" alt="MSPK™ Apps" style="height:40px;margin-bottom:16px;" />
   <h2>Plan Cancelled</h2>
   <p>Hello ${name},</p>
   <p>Your plan <strong>${planName}</strong> has been cancelled.</p>
@@ -111,7 +111,7 @@ const buildPlanCancelledEmail = ({ name, planName, cancelledAt, endDate }) => {
 const buildPlanExpiredEmail = ({ name, planName, endDate }) => {
   const endDateText = endDate ? new Date(endDate).toLocaleString() : 'Already expired';
   return `
-  <img src="https://mspkapps.in/logo.png" alt="MSPK™ Apps" style="height:40px;margin-bottom:16px;" />
+  <img src="https://mspk.in/logo.png" alt="MSPK™ Apps" style="height:40px;margin-bottom:16px;" />
   <h2>Your plan has expired</h2>
   <p>Hello ${name},</p>
   <p>Your plan <strong>${planName}</strong> has expired.</p>
@@ -128,7 +128,7 @@ const buildPlanExpiredEmail = ({ name, planName, endDate }) => {
 };
 
 const buildPlanInactiveEmail = ({ name, planName }) => `
-  <img src="https://mspkapps.in/logo.png" alt="MSPK™ Apps" style="height:40px;margin-bottom:16px;" />
+  <img src="https://mspk.in/logo.png" alt="MSPK™ Apps" style="height:40px;margin-bottom:16px;" />
   <h2>Your plan was deactivated</h2>
   <p>Hello ${name},</p>
   <p>Your plan <strong>${planName}</strong> has been deactivated because it is no longer available.</p>
@@ -170,7 +170,7 @@ const buildUsageReminderEmail = ({
       : `${apiCallsRemaining.toLocaleString()}`;
 
   return `
-  <img src="https://mspkapps.in/logo.png" alt="MSPK™ Apps" style="height:40px;margin-bottom:16px;" />
+  <img src="https://mspk.in/logo.png" alt="MSPK™ Apps" style="height:40px;margin-bottom:16px;" />
   <h2>Monthly Usage Summary</h2>
   <p>Hello ${name},</p>
   <p>Here is your current usage summary for plan <strong>${planName}</strong>:</p>
@@ -188,7 +188,7 @@ const buildUsageReminderEmail = ({
 };
 
 const buildPasswordChangeRequestEmail = ({ name, changeUrl }) => `
-  <img src="https://mspkapps.in/logo.png" alt="MSPK Apps" style="height:40px;margin-bottom:16px;" />
+  <img src="https://mspk.in/logo.png" alt="MSPK Apps" style="height:40px;margin-bottom:16px;" />
   <h2>Password Change Request</h2>
   <p>Hello ${name},</p>
   <p>You requested to change your password. Click the link below to proceed:</p>
@@ -203,7 +203,7 @@ const buildPasswordChangeRequestEmail = ({ name, changeUrl }) => `
 `;
 
 const buildPasswordResetEmail = ({ name, resetUrl }) => `
-  <img src="https://mspkapps.in/logo.png" alt="MSPK Apps" style="height:40px;margin-bottom:16px;" />
+  <img src="https://mspk.in/logo.png" alt="MSPK Apps" style="height:40px;margin-bottom:16px;" />
   <h2>Reset Your Password</h2>
   <p>Hello ${name},</p>
   <p>You requested to reset your password. Click the link below to proceed:</p>

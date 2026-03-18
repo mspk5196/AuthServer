@@ -5,7 +5,7 @@ pipeline {
   environment {
     APP = "auth-server"
     RUNTIME_ROOT = "/opt/runtime/${APP}"
-    EMAIL = "ci@mspkapps.in"
+    EMAIL = "ci@mspk.in"
     IMAGE_TAG = "prod-${BUILD_NUMBER}"
   }
 
@@ -27,9 +27,9 @@ pipeline {
           sh '''
             set -e
             git config user.name "Jenkins CI"
-            git config user.email "ci@mspkapps.in"
+            git config user.email "ci@mspk.in"
 
-            git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@github.com/MSPK-APPS/auth-server.git
+            git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@github.com/mspk5196/AuthServer.git
 
             git fetch origin \
               +refs/heads/main:refs/remotes/origin/main \

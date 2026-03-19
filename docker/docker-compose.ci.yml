@@ -4,7 +4,7 @@ services:
   cpanel-backend:
     build:
       context: ../Cpanel/auth-server
-    image: mspkapps/cpanel-backend:${IMAGE_TAG}
+    image: mspk5196/cpanel-backend:${IMAGE_TAG}
 
   cpanel-frontend:
     build:
@@ -12,12 +12,12 @@ services:
       args:
         VITE_CPANEL_API_BASE_URL: ${VITE_CPANEL_API_BASE_URL}
         VITE_MAIN_PORTAL_URL: ${VITE_MAIN_PORTAL_URL}
-    image: mspkapps/cpanel-frontend:${IMAGE_TAG}
+    image: mspk5196/cpanel-frontend:${IMAGE_TAG}
 
   developer-backend:
     build:
       context: ../developerWeb/Backend
-    image: mspkapps/dev-backend:${IMAGE_TAG}
+    image: mspk5196/dev-backend:${IMAGE_TAG}
 
   developer-frontend:
     build:
@@ -26,4 +26,4 @@ services:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL}
         VITE_API_URL: ${VITE_API_URL}
         VITE_SUPPORT_EMAIL: ${VITE_SUPPORT_EMAIL}
-    image: mspkapps/dev-frontend:${IMAGE_TAG}
+    image: mspk5196/dev-frontend:${IMAGE_TAG}

@@ -61,9 +61,9 @@ pipeline {
               echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
 
               echo "🏗️ Building images..."
-              docker compose \
+              COMPOSE_DOCKER_CLI_BUILD=0 docker compose \
                 -f docker/docker-compose.ci.yml \
-                build --no-parallel
+                build
 
               echo "📦 Pushing images..."
               docker compose \

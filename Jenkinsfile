@@ -63,7 +63,7 @@ pipeline {
               echo "🏗️ Building images..."
               docker compose \
                 -f docker/docker-compose.ci.yml \
-                build
+                build --no-parallel
 
               echo "📦 Pushing images..."
               docker compose \

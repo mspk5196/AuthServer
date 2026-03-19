@@ -1,8 +1,5 @@
 import React, { useEffect, useState } from 'react';
-<<<<<<< HEAD
-=======
 import { useNavigate } from 'react-router-dom';
->>>>>>> acefa4a709a56e3c493373a376cedc45c45d8131
 import { api } from '../../services/api';
 import { tokenService } from '../../services/tokenService';
 import '../Apps/AppHome/Apps.css';
@@ -20,11 +17,8 @@ const Groups = () => {
   const [groupUsers, setGroupUsers] = useState([]);
   const [viewUsersLoading, setViewUsersLoading] = useState(false);
 
-<<<<<<< HEAD
-=======
   const navigate = useNavigate();
   
->>>>>>> acefa4a709a56e3c493373a376cedc45c45d8131
   useEffect(() => {
     fetchGroups();
   }, []);
@@ -174,16 +168,6 @@ const Groups = () => {
             <div key={group.id} className="app-card">
               <div className="app-card-header">
                 <h3>{group.name}</h3>
-<<<<<<< HEAD
-                <button
-                  className="btn-link btn-danger"
-                  style={{ marginLeft: 'auto' }}
-                  onClick={() => handleDeleteGroup(group)}
-                  disabled={deletingId === group.id}
-                >
-                  {deletingId === group.id ? 'Deleting...' : 'Delete'}
-                </button>
-=======
                 <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
                   <button
                     className="btn-link"
@@ -200,7 +184,6 @@ const Groups = () => {
                     {deletingId === group.id ? 'Deleting...' : 'Delete'}
                   </button>
                 </div>
->>>>>>> acefa4a709a56e3c493373a376cedc45c45d8131
               </div>
                 <div className="app-card-body">
                 <div className="app-info-row">

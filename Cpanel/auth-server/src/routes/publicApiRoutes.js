@@ -39,9 +39,5 @@ router.post('/:apiKey/auth/delete-account', publicApis.deleteAccount);
 // User profile (requires Bearer token)
 router.get('/:apiKey/user/profile', publicApis.getUserProfile);
 router.patch('/:apiKey/user/profile', publicApis.patchUserProfile);
-<<<<<<< HEAD
-=======
-
->>>>>>> acefa4a709a56e3c493373a376cedc45c45d8131
 
 module.exports = router;

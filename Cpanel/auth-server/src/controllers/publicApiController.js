@@ -3083,8 +3083,6 @@ const confirmUserUpdate = async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to confirm update' });
   }
 };
-<<<<<<< HEAD
-=======
 
 /**
  * Get developer's groups
@@ -3328,7 +3326,6 @@ const getUserData = async (req, res) => {
     });
   }
 };
->>>>>>> acefa4a709a56e3c493373a376cedc45c45d8131
 
 module.exports = {
   verifyAppCredentials,
@@ -3352,13 +3349,9 @@ module.exports = {
   verifyEmailSetPasswordGoogleUser,
   verifyChangePassword,
   verifyAccessToken,
-<<<<<<< HEAD
-  confirmUserUpdate
-=======
   confirmUserUpdate,
   getDeveloperGroups,
   getDeveloperApps,
   getAppUsers,
   getUserData
->>>>>>> acefa4a709a56e3c493373a376cedc45c45d8131
 };

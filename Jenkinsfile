@@ -93,10 +93,10 @@ pipeline {
         sh '''
           set -e
 
-          docker pull mspkapps/cpanel-backend:${IMAGE_TAG}
-          docker pull mspkapps/cpanel-frontend:${IMAGE_TAG}
-          docker pull mspkapps/dev-backend:${IMAGE_TAG}
-          docker pull mspkapps/dev-frontend:${IMAGE_TAG}
+          docker pull mspk5196/cpanel-backend:${IMAGE_TAG}
+          docker pull mspk5196/cpanel-frontend:${IMAGE_TAG}
+          docker pull mspk5196/dev-backend:${IMAGE_TAG}
+          docker pull mspk5196/dev-frontend:${IMAGE_TAG}
 
           cd ${RUNTIME_ROOT}
 

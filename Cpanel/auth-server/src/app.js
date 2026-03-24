@@ -10,10 +10,13 @@ const groupSettingsRoutes = require('./routes/groupSettingsRoutes.js');
 
 const app = express();
 
-// app.use(cors({
-//   origin: "*",
-//   credentials: true, 
-// }));
+app.use(cors({
+  origin: [
+    'https://cpanel-authservices.mspk.in',
+    'https://authservices.mspk.in'
+  ],
+  credentials: true
+}));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

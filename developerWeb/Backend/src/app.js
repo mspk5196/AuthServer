@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const client = require('prom-client');
 
 const authRoutes = require('./routes/authRoutes.js');
 const cPanelRoutes = require('./routes/cPanelRoutes.js');
@@ -24,6 +25,37 @@ app.use(
 app.use((req, res, next) => {
   console.log(`[${req.method}] ${req.url}`);
   next();
+});
+
+// collect default metrics (CPU, memory, etc.)
+client.collectDefaultMetrics();
+
+// custom metric: request duration
+const httpRequestDuration = new client.Histogram({
+  name: 'http_request_duration_seconds',
+  help: 'HTTP request duration',
+  labelNames: ['method', 'route', 'status'],
+});
+
+// middleware
+app.use((req, res, next) => {
+  const end = httpRequestDuration.startTimer();
+
+  res.on('finish', () => {
+    end({
+      method: req.method,
+      route: req.path,
+      status: res.statusCode,
+    });
+  });
+
+  next();
+});
+
+// metrics endpoint
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', client.register.contentType);
+  res.end(await client.register.metrics());
 });
 
 // Razorpay webhook (must be before json parsing for raw body)

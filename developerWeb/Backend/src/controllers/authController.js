@@ -342,11 +342,13 @@ const exchangeOAuthTokens = async (req, res) => {
 const loginFailures = new client.Counter({
   name: 'login_failures_total',
   help: 'Total login failures',
+  labelNames: ['app'],
 });
 
 const loginSuccess = new client.Counter({
   name: 'login_success_total',
   help: 'Total login success',
+  labelNames: ['app'],
 });
 
 /**

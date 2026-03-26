@@ -25,7 +25,7 @@ export const authService = {
   // Login developer
   login: async (credentials) => {
     const response = await api.post('/developer/login', credentials);
-    
+     loginSuccess.inc({app: "dev-web"});
     // Expect backend to set httpOnly cookies for access/refresh tokens.
     // Do not store tokens in frontend. Normalize developer/user payload below.
 

@@ -46,7 +46,6 @@ export const AuthProvider = ({ children }) => {
       await checkAuth();
     } catch (e) {
       setDeveloper(data.developer);
-      loginFailures.inc({app: "dev-web"});
     }
     return data;
   };

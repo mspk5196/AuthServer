@@ -14,6 +14,7 @@ const {
   buildPasswordResetEmail,
   buildPasswordChangedEmail
 } = require('../templates/emailTemplates');
+const client = require('prom-client');
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -320,7 +321,7 @@ const exchangeOAuthTokens = async (req, res) => {
 
     const accessMaxAge = parseExpiryToMs(process.env.JWT_EXPIRE || '15m');
     const refreshMaxAge = parseExpiryToMs(process.env.JWT_REFRESH_EXPIRE || '7d');
-    const cookieDomain = (() => { try { return new URL(process.env.BACKEND_URL || '').hostname; } catch(e) { return undefined; } })();
+    const cookieDomain = (() => { try { return new URL(process.env.BACKEND_URL || '').hostname; } catch (e) { return undefined; } })();
     const cookieSecure = process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : (process.env.NODE_ENV === 'production');
     const cookieOpts = { httpOnly: true, secure: cookieSecure, sameSite: 'none', path: '/' };
     if (cookieDomain) cookieOpts.domain = cookieDomain;
@@ -402,6 +403,11 @@ const developerLogin = async (req, res) => {
         [failedAttempts, lockUntil, developer.id]
       );
 
+      const loginFailures = new client.Counter({
+        name: 'login_failures_total',
+        help: 'Total login failures',
+      });
+
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials',
@@ -412,6 +418,10 @@ const developerLogin = async (req, res) => {
 
     // Check if email is verified
     if (!developer.email_verified) {
+      const loginFailures = new client.Counter({
+        name: 'login_failures_total',
+        help: 'Total login failures',
+      });
       return res.status(403).json({
         success: false,
         message: 'Please verify your email first',
@@ -537,6 +547,10 @@ const developerLogin = async (req, res) => {
     if (refreshMaxAge) refreshOpts.maxAge = refreshMaxAge;
     res.cookie('refresh_token', refreshToken, refreshOpts);
 
+    const loginSuccess = new client.Counter({
+      name: 'login_success_total',
+      help: 'Total login success',
+    });
     // Return user payload only; tokens are stored in httpOnly cookies
     res.status(200).json({
       success: true,

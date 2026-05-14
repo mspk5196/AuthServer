@@ -201,12 +201,11 @@ async function trackApiCall(appId, developerId, req) {
   try {
     await pool.query(`
       INSERT INTO dev_api_calls (
-        app_id, developer_id, endpoint, method, 
+        app_id, endpoint, method, 
         ip_address, user_agent, created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      ) VALUES ($1, $2, $3, $4, $5, NOW())
     `, [
       appId,
-      developerId,
       req.path,
       req.method,
       req.ip,

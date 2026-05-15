@@ -30,7 +30,7 @@
     padding: 1.25rem;
     background: $card-bg;
     border: 1px solid $border-color;
-    border-radius: $border-radius;
+    border-radius: 8px;
 
     .filter-group {
       display: flex;
@@ -50,9 +50,9 @@
       input[type='date'] {
         padding: 0.5rem 0.75rem;
         border: 1px solid $border-color;
-        border-radius: $border-radius;
-        background: $bg-color;
-        color: $text-color;
+        border-radius: 6px;
+        background: $light-bg;
+        color: $text-primary;
         font-size: 0.9rem;
         height: 2.5rem;
 
@@ -110,14 +110,14 @@
     color: $text-secondary;
     background: $card-bg;
     border: 1px solid $border-color;
-    border-radius: $border-radius;
+    border-radius: 8px;
   }
 
   // Table
   .usage-table-wrapper {
     overflow-x: auto;
     border: 1px solid $border-color;
-    border-radius: $border-radius;
+    border-radius: 8px;
     background: $card-bg;
   }
 

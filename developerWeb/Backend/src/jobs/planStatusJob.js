@@ -33,6 +33,7 @@ const sendExpiryWarnings = async () => {
          JOIN dev_plans   dp ON dpr.plan_id = dp.id
          WHERE dpr.is_active = true
            AND dpr.end_date IS NOT NULL
+           AND COALESCE(dp.duration_days, 0) > 0
            AND dpr.end_date BETWEEN NOW() + INTERVAL '${days} days' - INTERVAL '30 minutes'
                                 AND NOW() + INTERVAL '${days} days' + INTERVAL '30 minutes'
            AND NOT EXISTS (
@@ -93,6 +94,7 @@ const sendPostExpiryReminders = async () => {
        JOIN dev_plans   dp ON dpr.plan_id = dp.id
        WHERE dpr.is_active = false
          AND dpr.end_date IS NOT NULL
+         AND COALESCE(dp.duration_days, 0) > 0
          AND dpr.end_date < NOW()
          AND (
                dpr.last_expiry_reminder_at IS NULL
@@ -141,6 +143,7 @@ const schedulePlanStatusJob = () => {
         WHERE dpr.plan_id = dp.id
           AND dpr.is_active = true
           AND dpr.end_date IS NOT NULL
+          AND COALESCE(dp.duration_days, 0) > 0
           AND dpr.end_date < NOW()
         RETURNING dpr.id, dpr.developer_id, dpr.plan_id, dpr.end_date, dp.name as plan_name;`
       );

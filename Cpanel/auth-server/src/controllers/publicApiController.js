@@ -71,6 +71,7 @@ const verifyDeveloperCredentials = async (req, res, next) => {
     const planCheck = await pool.query(`
       SELECT 
         p.features,
+        p.duration_days,
         dpr.is_active,
         dpr.end_date
       FROM developer_plan_registrations dpr
@@ -82,8 +83,9 @@ const verifyDeveloperCredentials = async (req, res, next) => {
 
     if (planCheck.rows.length > 0) {
       const plan = planCheck.rows[0];
-      
-      if (!plan.is_active) {
+      const isUnlimitedPlan = (plan.duration_days === 0 || plan.duration_days === null);
+
+      if (!plan.is_active && !isUnlimitedPlan) {
         return res.status(403).json({
           success: false,
           error: 'Plan inactive',
@@ -91,7 +93,7 @@ const verifyDeveloperCredentials = async (req, res, next) => {
         });
       }
 
-      if (plan.end_date && new Date(plan.end_date) < new Date()) {
+      if (!isUnlimitedPlan && plan.end_date && new Date(plan.end_date) < new Date()) {
         return res.status(403).json({
           success: false,
           error: 'Plan expired',

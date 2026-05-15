@@ -39,6 +39,9 @@ app.use((req, res, next) => {
 // Razorpay webhook — intentionally unversioned (Razorpay callback URL is fixed)
 app.post('/api/razorpay/webhook', express.raw({ type: 'application/json' }), paymentController.handleWebhook);
 
+// ── Stable versionless Google OAuth callback (never changes regardless of API_VERSION) ──
+app.get('/api/developer/auth/google/callback', require('./controllers/authController').googleCallback);
+
 // ── v1 routes (version controlled via API_VERSION env var) ──────────────────
 app.use(`/api/${API_VERSION}/developer`, authRoutes);
 app.use(`/api/${API_VERSION}/cpanel`, cPanelRoutes);

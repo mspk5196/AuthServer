@@ -19,6 +19,19 @@
     }
   }
 
+  .pricing-section {
+    margin-bottom: 3rem;
+  }
+
+  .pricing-section-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: $primary-color;
+    border-bottom: 2px solid $border-color;
+    padding-bottom: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+
   .pricing-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -47,7 +60,7 @@
     .pricing-card-header {
       margin-bottom: 1.5rem;
 
-      h2 {
+      h3 {
         font-size: 1.5rem;
         margin-bottom: 0.25rem;
       }
@@ -84,21 +97,31 @@
         margin: 0;
 
         li {
-          position: relative;
-          padding-left: 1.25rem;
+          display: flex;
+          align-items: flex-start;
+          gap: 0.4rem;
           margin-bottom: 0.5rem;
           font-size: 0.9375rem;
           color: $text-secondary;
 
-          &::before {
-            content: '✓';
-            position: absolute;
-            left: 0;
-            top: 0;
+          .feature-check {
             color: $primary-color;
+            flex-shrink: 0;
+            font-weight: 700;
           }
         }
       }
+    }
+
+    .badge-unlimited {
+      display: inline-block;
+      margin-top: 0.5rem;
+      padding: 0.2rem 0.6rem;
+      background: rgba(99, 102, 241, 0.12);
+      color: $primary-color;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border-radius: 999px;
     }
 
     .pricing-card-footer {

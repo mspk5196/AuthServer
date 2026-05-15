@@ -55,6 +55,12 @@ const Navbar = () => {
               Feedback
             </Link>
             <Link 
+              to="/usage" 
+              className={`nav-link ${isActive('/usage') ? 'active' : ''}`}
+            >
+              Usage
+            </Link>
+            <Link 
               to="/policies" 
               className={`nav-link ${isActive('/policies') ? 'active' : ''}`}
             >

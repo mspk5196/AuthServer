@@ -12,6 +12,7 @@ const planRoutesV2       = require('./routes/v2/planRoutesV2.js');
 const paymentRoutesV2    = require('./routes/v2/paymentRoutesV2.js');
 const transactionRoutes  = require('./routes/v2/transactionRoutes.js');
 const feedbackRoutes     = require('./routes/v2/feedbackRoutes.js');
+const usageRoutes        = require('./routes/v2/usageRoutes.js');
 
 // Initialize Redis connection (no-op if fallback is used)
 getRedis().catch(console.error);
@@ -55,6 +56,7 @@ app.use('/api/v2/developer', planRoutesV2);
 app.use('/api/v2/developer', paymentRoutesV2);
 app.use('/api/v2/developer', transactionRoutes);
 app.use('/api/v2/developer', feedbackRoutes);
+app.use('/api/v2/developer', usageRoutes);
 
 // block all non-API routes
 app.use((req, res, next) => {

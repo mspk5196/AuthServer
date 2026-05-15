@@ -17,6 +17,7 @@ import Policies from '../../pages/Legal/Policies';
 import Documentation from '../../pages/Documentation/Documentation';
 import Transactions from '../../pages/Transactions';
 import Feedback from '../../pages/Feedback';
+import Usage from '../../pages/Usage';
 
 const AppLayout = () => {
   return (
@@ -72,6 +73,14 @@ const AppLayout = () => {
             element={
               <PrivateRoute>
                 <Feedback />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/usage"
+            element={
+              <PrivateRoute>
+                <Usage />
               </PrivateRoute>
             }
           />

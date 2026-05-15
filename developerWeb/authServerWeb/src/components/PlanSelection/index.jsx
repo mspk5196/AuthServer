@@ -1,9 +1,29 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../utils/api';
 import paymentService from '../../services/paymentService';
-import { getFeatureSentences } from '../PlanFeatures/PlanFeatures';
 import './PlanSelection.scss';
 
+/** Build feature lines from features_desc (preferred) or features JSONB fallback */
+const getDisplayFeatures = (plan) => {
+  const desc = plan.features_desc;
+  if (Array.isArray(desc) && desc.length) return desc;
+
+  const f = plan.features;
+  if (!f) return [];
+  const unlimited = (v) => v === 0 || v === '0' || Number(v) === 0;
+  const fmt = (v, singular, plural) => {
+    if (unlimited(v)) return `Unlimited ${plural || singular}`;
+    return `Up to ${v} ${Number(v) === 1 ? singular : (plural || singular)}`;
+  };
+  const lines = [];
+  if (f.max_apps != null)           lines.push(fmt(f.max_apps, 'app', 'apps'));
+  if (f.max_api_calls != null)      lines.push(unlimited(f.max_api_calls) ? 'Unlimited API calls/month' : `${Number(f.max_api_calls).toLocaleString()} API calls/month`);
+  if (f.max_app_groups != null)     lines.push(fmt(f.max_app_groups, 'app group', 'app groups'));
+  if (f.max_apps_per_group != null) lines.push(fmt(f.max_apps_per_group, 'app per group', 'apps per group'));
+  if (f.google_login)               lines.push('Google login');
+  if (f.support)                    lines.push(`${f.support} support`);
+  return lines;
+};
 
 const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
   const [plans, setPlans] = useState([]);
@@ -13,12 +33,6 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
   const [selectedPlanId, setSelectedPlanId] = useState(null);
   const [error, setError] = useState('');
 
-  const isUnlimitedAdmin = (p) => {
-    if (!p) return false;
-    const n = (p.name || p.plan_name || p.key || p.slug || '').toString().toLowerCase();
-    return n === 'unlimited_admin' || n === 'unlimited admin';
-  };
-
   useEffect(() => {
     fetchPlans();
   }, []);
@@ -26,24 +40,20 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
   const fetchPlans = async () => {
     try {
       setLoading(true);
-      
-      
+      // v2 filters admin plans server-side
       const response = await api.get('/developer/plans');
-      const fetched = response.data.plans || [];
-      const filtered = fetched.filter((p) => !isUnlimitedAdmin(p));
-      setPlans(filtered);
-      // initialize displayedPlans based on whether a currentPlanId was provided
+      const fetched = response.data?.data?.plans || response.data?.plans || [];
+      setPlans(fetched);
       if (currentPlanId) {
-        const current = filtered.find((p) => p.id === currentPlanId);
+        const current = fetched.find((p) => p.id === currentPlanId);
         if (current) {
           const currentPrice = Number(current.price || 0);
-          const higher = filtered.filter((p) => Number(p.price || 0) > currentPrice);
-          setDisplayedPlans(higher);
+          setDisplayedPlans(fetched.filter((p) => Number(p.price || 0) > currentPrice));
         } else {
-          setDisplayedPlans(filtered);
+          setDisplayedPlans(fetched);
         }
       } else {
-        setDisplayedPlans(filtered);
+        setDisplayedPlans(fetched);
       }
     } catch (err) {
       console.error('Failed to fetch plans:', err);
@@ -163,11 +173,10 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
     return `₹${numeric.toFixed(2)}`;
   };
 
-  const formatDuration = (days) => {
-    if (!days) return 'Lifetime';
-    if (days === 30) return '/ month';
-    if (days === 365) return '/ year';
-    return `/ ${days} days`;
+  const formatDuration = (plan) => {
+    const days = plan.duration_days;
+    if (days === 0 || days === null || days === undefined) return 'Unlimited';
+    return plan.duration_label || `${days} days`;
   };
 
   if (loading) {
@@ -199,11 +208,12 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
 
         <div className="plans-grid">
           {(displayedPlans || []).map((plan) => {
-            const features = getFeatureSentences(plan.features || {});
+            const features = getDisplayFeatures(plan);
 
             const isSelecting = selecting && selectedPlanId === plan.id;
             const isFree = isFreePrice(plan.price);
             const isCurrent = currentPlanId && currentPlanId === plan.id;
+            const isUnlimited = plan.duration_days === 0 || plan.duration_days === null;
 
             return (
               <div key={plan.id} className={`plan-card ${isFree ? 'plan-free' : ''}`}>
@@ -215,9 +225,12 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
                   <div className="plan-price">
                     <span className="price-amount">{formatPrice(plan.price)}</span>
                     {!isFreePrice(plan.price) && (
-                      <span className="price-duration">{formatDuration(plan.duration_days)}</span>
+                      <span className="price-duration">/ {formatDuration(plan)}</span>
                     )}
                   </div>
+                  {isUnlimited && (
+                    <span className="badge-unlimited">Unlimited Duration</span>
+                  )}
                 </div>
 
                 <div className="plan-card-body">

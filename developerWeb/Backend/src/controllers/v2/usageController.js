@@ -49,8 +49,8 @@ const getUsageHistory = async (req, res) => {
     let selectExpr, groupExpr, orderExpr;
 
     if (groupBy === 'app') {
-      selectExpr = `dac.app_id AS id, da.name AS label`;
-      groupExpr = `dac.app_id, da.name`;
+      selectExpr = `dac.app_id AS id, da.app_name AS label`;
+      groupExpr = `dac.app_id, da.app_name`;
       orderExpr = `call_count DESC`;
     } else if (groupBy === 'group') {
       selectExpr = `ag.id, COALESCE(ag.name, 'No Group') AS label`;
@@ -117,11 +117,11 @@ const getDeveloperApps = async (req, res) => {
   try {
     const developerId = req.user.userId;
     const result = await pool.query(
-      `SELECT da.id, da.name, ag.name AS group_name
+      `SELECT da.id, da.app_name AS name, ag.name AS group_name
        FROM dev_apps da
        LEFT JOIN app_groups ag ON ag.id = da.group_id
        WHERE da.developer_id = $1
-       ORDER BY da.name ASC`,
+       ORDER BY da.app_name ASC`,
       [developerId]
     );
     res.status(200).json({ success: true, data: { apps: result.rows } });
@@ -141,8 +141,7 @@ const getDeveloperGroups = async (req, res) => {
     const result = await pool.query(
       `SELECT ag.id, ag.name
        FROM app_groups ag
-       JOIN developer_group_registrations dgr ON dgr.group_id = ag.id
-       WHERE dgr.developer_id = $1
+       WHERE ag.developer_id = $1
        ORDER BY ag.name ASC`,
       [developerId]
     );

@@ -12,7 +12,7 @@ router.post('/feedback', express.json({ limit: '45mb' }), authenticateToken, sub
 router.get('/feedback/apps', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, name FROM dev_apps WHERE developer_id = $1 ORDER BY name ASC',
+      'SELECT id, app_name AS name FROM dev_apps WHERE developer_id = $1 ORDER BY app_name ASC',
       [req.user.userId]
     );
     res.json({ success: true, data: { apps: result.rows } });

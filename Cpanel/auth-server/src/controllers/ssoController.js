@@ -3,6 +3,7 @@ const { postJson } = require('../utils/httpClient');
 
 // Base URL of the main Developer Auth API (where tickets are redeemed)
 const AUTH_API_BASE_URL = process.env.AUTH_API_BASE_URL;
+const API_VERSION = process.env.API_VERSION || 'v1';
 
 /**
  * POST /api/developer/sso/consume
@@ -20,17 +21,9 @@ const consumeTicket = async (req, res) => {
       });
     }
 
-  // Redeem the ticket with the main auth server (expects body { token })
-  // Build a redeem URL that tolerates whether AUTH_API_BASE_URL already contains /api or /api/cpanel
+  // Redeem the ticket with the main auth server
   const baseAuth = (AUTH_API_BASE_URL || '').replace(/\/$/, '');
-  let redeemUrl;
-  if (baseAuth.match(/\/api\/cpanel$/)) {
-    redeemUrl = `${baseAuth}/redeem-cpanel-ticket`;
-  } else if (baseAuth.endsWith('/api')) {
-    redeemUrl = `${baseAuth}/cpanel/redeem-cpanel-ticket`;
-  } else {
-    redeemUrl = `${baseAuth}/api/cpanel/redeem-cpanel-ticket`;
-  }
+  const redeemUrl = `${baseAuth}/api/${API_VERSION}/cpanel/redeem-cpanel-ticket`;
   // console.log  console.log('[SSO] Redeem URL:', redeemUrl, 'AUTH_API_BASE_URL:', AUTH_API_BASE_URL);
   let redeemResp;
   try {

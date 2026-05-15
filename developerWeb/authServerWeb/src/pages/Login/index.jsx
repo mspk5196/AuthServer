@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { validateEmail, validatePassword } from '../../utils/validators';
 import { tokenService } from '../../services/tokenService';
 import Modal from '../../components/Modal';
-import { API_URL } from '../../utils/api';
+import { API_URL, API_BASE_URL } from '../../utils/api';
 import './Login.scss';
 
 const Login = () => {
@@ -215,7 +215,7 @@ const Login = () => {
     setAcceptingOAuthPolicies(true);
 
     try {
-      const response = await fetch(`${API_URL}/api/developer/accept-policies-oauth`, {
+      const response = await fetch(`${API_BASE_URL}/developer/accept-policies-oauth`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -242,7 +242,7 @@ const Login = () => {
 
       // Retry Google OAuth after a short delay
       setTimeout(() => {
-        window.location.href = `${API_URL}/api/developer/auth/google`;
+        window.location.href = `${API_BASE_URL}/developer/auth/google`;
       }, 1500);
 
     } catch (error) {
@@ -455,7 +455,7 @@ const Login = () => {
               type="button"
               className="btn btn-google btn-block btn-lg"
               onClick={() => {
-                window.location.href = `${import.meta.env.VITE_API_URL}/api/developer/auth/google`;
+                window.location.href = `${API_BASE_URL}/developer/auth/google`;
               }}
             >
               <svg viewBox="0 0 24 24" width="20" height="20" style={{ marginRight: '10px' }}>

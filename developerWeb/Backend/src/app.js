@@ -10,6 +10,9 @@ const { getRedis } = require('./config/redisClient.js');
 getRedis().catch(console.error);
 
 const app = express();
+
+const API_VERSION = process.env.API_VERSION || 'v1';
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(
@@ -26,12 +29,12 @@ app.use((req, res, next) => {
   next();
 });
 
-// Razorpay webhook (must be before json parsing for raw body)
+// Razorpay webhook — intentionally unversioned (Razorpay callback URL is fixed)
 app.post('/api/razorpay/webhook', express.raw({ type: 'application/json' }), paymentController.handleWebhook);
 
 // routes
-app.use('/api/developer', authRoutes);
-app.use('/api/cpanel', cPanelRoutes);
+app.use(`/api/${API_VERSION}/developer`, authRoutes);
+app.use(`/api/${API_VERSION}/cpanel`, cPanelRoutes);
 // block all non-API routes
 app.use((req, res, next) => {
   if (

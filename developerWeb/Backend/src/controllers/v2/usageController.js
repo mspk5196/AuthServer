@@ -79,7 +79,7 @@ const getUsageHistory = async (req, res) => {
       SELECT
         ${selectExpr},
         COUNT(*) AS call_count,
-        COUNT(CASE WHEN dac.status_code >= 200 AND dac.status_code < 300 THEN 1 END) AS success_count,
+        COUNT(CASE WHEN COALESCE(dac.status_code, 200) >= 200 AND COALESCE(dac.status_code, 200) < 300 THEN 1 END) AS success_count,
         COUNT(CASE WHEN dac.status_code >= 400 THEN 1 END) AS error_count,
         ROUND(AVG(dac.response_time_ms)::numeric, 2) AS avg_response_ms
       FROM dev_api_calls dac

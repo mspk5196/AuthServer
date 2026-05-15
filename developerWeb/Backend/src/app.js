@@ -49,14 +49,14 @@ app.use(`/api/${API_VERSION}/cpanel`, cPanelRoutes);
 
 // ── v2 routes (hardcoded — new/changed endpoints for v2 features) ───────────
 // Also mount existing auth+cpanel routes at v2 so frontend can point to /api/v2
-app.use('/api/v2/developer', authRoutes);
-app.use('/api/v2/cpanel', cPanelRoutes);
-// New v2-specific endpoints
+// IMPORTANT: v2-specific routes must be mounted BEFORE authRoutes so they win on overlapping paths (e.g. /plans, /my-plan)
 app.use('/api/v2/developer', planRoutesV2);
 app.use('/api/v2/developer', paymentRoutesV2);
 app.use('/api/v2/developer', transactionRoutes);
 app.use('/api/v2/developer', feedbackRoutes);
 app.use('/api/v2/developer', usageRoutes);
+app.use('/api/v2/developer', authRoutes);
+app.use('/api/v2/cpanel', cPanelRoutes);
 
 // block all non-API routes
 app.use((req, res, next) => {

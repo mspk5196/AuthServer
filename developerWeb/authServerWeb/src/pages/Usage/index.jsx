@@ -58,19 +58,19 @@ const Usage = () => {
   // Load filter dropdowns on mount
   useEffect(() => {
     usageService.getApps()
-      .then(r => setApps(r.data?.data?.apps || []))
+      .then(r => setApps(r.data?.apps || []))
       .catch(() => {});
     usageService.getGroups()
-      .then(r => setGroups(r.data?.data?.groups || []))
+      .then(r => setGroups(r.data?.groups || []))
       .catch(() => {});
-  }, []);
+  }, []);;
 
   const fetchHistory = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
       const res = await usageService.getHistory({ groupBy, startDate, endDate, appId, groupId });
-      setRows(res.data?.data?.rows || []);
+      setRows(res.data?.rows || []);
     } catch (err) {
       console.error('Usage history error:', err);
       setError('Failed to load usage history. Please try again.');

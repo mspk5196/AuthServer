@@ -1,0 +1,243 @@
+.transactions-page {
+  padding: 40px 20px;
+  min-height: 100vh;
+  background: var(--bg-primary, #f8f9fa);
+
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .page-header {
+    margin-bottom: 32px;
+
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text-primary, #1a1a1a);
+      margin: 0 0 8px;
+    }
+
+    p {
+      color: var(--text-secondary, #666);
+      margin: 0;
+    }
+  }
+
+  .loading,
+  .error-message,
+  .empty-state {
+    text-align: center;
+    padding: 48px 0;
+    color: var(--text-secondary, #666);
+  }
+
+  .error-message {
+    color: #d93025;
+  }
+
+  .table-wrapper {
+    overflow-x: auto;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  }
+
+  .transactions-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+
+    thead tr {
+      background: #f5f7fa;
+    }
+
+    th {
+      padding: 14px 16px;
+      text-align: left;
+      font-weight: 600;
+      color: var(--text-secondary, #555);
+      white-space: nowrap;
+      border-bottom: 1px solid #e8eaed;
+    }
+
+    td {
+      padding: 14px 16px;
+      border-bottom: 1px solid #f0f0f0;
+      vertical-align: middle;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    tbody tr:hover td {
+      background: #fafbfc;
+    }
+
+    .duration-label {
+      color: #888;
+      font-size: 12px;
+    }
+
+    .amount {
+      font-weight: 600;
+      color: #1a73e8;
+    }
+
+    .receipt-num code {
+      font-size: 12px;
+      background: #f0f4ff;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #3c4fce;
+    }
+
+    .na {
+      color: #bbb;
+    }
+  }
+
+  .status-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: capitalize;
+
+    &.status-success {
+      background: #e6f4ea;
+      color: #1e7e34;
+    }
+
+    &.status-pending {
+      background: #fff8e1;
+      color: #b06000;
+    }
+
+    &.status-error {
+      background: #fce8e6;
+      color: #d93025;
+    }
+  }
+
+  .btn-receipt {
+    padding: 6px 14px;
+    background: #1a73e8;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+
+    &:hover:not(:disabled) {
+      background: #1558b0;
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+}
+
+/* ── Receipt Modal ─────────────────────────────────────────────── */
+.receipt-modal {
+  padding: 4px;
+  min-width: 560px;
+
+  .receipt-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+
+    h2 {
+      font-size: 20px;
+      font-weight: 700;
+      margin: 0;
+    }
+  }
+
+  .btn-print {
+    padding: 8px 16px;
+    background: #34a853;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+
+    &:hover {
+      background: #277c3c;
+    }
+  }
+
+  .receipt-logo {
+    height: 36px;
+    margin-bottom: 8px;
+  }
+
+  .receipt-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+    font-size: 14px;
+
+    td {
+      padding: 8px 12px;
+      border-bottom: 1px solid #eee;
+
+      &:first-child {
+        font-weight: 600;
+        width: 42%;
+        background: #f9f9f9;
+        color: #555;
+      }
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    .receipt-amount {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1a73e8;
+    }
+  }
+
+  .receipt-footer {
+    margin-top: 16px;
+    font-size: 12px;
+    color: #aaa;
+  }
+
+  .receipt-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 20px;
+  }
+
+  .btn-secondary {
+    padding: 8px 20px;
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+
+    &:hover {
+      background: #eee;
+    }
+  }
+}
+
+@media (max-width: 640px) {
+  .receipt-modal {
+    min-width: unset;
+    width: 100%;
+  }
+}

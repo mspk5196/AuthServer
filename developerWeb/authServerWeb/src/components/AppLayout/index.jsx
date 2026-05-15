@@ -15,6 +15,8 @@ import Refund from '../../pages/Legal/Refund';
 import Contact from '../../pages/Legal/Contact';
 import Policies from '../../pages/Legal/Policies';
 import Documentation from '../../pages/Documentation/Documentation';
+import Transactions from '../../pages/Transactions';
+import Feedback from '../../pages/Feedback';
 
 const AppLayout = () => {
   return (
@@ -54,6 +56,22 @@ const AppLayout = () => {
             element={
               <PrivateRoute>
                 <Settings />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/transactions"
+            element={
+              <PrivateRoute>
+                <Transactions />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/feedback"
+            element={
+              <PrivateRoute>
+                <Feedback />
               </PrivateRoute>
             }
           />

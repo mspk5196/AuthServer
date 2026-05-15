@@ -43,6 +43,18 @@ const Navbar = () => {
               Settings
             </Link>
             <Link 
+              to="/transactions" 
+              className={`nav-link ${isActive('/transactions') ? 'active' : ''}`}
+            >
+              Transactions
+            </Link>
+            <Link 
+              to="/feedback" 
+              className={`nav-link ${isActive('/feedback') ? 'active' : ''}`}
+            >
+              Feedback
+            </Link>
+            <Link 
               to="/policies" 
               className={`nav-link ${isActive('/policies') ? 'active' : ''}`}
             >

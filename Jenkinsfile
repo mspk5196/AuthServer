@@ -6,7 +6,6 @@ pipeline {
     APP = "auth-server"
     RUNTIME_ROOT = "/opt/runtime/${APP}"
     EMAIL = "ci@mspkapps.in"
-    IMAGE_TAG = "prod-${BUILD_NUMBER}"
   }
 
   stages {
@@ -14,6 +13,19 @@ pipeline {
     stage('Checkout') {
       steps {
         checkout scm
+      }
+    }
+
+    stage('Set Version') {
+      steps {
+        script {
+          def tag = sh(script: 'git describe --tags --exact-match 2>/dev/null || true', returnStdout: true).trim()
+          if (!tag) {
+            error('No Git tag found on this commit. Tag the commit (e.g. git tag v1.0.0 && git push origin v1.0.0) before triggering a build.')
+          }
+          env.IMAGE_TAG = tag
+          echo "Image tag: ${tag}"
+        }
       }
     }
 

@@ -85,7 +85,7 @@ const getUsageHistory = async (req, res) => {
       FROM dev_api_calls dac
       JOIN dev_apps da ON da.id = dac.app_id
       LEFT JOIN app_groups ag ON ag.id = da.group_id
-      WHERE dac.developer_id = $1
+      WHERE da.developer_id = $1
         AND dac.created_at BETWEEN $2 AND $3
         ${extraWhere}
       GROUP BY ${groupExpr}

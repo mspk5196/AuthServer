@@ -199,6 +199,19 @@ const verifyAppCredentials = async (req, res, next) => {
 };
 
 /**
+ * Extract the real client IP, preferring X-Forwarded-For over req.ip.
+ * Handles comma-separated lists (e.g. "clientIp, proxy1, proxy2").
+ */
+function getClientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) {
+    const first = forwarded.split(',')[0].trim();
+    if (first) return first;
+  }
+  return req.headers['x-real-ip'] || req.ip || null;
+}
+
+/**
  * Track API call for analytics and billing
  */
 async function trackApiCall(appId, developerId, req, statusCode, responseTimeMs) {
@@ -216,7 +229,7 @@ async function trackApiCall(appId, developerId, req, statusCode, responseTimeMs)
       req.method,
       statusCode ?? null,
       responseTimeMs ?? null,
-      req.ip,
+      getClientIp(req),
       req.headers['user-agent'],
     ]);
   } catch (error) {

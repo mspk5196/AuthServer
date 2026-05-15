@@ -17,6 +17,9 @@ const API_VERSION = process.env.API_VERSION || 'v1';
 //   credentials: true, 
 // }));
 
+// Trust reverse proxy (nginx/Docker) so req.ip returns the real client IP from X-Forwarded-For
+app.set('trust proxy', true);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(helmet());

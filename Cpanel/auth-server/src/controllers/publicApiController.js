@@ -180,10 +180,12 @@ const verifyAppCredentials = async (req, res, next) => {
     req.devApp = app;
     req.plan = planCheck.rows[0];
 
-    // Track API call (non-blocking)
-    trackApiCall(app.id, app.developer_id, req).catch(err =>
-      console.error('API tracking error:', err)
-    );
+    // Track API call after response so status_code and response_time_ms are available
+    const _trackStart = Date.now();
+    res.on('finish', () => {
+      trackApiCall(app.id, app.developer_id, req, res.statusCode, Date.now() - _trackStart)
+        .catch(err => console.error('API tracking error:', err));
+    });
 
     next();
   } catch (error) {
@@ -199,19 +201,23 @@ const verifyAppCredentials = async (req, res, next) => {
 /**
  * Track API call for analytics and billing
  */
-async function trackApiCall(appId, developerId, req) {
+async function trackApiCall(appId, developerId, req, statusCode, responseTimeMs) {
   try {
     await pool.query(`
       INSERT INTO dev_api_calls (
-        app_id, endpoint, method, 
+        app_id, developer_id, endpoint, method,
+        status_code, response_time_ms,
         ip_address, user_agent, created_at
-      ) VALUES ($1, $2, $3, $4, $5, NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
     `, [
       appId,
+      developerId,
       req.path,
       req.method,
+      statusCode ?? null,
+      responseTimeMs ?? null,
       req.ip,
-      req.headers['user-agent']
+      req.headers['user-agent'],
     ]);
   } catch (error) {
     // Silently fail - don't block the request

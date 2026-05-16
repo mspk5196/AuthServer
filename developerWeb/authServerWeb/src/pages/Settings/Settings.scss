@@ -66,6 +66,12 @@
     color: #991b1b;
     border: 1px solid #ef4444;
   }
+
+  &.alert-warning {
+    background-color: #fef3c7;
+    color: #92400e;
+    border: 1px solid #f59e0b;
+  }
 }
 
 .settings-content {
@@ -154,6 +160,16 @@
     &:hover:not(:disabled) {
       transform: translateY(-2px);
       box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+  }
+
+  &.btn-success {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+
+    &:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(16, 185, 129, 0.4);
     }
   }
 }

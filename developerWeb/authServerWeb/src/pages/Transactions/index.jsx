@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import transactionService from '../../services/transactionService';
 import Modal from '../../components/Modal';
 import './Transactions.scss';
@@ -9,6 +11,7 @@ const Transactions = () => {
   const [error, setError] = useState('');
   const [receipt, setReceipt] = useState(null);
   const [receiptLoading, setReceiptLoading] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   useEffect(() => {
     fetchTransactions();
@@ -65,6 +68,32 @@ const Transactions = () => {
     win.focus();
     win.print();
     win.close();
+  };
+
+  const handleDownloadPdf = async () => {
+    const el = document.getElementById('receipt-print-area');
+    if (!el) return;
+    setPdfLoading(true);
+    try {
+      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pageWidth - 80; // 40pt margin each side
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const x = 40;
+      const y = 40;
+      // If content is taller than one page, scale it down to fit
+      const scale = imgHeight > pageHeight - 80 ? (pageHeight - 80) / imgHeight : 1;
+      pdf.addImage(imgData, 'PNG', x, y, imgWidth * scale, imgHeight * scale);
+      pdf.save(`Receipt-${receipt?.receipt_number || 'download'}.pdf`);
+    } catch (err) {
+      console.error('PDF generation failed:', err);
+      alert('Could not generate PDF. Please try the Print option instead.');
+    } finally {
+      setPdfLoading(false);
+    }
   };
 
   const fmt = (dateStr) =>
@@ -170,9 +199,18 @@ const Transactions = () => {
           <div className="receipt-modal">
             <div className="receipt-modal-header">
               <h2>Payment Receipt</h2>
-              <button className="btn-print" onClick={handlePrintReceipt}>
-                🖨 Print / Save as PDF
-              </button>
+              <div className="receipt-modal-actions-top">
+                <button className="btn-print" onClick={handlePrintReceipt}>
+                  🖨 Print
+                </button>
+                <button
+                  className="btn-download-pdf"
+                  onClick={handleDownloadPdf}
+                  disabled={pdfLoading}
+                >
+                  {pdfLoading ? '⏳ Generating...' : '⬇ Download PDF'}
+                </button>
+              </div>
             </div>
 
             <div id="receipt-print-area">

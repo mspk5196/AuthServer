@@ -161,9 +161,15 @@
     }
   }
 
+  .receipt-modal-actions-top {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
   .btn-print {
     padding: 8px 16px;
-    background: #34a853;
+    background: #64748b;
     color: #fff;
     border: none;
     border-radius: 6px;
@@ -171,7 +177,27 @@
     cursor: pointer;
 
     &:hover {
-      background: #277c3c;
+      background: #475569;
+    }
+  }
+
+  .btn-download-pdf {
+    padding: 8px 16px;
+    background: #1a73e8;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    font-weight: 600;
+
+    &:hover:not(:disabled) {
+      background: #1558b0;
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
     }
   }
 

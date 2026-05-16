@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../utils/api';
 import { authService } from '../../services/authService';
+import paymentService from '../../services/paymentService';
 import './Settings.scss';
 
 /** Build display feature lines from features_desc (preferred) or features JSONB fallback */
@@ -32,6 +33,8 @@ const Settings = () => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [currentPlan, setCurrentPlan] = useState(null);
+  const [renewLoading, setRenewLoading] = useState(false);
+  const [renewMsg, setRenewMsg] = useState({ type: '', text: '' });
 
   // Profile form
   const [profileForm, setProfileForm] = useState({
@@ -161,6 +164,55 @@ const Settings = () => {
 
   const handleUpgradePlan = () => {
     navigate('/plans');
+  };
+
+  /** Days remaining until plan end_date (negative = already expired) */
+  const getDaysRemaining = (plan) => {
+    if (!plan?.end_date) return null;
+    return Math.ceil((new Date(plan.end_date) - new Date()) / (1000 * 60 * 60 * 24));
+  };
+
+  const handleRenewPlan = async () => {
+    if (!currentPlan?.plan_id) return;
+    setRenewLoading(true);
+    setRenewMsg({ type: '', text: '' });
+    try {
+      const orderResponse = await paymentService.createOrder(currentPlan.plan_id);
+      if (!orderResponse.success) throw new Error(orderResponse.message || 'Failed to create order');
+
+      paymentService.initiatePayment(
+        orderResponse.data,
+        async (razorpayResponse) => {
+          try {
+            const verifyResponse = await paymentService.verifyPayment({
+              razorpay_order_id: razorpayResponse.razorpay_order_id,
+              razorpay_payment_id: razorpayResponse.razorpay_payment_id,
+              razorpay_signature: razorpayResponse.razorpay_signature,
+            });
+            if (verifyResponse.success) {
+              setRenewMsg({ type: 'success', text: 'Plan renewed successfully! Your expiry date has been extended.' });
+              fetchCurrentPlan();
+            } else {
+              setRenewMsg({ type: 'error', text: 'Payment verification failed. Please contact support.' });
+            }
+          } catch {
+            setRenewMsg({ type: 'error', text: 'Payment verification failed. Please contact support with your payment ID.' });
+          } finally {
+            setRenewLoading(false);
+          }
+        },
+        (err) => {
+          if (err?.code !== 'PAYMENT_CANCELLED') {
+            setRenewMsg({ type: 'error', text: err?.description || 'Payment failed. Please try again.' });
+          }
+          setRenewLoading(false);
+        },
+        () => { setRenewLoading(false); }
+      );
+    } catch (err) {
+      setRenewMsg({ type: 'error', text: err.message || 'Failed to initiate renewal.' });
+      setRenewLoading(false);
+    }
   };
 
   const formatDate = (date) => {
@@ -301,6 +353,26 @@ const Settings = () => {
           <div className="settings-content">
             <h2>Current Plan</h2>
             
+            {renewMsg.text && (
+              <div className={`alert alert-${renewMsg.type}`}>{renewMsg.text}</div>
+            )}
+
+            {currentPlan && !isUnlimitedPlan(currentPlan) && (() => {
+              const days = getDaysRemaining(currentPlan);
+              if (days === null) return null;
+              if (days < 0) return (
+                <div className="alert alert-error" style={{ marginBottom: '16px' }}>
+                  ⚠ Your plan has expired. Renew now to continue using API features.
+                </div>
+              );
+              if (days <= 7) return (
+                <div className="alert alert-warning" style={{ marginBottom: '16px' }}>
+                  ⚠ Your plan expires in <strong>{days} day{days !== 1 ? 's' : ''}</strong>. Renew before it runs out to avoid any interruption.
+                </div>
+              );
+              return null;
+            })()}
+
             {currentPlan ? (
               <div className="plan-info-card">
                 <div className="plan-info-header">
@@ -366,6 +438,16 @@ const Settings = () => {
                 </div>
 
                 <div className="plan-info-footer">
+                  {!isUnlimitedPlan(currentPlan) && currentPlan.price && Number(currentPlan.price) > 0 && (
+                    <button
+                      className="btn btn-success"
+                      onClick={handleRenewPlan}
+                      disabled={renewLoading}
+                      style={{ marginRight: '10px' }}
+                    >
+                      {renewLoading ? 'Processing...' : `Renew Plan (+${currentPlan.duration_label || currentPlan.duration_days + ' days'})`}
+                    </button>
+                  )}
                   <button className="btn btn-primary" onClick={handleUpgradePlan}>
                     Upgrade Plan
                   </button>

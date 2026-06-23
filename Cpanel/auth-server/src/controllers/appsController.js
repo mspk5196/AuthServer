@@ -199,11 +199,12 @@ const createApp = async (req, res) => {
     `, [developerId, verificationToken]);
 
     // Send verification email
-    const verificationUrl = `${process.env.BACKEND_URL}/api/developer/apps/verify-app-email/${verificationToken}`;
+    const baseUrl = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace(/\/$/, '') : '';
+    const verificationUrl = `${baseUrl}/verify-app-email/${verificationToken}`;
     sendMail({
       to: support_email,
       subject: `Verify Your App Support Email - ${app_name}`,
-      html: buildAppSupportEmailVerificationEmail({ appName: app_name, verificationUrl, supportEmail: support_email }),
+      html: buildAppSupportEmailVerificationEmail({ appName: app_name, verificationUrl, supportEmail: process.env.FROM_EMAIL }),
     }).catch(err => console.error('Send verification email error:', err));
 
     // Return response with plaintext secret and pending verification status
@@ -1350,11 +1351,12 @@ const updateAppSupportEmail = async (req, res) => {
     `, [developerId, verificationToken]);
 
     // Send verification email
-    const verificationUrl = `${process.env.BACKEND_URL}/api/developer/apps/verify-app-email/${verificationToken}`;
+    const baseUrl = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace(/\/$/, '') : '';
+    const verificationUrl = `${baseUrl}/verify-app-email/${verificationToken}`;
     sendMail({
       to: support_email,
       subject: `Verify Updated Support Email - ${app.app_name}`,
-      html: buildAppSupportEmailUpdateEmail({ appName: app.app_name, verificationUrl, supportEmail: support_email }),
+      html: buildAppSupportEmailUpdateEmail({ appName: app.app_name, verificationUrl, supportEmail: process.env.FROM_EMAIL }),
     }).catch(err => console.error('Send verification email error:', err));
 
     res.json({

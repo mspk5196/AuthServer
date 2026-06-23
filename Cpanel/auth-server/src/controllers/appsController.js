@@ -196,7 +196,7 @@ const createApp = async (req, res) => {
     await pool.query(`
       INSERT INTO dev_email_verifications (dev_id, token, expires_at, verify_type, created_at)
       VALUES ($1, $2, NOW() + INTERVAL '24 hours', 'App Support Email', NOW())
-    `, [developerId, verificationToken]);
+    `, [developerId, verificationToken]); 
 
     // Send verification email
     const baseUrl = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace(/\/$/, '') : '';

@@ -199,8 +199,7 @@ const createApp = async (req, res) => {
     `, [developerId, verificationToken]);
 
     // Send verification email
-    const baseUrl = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace(/\/$/, '') : '';
-    const verificationUrl = `${baseUrl}/verify-app-email/${verificationToken}`;
+    const verificationUrl = `${process.env.BACKEND_URL}/api/v1/developer/apps/verify-app-email/${verificationToken}`;
     sendMail({
       to: support_email,
       subject: `Verify Your App Support Email - ${app_name}`,
@@ -1351,8 +1350,7 @@ const updateAppSupportEmail = async (req, res) => {
     `, [developerId, verificationToken]);
 
     // Send verification email
-    const baseUrl = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace(/\/$/, '') : '';
-    const verificationUrl = `${baseUrl}/verify-app-email/${verificationToken}`;
+    const verificationUrl = `${process.env.BACKEND_URL}/api/v1/developer/apps/verify-app-email/${verificationToken}`;
     sendMail({
       to: support_email,
       subject: `Verify Updated Support Email - ${app.app_name}`,

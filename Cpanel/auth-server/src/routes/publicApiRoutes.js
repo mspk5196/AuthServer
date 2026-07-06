@@ -40,5 +40,8 @@ router.post('/:apiKey/auth/delete-account', publicApis.deleteAccount);
 router.get('/:apiKey/user/profile', publicApis.getUserProfile);
 router.patch('/:apiKey/user/profile', publicApis.patchUserProfile);
 
+// Developer-initiated mail sending
+router.post('/:apiKey/mail/send', publicApis.sendAppMail);
+
 
 module.exports = router;

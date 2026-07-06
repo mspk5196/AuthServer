@@ -16,6 +16,7 @@ const {
   buildSetPasswordGoogleUserEmail,
   buildPasswordSetConfirmationEmail,
   buildProfileUpdateVerificationEmail,
+  buildDeveloperCustomEmail,
 } = require('../templates/emailTemplates');
 const { log, error } = require('console');
 
@@ -3353,6 +3354,125 @@ const getUserData = async (req, res) => {
   }
 };
 
+/**
+ * Send custom mail via app API (developer-initiated)
+ * POST /:apiKey/mail/send
+ * Headers: X-API-Key, X-API-Secret (via verifyAppCredentials)
+ * Body: { to, subject, html, fromName? }
+ *   to        - string or array of email strings (max 10)
+ *   subject   - required string
+ *   html      - required HTML string
+ *   fromName  - optional string, defaults to app_name
+ */
+const sendAppMail = async (req, res) => {
+  try {
+    const app = req.devApp;
+    const plan = req.plan;
+
+    // ── 1. Check plan quota ──────────────────────────────────────────────────
+    const planFeatures = plan?.features || {};
+    // monthly_mail_quota: 0 = unlimited, positive integer = cap per month
+    // If key is absent from features, default to 0 (unlimited)
+    const monthlyQuota = planFeatures.monthly_mail_quota !== undefined
+      ? Number(planFeatures.monthly_mail_quota)
+      : 0;
+
+    // ── 2. Load current app mail usage & maybe reset counter ─────────────────
+    const appRow = await pool.query(
+      'SELECT mail_sent_count, mail_quota_month FROM dev_apps WHERE id = $1',
+      [app.id]
+    );
+    if (appRow.rows.length === 0) return res.status(404).json({ success: false, message: 'App not found' });
+
+    const { mail_sent_count, mail_quota_month } = appRow.rows[0];
+    const currentMonth = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+
+    let currentCount = mail_sent_count || 0;
+    if (mail_quota_month !== currentMonth) {
+      // New month — reset counter
+      await pool.query(
+        'UPDATE dev_apps SET mail_sent_count = 0, mail_quota_month = $1, updated_at = NOW() WHERE id = $2',
+        [currentMonth, app.id]
+      );
+      currentCount = 0;
+    }
+
+    // ── 3. Enforce quota (0 = unlimited) ─────────────────────────────────────
+    if (monthlyQuota > 0 && currentCount >= monthlyQuota) {
+      return res.status(429).json({
+        success: false,
+        message: `Monthly mail quota of ${monthlyQuota} exceeded for this app`,
+        quota: monthlyQuota,
+        sent_this_month: currentCount
+      });
+    }
+
+    // ── 4. Validate request body ─────────────────────────────────────────────
+    const { to, subject, html, fromName } = req.body || {};
+
+    if (!to || (!Array.isArray(to) && typeof to !== 'string')) {
+      return res.status(400).json({ success: false, message: '"to" is required (string or array of emails)' });
+    }
+    if (!subject || typeof subject !== 'string' || !subject.trim()) {
+      return res.status(400).json({ success: false, message: '"subject" is required' });
+    }
+    if (!html || typeof html !== 'string' || !html.trim()) {
+      return res.status(400).json({ success: false, message: '"html" body is required' });
+    }
+
+    const recipients = Array.isArray(to) ? to : [to];
+    if (recipients.length === 0) {
+      return res.status(400).json({ success: false, message: '"to" must have at least one recipient' });
+    }
+    if (recipients.length > 10) {
+      return res.status(400).json({ success: false, message: '"to" cannot have more than 10 recipients per call' });
+    }
+    // Basic email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    for (const addr of recipients) {
+      if (!emailRegex.test(addr)) {
+        return res.status(400).json({ success: false, message: `Invalid email address: ${addr}` });
+      }
+    }
+
+    // ── 5. Build and send ────────────────────────────────────────────────────
+    const senderName = (fromName && fromName.trim()) ? fromName.trim() : app.app_name;
+    const finalHtml = buildDeveloperCustomEmail({ body: html, supportEmail: app.support_email });
+
+    const mailResult = await sendMail({
+      from: `"${senderName}" <${process.env.FROM_EMAIL}>`,
+      to: recipients.join(', '),
+      subject: subject.trim(),
+      html: finalHtml
+    });
+
+    if (!mailResult.success) {
+      console.error('sendAppMail: mail sending failed:', mailResult.error);
+      return res.status(502).json({ success: false, message: 'Failed to send mail' });
+    }
+
+    // ── 6. Increment counter ─────────────────────────────────────────────────
+    await pool.query(
+      'UPDATE dev_apps SET mail_sent_count = mail_sent_count + 1, mail_quota_month = $1, updated_at = NOW() WHERE id = $2',
+      [currentMonth, app.id]
+    );
+
+    const newCount = currentCount + 1;
+    const remaining = monthlyQuota === 0 ? null : monthlyQuota - newCount;
+
+    return res.json({
+      success: true,
+      message: 'Mail sent successfully',
+      sent_this_month: newCount,
+      ...(remaining !== null ? { remaining_quota: remaining } : { remaining_quota: 'unlimited' })
+    });
+
+  } catch (error) {
+    console.error('sendAppMail error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to send mail' });
+  }
+};
+
 module.exports = {
   verifyAppCredentials,
   registerUser,
@@ -3379,5 +3499,6 @@ module.exports = {
   getDeveloperGroups,
   getDeveloperApps,
   getAppUsers,
-  getUserData
+  getUserData,
+  sendAppMail,
 };

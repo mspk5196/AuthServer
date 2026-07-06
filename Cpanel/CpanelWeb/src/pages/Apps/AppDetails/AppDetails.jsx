@@ -223,6 +223,10 @@ export default function AppDetails(){
             <strong>API Usage (this month):</strong>
             <span className="stat-number">{app?.usage?.calls_this_month || 0}</span>
           </div>
+          <div className="stat-badge" style={{ background: 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)', borderColor: '#34d399', color: '#065f46' }}>
+            <strong>📧 Mails sent (this month):</strong>
+            <span className="stat-number" style={{ color: '#065f46' }}>{app?.app?.mail_sent_count ?? 0}</span>
+          </div>
           <button 
             className="details-settings-btn" 
             onClick={() => navigate(`/apps/${appId}/settings`)}
@@ -230,6 +234,7 @@ export default function AppDetails(){
             Open Settings
           </button>
         </div>
+
       </div>
 
       {/* Support Email Section */}

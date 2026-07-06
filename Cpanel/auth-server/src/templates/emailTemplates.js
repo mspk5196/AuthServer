@@ -135,6 +135,17 @@ const buildAppSupportEmailUpdateEmail = ({ appName, verificationUrl, supportEmai
   ${supportLine(supportEmail)}
 `;
 
+// Developer custom email — sent via POST /:apiKey/mail/send
+// Wraps developer-provided HTML body and appends mandatory MSPK footer.
+const buildDeveloperCustomEmail = ({ body, supportEmail }) => `
+  ${body}
+  <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;">
+  <p style="font-size:12px;color:#6b7280;margin:0;">
+    For any queries contact <a href="mailto:${supportEmail}" style="color:#6b7280;">${supportEmail}</a><br>
+    This service is provided by MSPK Apps
+  </p>
+`;
+
 // App deletion confirmation (developer-initiated from cPanel)
 const buildAppDeleteConfirmationEmail = ({ appName, developerName, confirmationUrl, supportEmail }) => `
   <h2>Confirm deletion of your app "${appName}"</h2>
@@ -181,4 +192,5 @@ module.exports = {
   buildAppSupportEmailUpdateEmail,
   buildAppDeleteConfirmationEmail,
   buildProfileUpdateVerificationEmail,
+  buildDeveloperCustomEmail,
 };

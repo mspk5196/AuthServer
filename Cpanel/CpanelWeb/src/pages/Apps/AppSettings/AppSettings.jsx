@@ -320,8 +320,13 @@ export default function AppSettings(){
       <div className="usage-stats-card">
         <div className="usage-header">
           <h3 className="usage-title">API Usage Statistics</h3>
-          <div className="total-calls-badge">
-            Total Calls: <span className="calls-number">{usage?.total_calls || 0}</span>
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div className="total-calls-badge">
+              Total Calls: <span className="calls-number">{usage?.total_calls || 0}</span>
+            </div>
+            <div className="total-calls-badge" style={{ background: 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)', borderColor: '#34d399', color: '#065f46' }}>
+              📧 Mails this month: <span className="calls-number" style={{ color: '#065f46' }}>{usage?.mail_sent_this_month ?? 0}</span>
+            </div>
           </div>
         </div>
         
@@ -342,6 +347,7 @@ export default function AppSettings(){
           )}
         </div>
       </div>
+
 
       {/* Custom Fields Card */}
       <div className="custom-fields-card">

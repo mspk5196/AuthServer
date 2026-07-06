@@ -141,7 +141,8 @@ const verifyAppCredentials = async (req, res, next) => {
         a.*,
         d.id as developer_id,
         d.name as developer_name,
-        d.email as developer_email
+        d.email as developer_email,
+        d.mail_sending_blocked as developer_mail_sending_blocked
       FROM dev_apps a
       JOIN developers d ON a.developer_id = d.id
       WHERE a.api_key = $1 AND a.api_secret_hash = $2
@@ -3369,7 +3370,23 @@ const sendAppMail = async (req, res) => {
     const app = req.devApp;
     const plan = req.plan;
 
-    // ── 1. Check plan quota ──────────────────────────────────────────────────
+    // ── 1. Check mail sending blocks ────────────────────────────────────────
+    if (app.developer_mail_sending_blocked) {
+      return res.status(403).json({
+        success: false,
+        code: 'MAIL_SENDING_BLOCKED',
+        message: 'Mail sending has been disabled for your developer account. Please contact MSPK Apps support.'
+      });
+    }
+    if (app.mail_sending_blocked) {
+      return res.status(403).json({
+        success: false,
+        code: 'MAIL_SENDING_BLOCKED',
+        message: 'Mail sending has been disabled for this app. Please contact MSPK Apps support.'
+      });
+    }
+
+    // ── 2. Check plan quota ──────────────────────────────────────────────────
     const planFeatures = plan?.features || {};
     // monthly_mail_quota: 0 = unlimited, positive integer = cap per month
     // If key is absent from features, default to 0 (unlimited)

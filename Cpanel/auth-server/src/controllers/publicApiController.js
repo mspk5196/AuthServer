@@ -3054,6 +3054,9 @@ const patchUserProfile = async (req, res) => {
     res.json({ success: true, message: 'Profile updated' });
 
   } catch (error) {
+    if (error.code === '23505' && error.detail && error.detail.includes('username')) {
+      return res.status(409).json({ success: false, message: 'Username already exists' });
+    }
     console.error('Patch user profile error:', error);
     res.status(500).json({ success: false, message: 'Failed to update profile' });
   }
@@ -3099,6 +3102,9 @@ const confirmUserUpdate = async (req, res) => {
     `);
 
   } catch (error) {
+    if (error.code === '23505' && error.detail && error.detail.includes('username')) {
+      return res.status(409).json({ success: false, message: 'Username already exists' });
+    }
     console.error('Confirm user update error:', error);
     res.status(500).json({ success: false, message: 'Failed to confirm update' });
   }

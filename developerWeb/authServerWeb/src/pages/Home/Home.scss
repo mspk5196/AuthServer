@@ -2,47 +2,80 @@
 
 .home-page {
   min-height: calc(100vh - 60px);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  color: #1e293b;
+  background-color: #f8fafc;
 
   section {
-    padding: 4rem 0;
+    padding: 6rem 0;
 
     @include mobile {
-      padding: 2.5rem 0;
+      padding: 4rem 0;
     }
   }
 
+  // Region Banner - Subtle & Clean
+  .region-banner {
+    background: #fffbeb;
+    border-bottom: 1px solid #fef3c7;
+    padding: 0.75rem 0;
+
+    p {
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: #b45309;
+      text-align: center;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+  }
+
+  // Hero Section - Bold, Modern Gradient & Glassmorphism Hints
   .hero {
-    background: linear-gradient(135deg, $primary-color 0%, $primary-dark 100%);
+    background: radial-gradient(circle at top right, rgba(99, 102, 241, 0.15) 0%, rgba(255, 255, 255, 0) 50%),
+                linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
     color: white;
-    padding: 6rem 0;
+    padding: 8rem 0;
     text-align: center;
+    position: relative;
+    overflow: hidden;
 
     @include mobile {
-      padding: 3rem 0;
+      padding: 5rem 0;
     }
 
     .hero-content {
-      max-width: 800px;
+      max-width: 840px;
       margin: 0 auto;
+      padding: 0 1.5rem;
 
       h1 {
-        font-size: 3rem;
+        font-size: 3.5rem;
+        letter-spacing: -0.025em;
+        line-height: 1.15;
         margin-bottom: 1.5rem;
-        font-weight: 700;
+        font-weight: 800;
+        background: linear-gradient(to right, #ffffff, #e2e8f0);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
 
         @include mobile {
-          font-size: 2rem;
+          font-size: 2.25rem;
         }
       }
 
       .hero-subtitle {
         font-size: 1.25rem;
-        margin-bottom: 2.5rem;
-        opacity: 0.95;
-        line-height: 1.7;
+        margin-bottom: 3rem;
+        color: #e0e7ff;
+        line-height: 1.8;
+        font-weight: 400;
 
         @include mobile {
-          font-size: 1rem;
+          font-size: 1.125rem;
           margin-bottom: 2rem;
         }
       }
@@ -51,157 +84,228 @@
         display: flex;
         gap: 1rem;
         justify-content: center;
+        align-items: center;
 
         @include mobile {
           flex-direction: column;
-          gap: 0.75rem;
+          gap: 1rem;
+          width: 100%;
+          max-width: 320px;
+          margin: 0 auto;
+        }
+
+        // Ensuring buttons look consistently gorgeous without altering layout
+        .btn {
+          transition: all 0.2s ease-in-out;
+          font-weight: 600;
+          letter-spacing: -0.01em;
+          
+          &:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+          }
+          &:active {
+            transform: translateY(0);
+          }
         }
       }
     }
   }
 
-  .region-banner {
-    background: #fef3c7;
-    border-bottom: 1px solid $border-color;
-    padding: 0.5rem 0;
-
-    p {
-      font-size: 0.875rem;
-      color: $text-secondary;
-      text-align: center;
-    }
-  }
-
+  // Features Grid - Clean Glass Cards & Soft Shadows
   .features {
-    background: white;
+    background: #ffffff;
 
     h2 {
       text-align: center;
       font-size: 2.5rem;
-      margin-bottom: 3rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 4rem;
+      color: #0f172a;
 
       @include mobile {
-        font-size: 1.75rem;
-        margin-bottom: 2rem;
+        font-size: 2rem;
+        margin-bottom: 2.5rem;
       }
     }
 
     .features-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 2rem;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 2.5rem;
+      padding: 0 1rem;
 
       @include mobile {
         grid-template-columns: 1fr;
-        gap: 1.5rem;
+        gap: 1.75rem;
       }
 
       .feature-card {
-        @include card;
-        text-align: center;
-        transition: transform 0.2s, box-shadow 0.2s;
+        background: #ffffff;
+        border-radius: 16px;
+        border: 1px solid #f1f5f9;
+        padding: 2.5rem 2rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+        text-align: left; /* Switched to left align for an easier to read tech look */
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
         &:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+          transform: translateY(-6px);
+          border-color: #e2e8f0;
+          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.02);
+          
+          .feature-icon {
+            background: #eef2ff;
+            transform: scale(1.05);
+          }
         }
 
         .feature-icon {
-          font-size: 3rem;
-          margin-bottom: 1rem;
+          font-size: 2rem;
+          margin-bottom: 1.5rem;
+          width: 56px;
+          height: 56px;
+          background: #f8fafc;
+          border-radius: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.3s ease;
         }
 
         h3 {
           font-size: 1.25rem;
+          font-weight: 700;
+          color: #1e293b;
+          margin-bottom: 0.75rem;
+          letter-spacing: -0.01em;
+        }
+
+        p {
+          color: #64748b;
+          font-size: 0.975rem;
+          line-height: 1.625;
+        }
+      }
+    }
+  }
+
+  // How It Works - Clean timelines without extra markup
+  .how-it-works {
+    background: #f8fafc;
+    border-top: 1px solid #f1f5f9;
+    border-bottom: 1px solid #f1f5f9;
+
+    h2 {
+      text-align: center;
+      font-size: 2.5rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 4rem;
+      color: #0f172a;
+
+      @include mobile {
+        font-size: 2rem;
+        margin-bottom: 2.5rem;
+      }
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 2.5rem;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+
+      @include mobile {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+      }
+
+      .step {
+        text-align: center;
+        padding: 1rem;
+        position: relative;
+
+        .step-number {
+          width: 52px;
+          height: 52px;
+          background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+          color: white;
+          border-radius: 50%;
+          @include flex-center;
+          font-size: 1.25rem;
+          font-weight: 700;
+          margin: 0 auto 1.5rem;
+          box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+        }
+
+        h3 {
+          font-size: 1.25rem;
+          font-weight: 700;
+          color: #1e293b;
           margin-bottom: 0.75rem;
         }
 
         p {
-          color: $text-secondary;
-          font-size: 0.9375rem;
+          color: #64748b;
+          font-size: 0.975rem;
           line-height: 1.6;
         }
       }
     }
   }
 
-  .how-it-works {
-    background: $light-bg;
-
+  // Demo Project Block (Ensuring it fits perfectly seamlessly)
+  .demo-project {
+    background: #ffffff;
+    text-align: center;
+    border-bottom: 1px solid #f1f5f9;
+    
     h2 {
-      text-align: center;
       font-size: 2.5rem;
-      margin-bottom: 3rem;
-
-      @include mobile {
-        font-size: 1.75rem;
-        margin-bottom: 2rem;
-      }
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 1.25rem;
+      color: #0f172a;
+      
+      @include mobile { font-size: 2rem; }
     }
-
-    .steps {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 2rem;
-      max-width: 1100px;
-      margin: 0 auto;
-
-      @include mobile {
-        grid-template-columns: 1fr;
-        gap: 1.5rem;
-      }
-
-      .step {
-        text-align: center;
-        padding: 2rem 1rem;
-
-        .step-number {
-          width: 60px;
-          height: 60px;
-          background: $primary-color;
-          color: white;
-          border-radius: 50%;
-          @include flex-center;
-          font-size: 1.5rem;
-          font-weight: 700;
-          margin: 0 auto 1.5rem;
-        }
-
-        h3 {
-          font-size: 1.25rem;
-          margin-bottom: 0.75rem;
-        }
-
-        p {
-          color: $text-secondary;
-          font-size: 0.9375rem;
-        }
-      }
+    
+    p {
+      max-width: 650px;
+      margin: 0 auto 2.5rem;
+      font-size: 1.125rem;
+      color: #64748b;
+      line-height: 1.7;
+      
+      @include mobile { font-size: 1rem; }
     }
   }
 
+  // CTA Section - Clean & Intentional Minimalist design
   .cta {
-    background: white;
+    background: #ffffff;
     text-align: center;
-    padding: 5rem 0;
-
-    @include mobile {
-      padding: 3rem 0;
-    }
 
     h2 {
-      font-size: 2.5rem;
-      margin-bottom: 1rem;
+      font-size: 2.75rem;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      color: #0f172a;
+      margin-bottom: 1.25rem;
 
       @include mobile {
-        font-size: 1.75rem;
+        font-size: 2rem;
       }
     }
 
     p {
       font-size: 1.125rem;
-      color: $text-secondary;
-      margin-bottom: 2rem;
+      color: #64748b;
+      margin-bottom: 2.5rem;
 
       @include mobile {
         font-size: 1rem;
@@ -209,34 +313,40 @@
     }
   }
 
+  // Footer - Deep Matte Tech Theme
   .home-footer {
-    background: #1e293b;
-    color: white;
-    padding: 3rem 0 1.5rem;
+    background: #0f172a;
+    color: #94a3b8;
+    padding: 5rem 0 2rem;
+    border-top: 1px solid #1e293b;
 
     .footer-content {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 2rem;
-      margin-bottom: 2rem;
+      grid-template-columns: 2fr repeat(2, 1fr);
+      gap: 4rem;
+      margin-bottom: 4rem;
+      padding: 0 1.5rem;
 
       @include mobile {
         grid-template-columns: 1fr;
-        gap: 1.5rem;
+        gap: 2.5rem;
+        margin-bottom: 2.5rem;
       }
     }
 
     .footer-section {
       h4 {
-        font-size: 1.125rem;
-        font-weight: 600;
-        margin-bottom: 1rem;
-        color: white;
+        font-size: 1rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 1.25rem;
+        color: #ffffff;
       }
 
       p {
-        font-size: 0.875rem;
-        color: #cbd5e1;
+        font-size: 0.9375rem;
+        color: #94a3b8;
         line-height: 1.6;
       }
 
@@ -246,16 +356,16 @@
         margin: 0;
 
         li {
-          margin-bottom: 0.5rem;
+          margin-bottom: 0.75rem;
 
           a {
-            color: #cbd5e1;
+            color: #94a3b8;
             text-decoration: none;
-            font-size: 0.875rem;
-            transition: color 0.2s;
+            font-size: 0.9375rem;
+            transition: color 0.15s ease;
 
             &:hover {
-              color: white;
+              color: #38bdf8; // Subtle energetic pop on links
             }
           }
         }
@@ -263,13 +373,13 @@
     }
 
     .footer-bottom {
-      border-top: 1px solid rgba(255, 255, 255, 0.1);
-      padding-top: 1.5rem;
+      border-top: 1px solid #1e293b;
+      padding-top: 2rem;
       text-align: center;
 
       p {
         font-size: 0.875rem;
-        color: #94a3b8;
+        color: #64748b;
         margin: 0;
       }
     }

@@ -1,30 +1,42 @@
 @use '../../styles/variables' as *;
 
 .navbar {
-  background: white;
-  border-bottom: 1px solid $border-color;
-  padding: 0.875rem 0;
+  background: rgba(255, 255, 255, 0.85); // Modern glassmorphism look
+  backdrop-filter: blur(12px); // Native blur for a premium web app feel
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid #f1f5f9; // Crisp modern boundary line
+  padding: 0.75rem 0;
   position: sticky;
   top: 0;
   z-index: 100;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
 
   .navbar-content {
     @include flex-between;
-    gap: 1rem;
+    gap: 1.5rem;
   }
 
+  // Brand / Logo Styling
   .navbar-brand {
     display: flex;
     align-items: center;
-    gap: 0.625rem;
-    font-weight: 600;
+    gap: 0.75rem;
+    font-weight: 700;
     font-size: 1.125rem;
-    color: $text-primary;
+    color: #0f172a; // Deep technical primary text
     text-decoration: none;
+    letter-spacing: -0.02em;
+    transition: transform 0.15s ease;
 
     .logo {
-      font-size: 1.5rem;
+      display: flex;
+      align-items: center;
+      
+      img {
+        transition: transform 0.2s ease;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      }
     }
 
     .brand-name {
@@ -35,58 +47,104 @@
 
     &:hover {
       text-decoration: none;
-      color: $primary-color;
+      color: #4f46e5; // Use primary brand color on hover
+
+      .logo img {
+        transform: scale(1.05);
+      }
     }
   }
 
+  // Navigation Links & User Block Wrapper
   .navbar-menu {
     display: flex;
     align-items: center;
-    gap: 1.5rem;
+    gap: 1.25rem;
 
     @include mobile {
       gap: 0.75rem;
     }
 
+    // Individual Nav Anchor Links
     .nav-link {
-      color: $text-secondary;
+      color: #64748b; // Clean, non-distracting slate link color
       font-weight: 500;
       font-size: 0.9375rem;
-      padding: 0.5rem 0;
-      transition: color 0.2s;
+      padding: 0.5rem 0.75rem;
+      border-radius: 6px;
+      transition: all 0.15s ease-in-out;
       text-decoration: none;
+      position: relative;
 
       @include mobile {
-        display: none;
+        display: none; // Maintains mobile-hiding functionality flawlessly
       }
 
       &:hover {
-        color: $primary-color;
+        color: #4f46e5;
+        background: #f8fafc; // Soft subtle pill wrapper backplate on hover
         text-decoration: none;
       }
 
+      // Polished active link design
       &.active {
-        color: $primary-color;
-        border-bottom: 2px solid $primary-color;
+        color: #4f46e5;
+        font-weight: 600;
+        background: #eef2ff; // Modern block accent pill container instead of plain underline
+        
+        // Alternative bottom pill highlight effect if preferred (Clean and out of path)
+        &::after {
+          content: '';
+          position: absolute;
+          bottom: -4px;
+          left: 12px;
+          right: 12px;
+          height: 2px;
+          background-color: #4f46e5;
+          border-radius: 2px;
+        }
       }
     }
 
+    // User State / Auth Section
     .navbar-user {
       display: flex;
       align-items: center;
-      gap: 1rem;
+      gap: 1.25rem;
+      margin-left: 0.5rem;
+      border-left: 1px solid #e2e8f0; // Separator for clean structure
+      padding-left: 1.25rem;
 
       @include mobile {
         gap: 0.5rem;
+        border-left: none;
+        padding-left: 0;
+        margin-left: 0;
       }
 
       .user-name {
-        font-weight: 500;
+        font-weight: 600;
         font-size: 0.875rem;
-        color: $text-primary;
+        color: #334155;
 
         @include mobile {
           display: none;
+        }
+      }
+
+      // Standard button fine tuning inside navbar context
+      .btn {
+        font-weight: 600;
+        font-size: 0.875rem;
+        padding: 0.45rem 1rem;
+        border-radius: 8px;
+        transition: all 0.15s ease;
+
+        &:hover {
+          transform: translateY(-1px);
+        }
+        &:active {
+          transform: translateY(0);
         }
       }
     }

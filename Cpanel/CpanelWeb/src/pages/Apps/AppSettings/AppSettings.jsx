@@ -110,6 +110,11 @@ export default function AppSettings(){
     setFieldsDirty(true);
   }
 
+  function updateCorePermission(key, value) {
+    setUserEditPermissions(prev => ({ ...prev, [key]: value }));
+    setFieldsDirty(true);
+  }
+
   async function saveExtraFields() {
     setSaving(true);
     try {
@@ -480,7 +485,7 @@ export default function AppSettings(){
                       type="checkbox" 
                       className="custom-switch-input"
                       checked={!!userEditPermissions.name} 
-                      onChange={(e)=>setUserEditPermissions(prev=>({...prev, name: e.target.checked}))} 
+                      onChange={(e)=>updateCorePermission('name', e.target.checked)} 
                     />
                     <span className="custom-switch-slider"></span>
                   </label>
@@ -499,7 +504,7 @@ export default function AppSettings(){
                       type="checkbox" 
                       className="custom-switch-input"
                       checked={!!userEditPermissions.username} 
-                      onChange={(e)=>setUserEditPermissions(prev=>({...prev, username: e.target.checked}))} 
+                      onChange={(e)=>updateCorePermission('username', e.target.checked)} 
                     />
                     <span className="custom-switch-slider"></span>
                   </label>
@@ -518,7 +523,7 @@ export default function AppSettings(){
                       type="checkbox" 
                       className="custom-switch-input"
                       checked={!!userEditPermissions.email} 
-                      onChange={(e)=>setUserEditPermissions(prev=>({...prev, email: e.target.checked}))} 
+                      onChange={(e)=>updateCorePermission('email', e.target.checked)} 
                     />
                     <span className="custom-switch-slider"></span>
                   </label>

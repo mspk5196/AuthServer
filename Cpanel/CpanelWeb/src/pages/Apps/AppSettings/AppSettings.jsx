@@ -352,87 +352,207 @@ export default function AppSettings(){
       {/* Custom Fields Card */}
       <div className="custom-fields-card">
         <div className="custom-fields-header" onClick={() => setShowExtraFieldsPanel(prev => !prev)}>
-          <h3 className="card-title">Custom User Fields</h3>
-          <div className="header-actions">
-            <span className="fields-count">{extraFields.length} / 10</span>
-            <button className="collapse-toggle">{showExtraFieldsPanel ? '−' : '+'}</button>
+          <div className="title-area">
+            <h3 className="card-title">Custom User Fields</h3>
+            <span className="fields-count">{extraFields.length} / 10 fields</span>
           </div>
+          <button className="collapse-toggle-btn" aria-label="Toggle extra fields panel">
+            <svg className={`chevron-icon ${showExtraFieldsPanel ? 'expanded' : ''}`} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </button>
         </div>
 
-        <p className="card-sub">Add extra columns available for users. Control whether each field (and core fields) is editable by the user.</p>
+        <p className="card-sub">Define supplementary attributes for your user profiles. Check "Editable" if you want users to modify these values themselves from their account page.</p>
 
         {!showExtraFieldsPanel && (
-          <div className="fields-collapsed-summary">Custom fields are collapsed. Click to expand.</div>
+          <div className="fields-collapsed-summary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '0.5rem', opacity: 0.7 }}>
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+            Custom fields configuration is collapsed. Click to expand and configure.
+          </div>
         )}
 
         {showExtraFieldsPanel && (
           <>
-            {extraFields.length === 0 && (
-              <div className="no-custom-fields">No custom fields defined.</div>
+            {extraFields.length === 0 ? (
+              <div className="no-custom-fields">
+                <div className="no-fields-icon">✨</div>
+                <h4>No Custom Fields Defined</h4>
+                <p>Add custom fields like phone number, address, or preferences to enrich your user profiles.</p>
+              </div>
+            ) : (
+              <div className="fields-grid">
+                {extraFields.map((f, idx) => (
+                  <div className="custom-field-row" key={idx}>
+                    <div className="field-index-badge">
+                      <span>#{idx + 1}</span>
+                    </div>
+
+                    <div className="field-inputs-container">
+                      <div className="field-input-wrapper">
+                        <label className="field-input-label">Key Name</label>
+                        <input
+                          className="custom-field-input name"
+                          placeholder="e.g., billing_address"
+                          value={f.name}
+                          onChange={(e) => updateField(idx, 'name', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="field-input-wrapper flex-grow">
+                        <label className="field-input-label">Display Label</label>
+                        <input
+                          className="custom-field-input label"
+                          placeholder="e.g., Billing Address"
+                          value={f.label || ''}
+                          onChange={(e) => updateField(idx, 'label', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="field-input-wrapper">
+                        <label className="field-input-label">Data Type</label>
+                        <select
+                          className="custom-field-select"
+                          value={f.type}
+                          onChange={(e) => updateField(idx, 'type', e.target.value)}
+                        >
+                          <option value="text">Text (String)</option>
+                          <option value="integer">Integer (Number)</option>
+                          <option value="boolean">Boolean</option>
+                          <option value="date">Date</option>
+                          <option value="json">JSON Object</option>
+                        </select>
+                      </div>
+
+                      <div className="field-switch-wrapper">
+                        <label className="field-input-label">User Editable</label>
+                        <label className="custom-switch-label">
+                          <input 
+                            type="checkbox" 
+                            className="custom-switch-input"
+                            checked={!!f.editable_by_user} 
+                            onChange={(e) => updateField(idx, 'editable_by_user', e.target.checked)} 
+                          />
+                          <span className="custom-switch-slider"></span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="field-row-actions">
+                      <button 
+                        className="remove-field-action-btn" 
+                        onClick={() => removeField(idx)} 
+                        title="Delete custom field"
+                        type="button"
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6"></polyline>
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                          <line x1="10" y1="11" x2="10" y2="17"></line>
+                          <line x1="14" y1="11" x2="14" y2="17"></line>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
 
-            <div className="fields-grid">
-              {extraFields.map((f, idx) => (
-                <div className="custom-field-row" key={idx}>
-                  <div className="field-main">
-                    <input
-                      className="custom-field-input name"
-                      placeholder="field_name"
-                      value={f.name}
-                      onChange={(e) => updateField(idx, 'name', e.target.value)}
+            <div className="core-field-permissions-section">
+              <h4 className="permissions-title">Core User Fields Permissions</h4>
+              <p className="permissions-subtext">Toggle whether users can directly modify their default credentials and personal details.</p>
+              
+              <div className="core-perms-grid">
+                <div className="core-perm-card">
+                  <div className="perm-info">
+                    <span className="perm-icon">👤</span>
+                    <div className="perm-details">
+                      <span className="perm-label">Display Name</span>
+                      <span className="perm-desc">Allow updating full name</span>
+                    </div>
+                  </div>
+                  <label className="custom-switch-label">
+                    <input 
+                      type="checkbox" 
+                      className="custom-switch-input"
+                      checked={!!userEditPermissions.name} 
+                      onChange={(e)=>setUserEditPermissions(prev=>({...prev, name: e.target.checked}))} 
                     />
-                    <input
-                      className="custom-field-input label"
-                      placeholder="Label (optional)"
-                      value={f.label || ''}
-                      onChange={(e) => updateField(idx, 'label', e.target.value)}
-                    />
-                  </div>
-
-                  <div className="field-meta">
-                    <select
-                      className="custom-field-select"
-                      value={f.type}
-                      onChange={(e) => updateField(idx, 'type', e.target.value)}
-                    >
-                      <option value="text">Text</option>
-                      <option value="integer">Integer</option>
-                      <option value="boolean">Boolean</option>
-                      <option value="date">Date</option>
-                      <option value="json">JSON</option>
-                    </select>
-
-                    <label className="editable-by-user-label">
-                      <input type="checkbox" checked={!!f.editable_by_user} onChange={(e) => updateField(idx, 'editable_by_user', e.target.checked)} />
-                      Editable
-                    </label>
-                  </div>
-
-                  <div className="field-actions">
-                    <button className="btn btn-danger small" onClick={() => removeField(idx)}>Remove</button>
-                  </div>
+                    <span className="custom-switch-slider"></span>
+                  </label>
                 </div>
-              ))}
-            </div>
 
-            <div className="core-field-permissions">
-              <h4>Core field permissions</h4>
-              <div className="core-perms-row">
-                <label><input type="checkbox" checked={!!userEditPermissions.name} onChange={(e)=>setUserEditPermissions(prev=>({...prev, name: e.target.checked}))} /> Name editable by user</label>
-                <label><input type="checkbox" checked={!!userEditPermissions.username} onChange={(e)=>setUserEditPermissions(prev=>({...prev, username: e.target.checked}))} /> Username editable by user</label>
-                <label><input type="checkbox" checked={!!userEditPermissions.email} onChange={(e)=>setUserEditPermissions(prev=>({...prev, email: e.target.checked}))} /> Email editable by user</label>
+                <div className="core-perm-card">
+                  <div className="perm-info">
+                    <span className="perm-icon">🏷️</span>
+                    <div className="perm-details">
+                      <span className="perm-label">Username</span>
+                      <span className="perm-desc">Allow changing username</span>
+                    </div>
+                  </div>
+                  <label className="custom-switch-label">
+                    <input 
+                      type="checkbox" 
+                      className="custom-switch-input"
+                      checked={!!userEditPermissions.username} 
+                      onChange={(e)=>setUserEditPermissions(prev=>({...prev, username: e.target.checked}))} 
+                    />
+                    <span className="custom-switch-slider"></span>
+                  </label>
+                </div>
+
+                <div className="core-perm-card">
+                  <div className="perm-info">
+                    <span className="perm-icon">✉️</span>
+                    <div className="perm-details">
+                      <span className="perm-label">Email Address</span>
+                      <span className="perm-desc">Allow changing login email</span>
+                    </div>
+                  </div>
+                  <label className="custom-switch-label">
+                    <input 
+                      type="checkbox" 
+                      className="custom-switch-input"
+                      checked={!!userEditPermissions.email} 
+                      onChange={(e)=>setUserEditPermissions(prev=>({...prev, email: e.target.checked}))} 
+                    />
+                    <span className="custom-switch-slider"></span>
+                  </label>
+                </div>
               </div>
             </div>
 
-            <div className="custom-fields-actions">
-              <button className="btn btn-secondary" onClick={addField} disabled={extraFields.length >= 10}>+ Add field</button>
-              <button className="btn btn-primary" onClick={saveExtraFields} disabled={saving || !fieldsDirty}>Save Fields</button>
-              <button className="btn btn-ghost" onClick={async () => { await fetchSettings(); setFieldsDirty(false); }}>Cancel</button>
+            <div className="custom-fields-footer-actions">
+              <button className="app-btn-secondary" onClick={addField} disabled={extraFields.length >= 10}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '0.375rem' }}>
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Add Custom Field
+              </button>
+              
+              <div className="save-cancel-group">
+                <button className="app-btn-ghost" onClick={async () => { await fetchSettings(); setFieldsDirty(false); }}>
+                  Cancel
+                </button>
+                <button className="app-btn-primary" onClick={saveExtraFields} disabled={saving || !fieldsDirty}>
+                  Save Configuration
+                </button>
+              </div>
             </div>
 
-            <div className="fields-preview">
-              <h4>Preview (JSON)</h4>
-              <pre className="preview-block">{JSON.stringify(extraFields, null, 2)}</pre>
+            <div className="fields-schema-preview">
+              <div className="schema-preview-header">
+                <div className="header-tabs">
+                  <span className="preview-indicator-dot"></span>
+                  <span className="tab-title">App User Schema (JSON)</span>
+                </div>
+              </div>
+              <pre className="schema-preview-block">{JSON.stringify(extraFields, null, 2)}</pre>
             </div>
           </>
         )}

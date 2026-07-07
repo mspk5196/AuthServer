@@ -921,10 +921,15 @@ export default function GroupSettings() {
               <strong>Note:</strong> Enabling common extra fields will ADD these fields to all apps without deleting existing data. Only disabling will delete the extra field data.
             </p>
 
-            <div className="fields-toggle-section">
-              <label className="toggle-container">
+            <div className="fields-toggle-section-premium">
+              <div className="toggle-info-block">
+                <h4 className="toggle-block-title">Use Common Extra Fields for All Apps</h4>
+                <p className="toggle-block-desc">Define custom user fields globally at the group level to automatically sync them across all member apps.</p>
+              </div>
+              <label className="custom-switch-label">
                 <input
                   type="checkbox"
+                  className="custom-switch-input"
                   checked={useCommonExtraFields}
                   onChange={(e) => {
                     if (!e.target.checked && useCommonExtraFields) {
@@ -968,78 +973,123 @@ export default function GroupSettings() {
                     }
                   }}
                 />
-                <span className="toggle-slider"></span>
-                <span className="toggle-label">Use Common Extra Fields for All Apps</span>
+                <span className="custom-switch-slider"></span>
               </label>
             </div>
 
             {useCommonExtraFields && (
               <>
-                <div className="fields-header">
-                  <span className="fields-count">{commonExtraFields.length} / 10 fields</span>
-                  <button className="btn-secondary" onClick={addField} disabled={commonExtraFields.length >= 10}>
-                    + Add Field
+                <div className="fields-header-premium">
+                  <span className="fields-count-badge">{commonExtraFields.length} / 10 fields</span>
+                  <button className="app-btn-secondary" onClick={addField} disabled={commonExtraFields.length >= 10}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '0.375rem' }}>
+                      <line x1="12" y1="5" x2="12" y2="19"></line>
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Add Shared Field
                   </button>
                 </div>
 
                 {commonExtraFields.length === 0 ? (
-                  <p className="no-data">No custom fields defined yet.</p>
+                  <div className="no-custom-fields-premium">
+                    <div className="no-fields-icon">✨</div>
+                    <h4>No Shared Fields Defined</h4>
+                    <p>Add shared custom fields to automatically sync user profile schema requirements across all apps in this group.</p>
+                  </div>
                 ) : (
-                  <div className="fields-grid">
+                  <div className="fields-grid-premium">
                     {commonExtraFields.map((f, idx) => (
-                      <div className="field-row" key={idx}>
-                        <input
-                          className="field-input name"
-                          placeholder="field_name"
-                          value={f.name}
-                          onChange={(e) => updateField(idx, 'name', e.target.value)}
-                        />
-                        <input
-                          className="field-input label"
-                          placeholder="Label (optional)"
-                          value={f.label || ''}
-                          onChange={(e) => updateField(idx, 'label', e.target.value)}
-                        />
-                        <select
-                          className="field-select"
-                          value={f.type}
-                          onChange={(e) => updateField(idx, 'type', e.target.value)}
-                        >
-                          <option value="text">Text</option>
-                          <option value="integer">Integer</option>
-                          <option value="boolean">Boolean</option>
-                          <option value="date">Date</option>
-                          <option value="json">JSON</option>
-                        </select>
-                        <label className="field-checkbox">
-                          <input
-                            type="checkbox"
-                            checked={!!f.editable_by_user}
-                            onChange={(e) => updateField(idx, 'editable_by_user', e.target.checked)}
-                          />
-                          Editable
-                        </label>
-                        <button className="btn-danger small" onClick={() => removeField(idx)}>
-                          Remove
-                        </button>
+                      <div className="custom-field-row" key={idx}>
+                        <div className="field-index-badge">
+                          <span>#{idx + 1}</span>
+                        </div>
+
+                        <div className="field-inputs-container">
+                          <div className="field-input-wrapper">
+                            <label className="field-input-label">Key Name</label>
+                            <input
+                              className="custom-field-input name"
+                              placeholder="e.g., telephone"
+                              value={f.name}
+                              onChange={(e) => updateField(idx, 'name', e.target.value)}
+                            />
+                          </div>
+
+                          <div className="field-input-wrapper flex-grow">
+                            <label className="field-input-label">Display Label</label>
+                            <input
+                              className="custom-field-input label"
+                              placeholder="e.g., Telephone"
+                              value={f.label || ''}
+                              onChange={(e) => updateField(idx, 'label', e.target.value)}
+                            />
+                          </div>
+
+                          <div className="field-input-wrapper">
+                            <label className="field-input-label">Data Type</label>
+                            <select
+                              className="custom-field-select"
+                              value={f.type}
+                              onChange={(e) => updateField(idx, 'type', e.target.value)}
+                            >
+                              <option value="text">Text (String)</option>
+                              <option value="integer">Integer (Number)</option>
+                              <option value="boolean">Boolean</option>
+                              <option value="date">Date</option>
+                              <option value="json">JSON Object</option>
+                            </select>
+                          </div>
+
+                          <div className="field-switch-wrapper">
+                            <label className="field-input-label">User Editable</label>
+                            <label className="custom-switch-label">
+                              <input 
+                                type="checkbox" 
+                                className="custom-switch-input"
+                                checked={!!f.editable_by_user} 
+                                onChange={(e) => updateField(idx, 'editable_by_user', e.target.checked)} 
+                              />
+                              <span className="custom-switch-slider"></span>
+                            </label>
+                          </div>
+                        </div>
+
+                        <div className="field-row-actions">
+                          <button 
+                            className="remove-field-action-btn" 
+                            onClick={() => removeField(idx)} 
+                            title="Delete custom field"
+                            type="button"
+                          >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6"></polyline>
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                              <line x1="10" y1="11" x2="10" y2="17"></line>
+                              <line x1="14" y1="11" x2="14" y2="17"></line>
+                            </svg>
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
                 )}
 
-                <div className="fields-actions">
-                  <button className="btn-primary" onClick={saveExtraFields} disabled={saving || !fieldsDirty}>
-                    {saving ? '💾 Saving...' : '✓ Save & Apply to All Apps'}
-                  </button>
-                  <button
-                    className="btn-ghost"
-                    onClick={() => {
-                      fetchGroupSettings();
-                      setFieldsDirty(false);
-                    }}
-                  >
-                    Cancel
-                  </button>
+                <div className="custom-fields-footer-actions">
+                  <div></div>
+                  <div className="save-cancel-group">
+                    <button
+                      className="app-btn-ghost"
+                      onClick={() => {
+                        fetchGroupSettings();
+                        setFieldsDirty(false);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button className="app-btn-primary" onClick={saveExtraFields} disabled={saving || !fieldsDirty}>
+                      {saving ? 'Saving...' : '✓ Save & Apply to All Apps'}
+                    </button>
+                  </div>
                 </div>
               </>
             )}

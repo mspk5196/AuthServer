@@ -214,7 +214,6 @@ const Register = () => {
                   type="checkbox"
                   checked={acceptPolicies}
                   onChange={(e) => setAcceptPolicies(e.target.checked)}
-                  style={{ marginRight: '0.5rem' }}
                 />
                 <span>
                   I agree to the Terms, Privacy Policy and Refund Policy.
@@ -261,7 +260,7 @@ const Register = () => {
                 </p>
               </div>
 
-              <div style={{ marginTop: '1.5rem' }}>
+              <div className="success-action">
                 <button
                   onClick={() => navigate('/login')}
                   className="btn btn-primary btn-block btn-lg"

@@ -118,18 +118,18 @@ const Dashboard = () => {
             >
               {openingCpanel ? 'Opening cPanel…' : 'Open cPanel'}
             </button>
-            <Link to="/policies" className="btn btn-outline btn-large" style={{ marginLeft: '1rem' }}>
+            <Link to="/policies" className="btn btn-outline btn-large">
               View Policies
             </Link>
-            <p style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: '#6b7280' }}>
+            <p>
               If cPanel shows a blank page or session error, your session may have expired.
               Close it and click <strong>Open cPanel</strong> again after logging in.
             </p>
           </div>
 
-          <div className="demo-project-card" style={{ marginTop: '1.5rem', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
-            <h3 style={{ marginBottom: '0.5rem' }}>Demo Client Project</h3>
-            <p style={{ marginBottom: '0.75rem', fontSize: '0.9rem', color: '#4b5563' }}>
+          <div className="demo-project-card">
+            <h3>Demo Client Project</h3>
+            <p>
               Try our open-source demo client that already integrates with this
               authentication platform. Use it as a reference or starter for your own apps.
             </p>

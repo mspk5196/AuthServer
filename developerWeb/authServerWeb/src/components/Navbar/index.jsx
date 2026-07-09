@@ -22,7 +22,6 @@ const Navbar = () => {
             <img
               src="/logo.png"
               alt="MSPK™ Apps"
-              style={{ height: '40px', width: '40px', borderRadius: '8px' }}
             />
           </span>
           <span className="brand-name">Auth Platform</span>

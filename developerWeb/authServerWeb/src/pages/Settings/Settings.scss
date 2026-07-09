@@ -1,152 +1,188 @@
+@use '../../styles/variables' as *;
+
 .settings-page {
-  padding: 2rem;
-  max-width: 900px;
+  padding: 3rem 1.5rem;
+  max-width: 960px;
   margin: 0 auto;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+
+  @include mobile {
+    padding: 1.5rem 1rem;
+  }
 }
 
 .settings-container {
-  background: white;
-  border-radius: 1rem;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
   overflow: hidden;
 }
 
 .settings-title {
-  padding: 2rem 2rem 1rem;
+  padding: 2.5rem 2.5rem 1.25rem;
   margin: 0;
-  font-size: 2rem;
-  font-weight: 700;
-  color: #1e293b;
+  font-size: 2.25rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #0f172a;
+
+  @include mobile {
+    padding: 1.75rem 1.25rem 1rem;
+    font-size: 1.75rem;
+  }
 }
 
 .settings-tabs {
   display: flex;
-  border-bottom: 2px solid #e2e8f0;
-  padding: 0 2rem;
-  gap: 0.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0 2.5rem;
+  gap: 1.5rem;
+
+  @include mobile {
+    padding: 0 1.25rem;
+    gap: 0.75rem;
+  }
 }
 
 .tab {
-  padding: 1rem 1.5rem;
+  padding: 1rem 0.5rem;
   background: none;
   border: none;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: #64748b;
   cursor: pointer;
-  border-bottom: 3px solid transparent;
-  margin-bottom: -2px;
-  transition: all 0.3s ease;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s ease;
 
   &:hover {
-    color: #475569;
-    background: #f8fafc;
+    color: #334155;
   }
 
   &.active {
-    color: #667eea;
-    border-bottom-color: #667eea;
+    color: $primary-color;
+    border-bottom-color: $primary-color;
   }
 }
 
 .alert {
-  margin: 1.5rem 2rem;
-  padding: 1rem;
-  border-radius: 0.5rem;
+  margin: 1.5rem 2.5rem;
+  padding: 1rem 1.25rem;
+  border-radius: 8px;
   font-size: 0.875rem;
+  font-weight: 500;
+
+  @include mobile {
+    margin: 1.25rem;
+  }
 
   &.alert-success {
-    background-color: #d1fae5;
+    background-color: #ecfdf5;
     color: #065f46;
-    border: 1px solid #10b981;
+    border: 1px solid #a7f3d0;
   }
 
   &.alert-error {
-    background-color: #fee2e2;
+    background-color: #fef2f2;
     color: #991b1b;
-    border: 1px solid #ef4444;
+    border: 1px solid #fca5a5;
   }
 
   &.alert-warning {
-    background-color: #fef3c7;
+    background-color: #fffbeb;
     color: #92400e;
-    border: 1px solid #f59e0b;
+    border: 1px solid #fde68a;
   }
 }
 
 .settings-content {
-  padding: 2rem;
+  padding: 2.5rem;
+
+  @include mobile {
+    padding: 1.5rem 1.25rem;
+  }
 
   h2 {
     font-size: 1.5rem;
     font-weight: 700;
-    color: #1e293b;
-    margin-bottom: 1.5rem;
+    color: #0f172a;
+    margin-bottom: 2rem;
+    letter-spacing: -0.02em;
   }
 }
 
 .form-group {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.75rem;
 
   label {
     display: block;
-    font-weight: 600;
+    font-weight: 700;
     color: #475569;
     margin-bottom: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.8125rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
   input {
     width: 100%;
-    padding: 0.75rem;
-    border: 1px solid #e2e8f0;
-    border-radius: 0.5rem;
-    font-size: 1rem;
-    transition: border-color 0.3s ease;
+    padding: 0.75rem 1rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    background: #f8fafc;
+    transition: all 0.2s ease;
 
     &:focus {
       outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      border-color: $primary-color;
+      background: #ffffff;
+      box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
     }
   }
 
   .form-hint {
     display: block;
-    margin-top: 0.25rem;
-    font-size: 0.75rem;
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
     color: #64748b;
+    font-weight: 500;
   }
 }
 
 .verification-badge {
+  margin-top: 0.25rem;
+
   .badge {
-    display: inline-block;
-    padding: 0.5rem 1rem;
-    border-radius: 0.375rem;
-    font-size: 0.875rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.875rem;
+    border-radius: 9999px;
+    font-size: 0.8125rem;
     font-weight: 600;
 
     &.badge-success {
-      background-color: #d1fae5;
+      background-color: #ecfdf5;
       color: #065f46;
     }
 
     &.badge-warning {
-      background-color: #fef3c7;
-      color: #92400e;
+      background-color: #fffbeb;
+      color: #d97706;
     }
   }
 }
 
 .btn {
-  padding: 0.75rem 1.5rem;
+  padding: 0.625rem 1.5rem;
   border: none;
-  border-radius: 0.5rem;
-  font-size: 1rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
 
   &:disabled {
     opacity: 0.6;
@@ -154,22 +190,24 @@
   }
 
   &.btn-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    color: #ffffff;
+    box-shadow: 0 2px 4px rgba(79, 70, 229, 0.15);
 
     &:hover:not(:disabled) {
-      transform: translateY(-2px);
-      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 6px rgba(79, 70, 229, 0.2);
     }
   }
 
   &.btn-success {
     background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    color: white;
+    color: #ffffff;
+    box-shadow: 0 2px 4px rgba(16, 185, 129, 0.15);
 
     &:hover:not(:disabled) {
-      transform: translateY(-2px);
-      box-shadow: 0 5px 15px rgba(16, 185, 129, 0.4);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 6px rgba(16, 185, 129, 0.2);
     }
   }
 }
@@ -178,49 +216,22 @@
 .password-options {
   .option-card {
     border: 1px solid #e2e8f0;
-    border-radius: 0.75rem;
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
+    border-radius: 12px;
+    padding: 2rem;
+    background: #ffffff;
 
     h3 {
-      margin: 0 0 0.75rem;
-      font-size: 1.125rem;
-      font-weight: 600;
-      color: #1e293b;
+      margin: 0 0 0.5rem;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #0f172a;
     }
 
     p {
       color: #64748b;
-      margin-bottom: 1rem;
-      font-size: 0.9375rem;
+      margin-bottom: 1.5rem;
+      font-size: 0.95rem;
       line-height: 1.6;
-    }
-  }
-
-  .divider-text {
-    text-align: center;
-    margin: 2rem 0;
-    position: relative;
-    color: #64748b;
-    font-size: 0.875rem;
-    font-weight: 600;
-
-    &::before,
-    &::after {
-      content: '';
-      position: absolute;
-      top: 50%;
-      width: 45%;
-      height: 1px;
-      background: #e2e8f0;
-    }
-
-    &::before {
-      left: 0;
-    }
-
-    &::after {
-      right: 0;
     }
   }
 }
@@ -228,60 +239,94 @@
 // Plan info card
 .plan-info-card {
   border: 1px solid #e2e8f0;
-  border-radius: 0.75rem;
+  border-radius: 12px;
   overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
 .plan-info-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem;
-  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  padding: 1.5rem 2rem;
+  background: #f8fafc;
   border-bottom: 1px solid #e2e8f0;
+
+  @include mobile {
+    padding: 1.25rem 1rem;
+  }
 
   h3 {
     margin: 0;
-    font-size: 1.5rem;
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #0f172a;
+  }
+
+  .badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
     font-weight: 700;
-    color: #1e293b;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+
+    &.badge-success {
+      background-color: #ecfdf5;
+      color: #10b981;
+    }
+
+    &.badge-warning {
+      background-color: #fffbeb;
+      color: #d97706;
+    }
   }
 }
 
 .plan-info-body {
-  padding: 1.5rem;
+  padding: 2rem;
+
+  @include mobile {
+    padding: 1.25rem 1rem;
+  }
 }
 
 .plan-detail {
   display: flex;
   justify-content: space-between;
-  padding: 0.75rem 0;
+  padding: 0.875rem 0;
   border-bottom: 1px solid #f1f5f9;
+  font-size: 0.95rem;
 
-  &:last-child {
+  &:last-of-type {
     border-bottom: none;
   }
 
   .label {
     font-weight: 600;
-    color: #64748b;
+    color: #475569;
   }
 
   .value {
-    color: #1e293b;
+    color: #0f172a;
+    font-weight: 500;
   }
 }
 
 .plan-features {
-  margin-top: 1.5rem;
+  margin-top: 2rem;
   padding-top: 1.5rem;
   border-top: 1px solid #e2e8f0;
 
-  h4 {
-    margin: 0 0 1rem;
-    font-size: 1rem;
-    font-weight: 600;
+  .label {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
     color: #475569;
+    margin-bottom: 1rem;
   }
 
   ul {
@@ -292,39 +337,53 @@
     li {
       padding: 0.5rem 0;
       color: #475569;
+      font-size: 0.9rem;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
 
       &::before {
-        content: '✓ ';
+        content: '✓';
         color: #10b981;
         font-weight: 700;
+        font-size: 1.05rem;
       }
     }
   }
 }
 
 .plan-info-footer {
-  padding: 1.5rem;
+  padding: 1.5rem 2rem;
   background: #f8fafc;
   border-top: 1px solid #e2e8f0;
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+
+  @include mobile {
+    padding: 1.25rem 1rem;
+    flex-direction: column-reverse;
+    
+    button {
+      width: 100%;
+    }
+  }
 }
 
 .no-plan {
   text-align: center;
-  padding: 3rem;
+  padding: 3.5rem 2rem;
   color: #64748b;
 
   p {
     margin-bottom: 1.5rem;
-    font-size: 1.125rem;
+    font-size: 1.05rem;
+    font-weight: 500;
   }
 }
 
 @media (max-width: 768px) {
-  .settings-page {
-    padding: 1rem;
-  }
-
   .settings-tabs {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;

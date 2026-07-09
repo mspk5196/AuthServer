@@ -30,7 +30,7 @@ const Refund = () => {
         <h1>{content?.title || 'Refund & Cancellation Policy'}</h1>
 
         {error && (
-          <div className="alert alert-warning" style={{ marginBottom: '1rem' }}>
+          <div className="alert alert-warning">
             {error}
           </div>
         )}

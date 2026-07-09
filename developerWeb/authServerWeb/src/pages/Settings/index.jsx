@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../utils/api';
@@ -314,9 +314,9 @@ const Settings = () => {
                 <label>Email Verification Status</label>
                 <div className="verification-badge">
                   {developer?.email_verified ? (
-                    <span className="badge badge-success">âœ“ Verified</span>
+                    <span className="badge badge-success">✓ Verified</span>
                   ) : (
-                    <span className="badge badge-warning">âš  Not Verified</span>
+                    <span className="badge badge-warning">⚠️ Not Verified</span>
                   )}
                 </div>
               </div>
@@ -362,12 +362,12 @@ const Settings = () => {
               if (days === null) return null;
               if (days < 0) return (
                 <div className="alert alert-error" style={{ marginBottom: '16px' }}>
-                  ⚠ Your plan has expired. Renew now to continue using API features.
+                  ⚠️ Your plan has expired. Renew now to continue using API features.
                 </div>
               );
               if (days <= 7) return (
                 <div className="alert alert-warning" style={{ marginBottom: '16px' }}>
-                  ⚠ Your plan expires in <strong>{days} day{days !== 1 ? 's' : ''}</strong>. Renew before it runs out to avoid any interruption.
+                  ⚠️ Your plan expires in <strong>{days} day{days !== 1 ? 's' : ''}</strong>. Renew before it runs out to avoid any interruption.
                 </div>
               );
               return null;
@@ -386,7 +386,7 @@ const Settings = () => {
                   <div className="plan-detail">
                     <span className="label">Price:</span>
                     <span className="value">
-                      {currentPlan.price ? `â‚¹${parseFloat(currentPlan.price).toFixed(2)}` : 'Free'}
+                      {currentPlan.price ? `₹${parseFloat(currentPlan.price).toFixed(2)}` : 'Free'}
                     </span>
                   </div>
 

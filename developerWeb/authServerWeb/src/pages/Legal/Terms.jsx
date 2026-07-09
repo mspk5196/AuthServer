@@ -34,7 +34,7 @@ const Terms = () => {
         <h1>{content?.title || 'Terms & Conditions'}</h1>
 
         {error && (
-          <div className="alert alert-warning" style={{ marginBottom: '1rem' }}>
+          <div className="alert alert-warning">
             {error}
           </div>
         )}

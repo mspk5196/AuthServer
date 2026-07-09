@@ -30,7 +30,7 @@ const Privacy = () => {
         <h1>{content?.title || 'Privacy Policy'}</h1>
 
         {error && (
-          <div className="alert alert-warning" style={{ marginBottom: '1rem' }}>
+          <div className="alert alert-warning">
             {error}
           </div>
         )}

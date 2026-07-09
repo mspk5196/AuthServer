@@ -267,33 +267,27 @@ const Login = () => {
         title="Policy Acceptance Required"
       >
         <div className="oauth-policy-modal">
-          <p style={{ marginBottom: '1rem', lineHeight: '1.6' }}>
+          <p>
             To continue with Google sign-in, you need to review and accept our latest policies.
           </p>
           
-          <div style={{ marginBottom: '1.5rem' }}>
+          <div className="policy-link-wrapper">
             <Link 
               to="/policies" 
               target="_blank"
               rel="noopener noreferrer"
-              style={{ 
-                color: '#4285F4', 
-                textDecoration: 'underline',
-                fontSize: '0.95rem'
-              }}
             >
               View all policies (opens in new tab)
             </Link>
           </div>
 
-          <label className="policy-checkbox" style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+          <label className="policy-checkbox">
             <input
               type="checkbox"
               checked={oauthPolicyAccepted}
               onChange={(e) => setOauthPolicyAccepted(e.target.checked)}
-              style={{ marginTop: '0.25rem' }}
             />
-            <span style={{ lineHeight: '1.5' }}>
+            <span>
               I have read and agree to the{' '}
               <Link to="/terms" target="_blank" rel="noopener noreferrer">Terms</Link>,{' '}
               <Link to="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</Link>, and{' '}
@@ -306,7 +300,6 @@ const Login = () => {
             className="btn btn-primary btn-block btn-lg"
             onClick={handleAcceptOAuthPolicies}
             disabled={!oauthPolicyAccepted || acceptingOAuthPolicies}
-            style={{ marginTop: '1.5rem' }}
           >
             {acceptingOAuthPolicies ? 'Accepting...' : 'Accept & Continue with Google'}
           </button>
@@ -327,22 +320,14 @@ const Login = () => {
           )}
 
           {unverifiedEmail && (
-            <div className="alert alert-warning" style={{ marginTop: '1rem' }}>
-              <p style={{ marginBottom: '0.5rem' }}>
+            <div className="alert alert-warning unverified-alert">
+              <p>
                 Your email is not verified yet.
               </p>
               <button
                 onClick={handleResendVerification}
                 disabled={resendingEmail}
-                className="btn btn-sm"
-                style={{ 
-                  marginTop: '0.5rem',
-                  padding: '0.5rem 1rem',
-                  fontSize: '0.9rem',
-                  backgroundColor: '#fff',
-                  color: '#856404',
-                  border: '1px solid #856404'
-                }}
+                className="btn btn-sm btn-resend"
               >
                 {resendingEmail ? 'Sending...' : 'Resend Verification Email'}
               </button>
@@ -404,7 +389,7 @@ const Login = () => {
                 <p className="policy-intro">
                   To continue, please review and accept the following policies. You can also read them any time on the public pages.
                 </p>
-                <p className="policy-intro" style={{ marginTop: '0.25rem' }}>
+                <p className="policy-intro">
                   You can open the full documents here:
                   {' '}
                   <Link to="/policies">All Policies</Link>,{' '}
@@ -439,7 +424,6 @@ const Login = () => {
                     className="btn btn-primary btn-block btn-lg"
                     onClick={handleAcceptPolicies}
                     disabled={!policyAccepted || acceptingPolicies}
-                    style={{ marginTop: '0.75rem' }}
                   >
                     {acceptingPolicies ? 'Saving acceptance...' : 'Accept & Continue'}
                   </button>
@@ -458,7 +442,7 @@ const Login = () => {
                 window.location.href = `${API_BASE_URL}/developer/auth/google`;
               }}
             >
-              <svg viewBox="0 0 24 24" width="20" height="20" style={{ marginRight: '10px' }}>
+              <svg viewBox="0 0 24 24" width="20" height="20">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                 <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>

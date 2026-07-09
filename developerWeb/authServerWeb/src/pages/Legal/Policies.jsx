@@ -45,20 +45,20 @@ const Policies = () => {
     <div className="legal-page">
       <div className="container">
         <h1>Platform Policies</h1>
-        <p className="policy-intro" style={{ marginTop: '0.75rem', marginBottom: '1.5rem' }}>
+        <p className="policy-intro">
           Select a policy below to view its full details on the dedicated page.
         </p>
 
         {error && (
-          <div className="alert alert-warning" style={{ marginBottom: '1rem' }}>
+          <div className="alert alert-warning">
             {error}
           </div>
         )}
 
         {loading ? (
-          <p>Loading policies...</p>
+          <p className="policy-loading">Loading policies...</p>
         ) : policies.length === 0 ? (
-          <p>No active policies are configured yet. Please check back later.</p>
+          <p className="policy-empty">No active policies are configured yet. Please check back later.</p>
         ) : (
           <div className="policy-selector-grid">
             {policies.map((policy) => {
@@ -68,7 +68,7 @@ const Policies = () => {
                   <h2>{policy.title}</h2>
                   <p className="policy-key">Key: {policy.key}</p>
                   <p className="policy-version">Version: {policy.version}</p>
-                  <Link to={path} className="btn btn-primary" style={{ marginTop: '0.75rem' }}>
+                  <Link to={path} className="btn btn-primary">
                     View Policy
                   </Link>
                 </div>

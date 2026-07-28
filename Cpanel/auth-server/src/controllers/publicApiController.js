@@ -1513,9 +1513,10 @@ const completePasswordReset = async (req, res) => {
 
     // Find valid reset token and get current password
     const result = await pool.query(`
-      SELECT pr.id, pr.user_id, u.password_hash, u.email
+      SELECT pr.id, pr.user_id, u.password_hash, u.email, u.app_id, a.app_name, a.support_email
       FROM password_resets pr
       JOIN users u ON pr.user_id = u.id
+      JOIN dev_apps a ON u.app_id = a.id
       WHERE pr.token = $1 AND pr.expires_at > NOW() AND pr.used = false
     `, [token]);
 
@@ -1563,7 +1564,7 @@ const completePasswordReset = async (req, res) => {
     sendMail({
       to: resetRecord.email,
       subject: 'Account password changed successfully',
-      html: buildPasswordChangedEmail({ appName: app.app_name, changedAt: new Date().toLocaleString(), supportEmail: app.support_email }),
+      html: buildPasswordChangedEmail({ appName: resetRecord.app_name, changedAt: new Date().toLocaleString(), supportEmail: resetRecord.support_email }),
     }).catch(err => console.error('Send verification email error:', err));
 
     res.json({
@@ -1708,7 +1709,7 @@ const verifyDeleteEmail = async (req, res) => {
     const verification = result.rows[0];
 
     const appData = await pool.query(
-      'SELECT app_name FROM dev_apps WHERE id = $1',
+      'SELECT app_name, support_email FROM dev_apps WHERE id = $1',
       [verification.app_id]
     );
     const app = appData.rows[0];
@@ -2498,9 +2499,9 @@ const verifyEmailSetPasswordGoogleUser = async (req, res) => {
         });
       }
 
-      // Get user
+      // Get user and app details
       const userRes = await pool.query(
-        'SELECT id, email, password_hash FROM users WHERE id = $1 AND app_id = $2',
+        'SELECT u.id, u.email, u.password_hash, a.app_name, a.support_email FROM users u JOIN dev_apps a ON u.app_id = a.id WHERE u.id = $1 AND u.app_id = $2',
         [verification.user_id, verification.app_id]
       );
 
@@ -2538,7 +2539,7 @@ const verifyEmailSetPasswordGoogleUser = async (req, res) => {
       sendMail({
         to: user.email,
         subject: 'Password linked to your account',
-        html: buildPasswordSetConfirmationEmail({ changedAt: new Date().toLocaleString(), supportEmail: 'Contact your app support.' }),
+        html: buildPasswordSetConfirmationEmail({ changedAt: new Date().toLocaleString(), supportEmail: user.support_email }),
       }).catch(err => console.error('Send password setup confirmation email error:', err));
 
       return res.json({
@@ -2762,7 +2763,7 @@ const verifyChangePassword = async (req, res) => {
 
     const verification = result.rows[0];
 
-    const appData = await pool.query('SELECT app_name FROM dev_apps WHERE id = $1', [verification.app_id]);
+    const appData = await pool.query('SELECT app_name, support_email FROM dev_apps WHERE id = $1', [verification.app_id]);
     const app = appData.rows[0] || { app_name: 'your app' };
 
     const userRes = await pool.query(

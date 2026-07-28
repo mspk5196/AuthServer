@@ -191,9 +191,15 @@ const buildPasswordChangeRequestEmail = ({ name, changeUrl }) => `
   <img src="https://mspkapps.in/logo.png" alt="MSPK Apps" style="height:40px;margin-bottom:16px;" />
   <h2>Password Change Request</h2>
   <p>Hello ${name},</p>
-  <p>You requested to change your password. Click the link below to proceed:</p>
-  <a href="${changeUrl}" target="_blank" style="color:#1a73e8;">Change Password</a>
-  <br /><br />
+  <p>You requested to change your password. Click the button below to proceed:</p>
+  <p style="margin: 20px 0;">
+    <a href="${changeUrl}" target="_blank" style="background-color: #1a73e8; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block; font-size: 14px;">Change Password</a>
+  </p>
+  <p style="font-size: 12px; color: #6b7280; margin-top: 10px;">
+    If the button above doesn't work, copy and paste this link into your browser:<br>
+    <a href="${changeUrl}" style="color: #1a73e8; word-break: break-all;">${changeUrl}</a>
+  </p>
+  <br />
   <p>This link will expire in 1 hour.</p>
   <p>If you didn't request this, please ignore this email.</p>
   <br />
@@ -206,9 +212,15 @@ const buildPasswordResetEmail = ({ name, resetUrl }) => `
   <img src="https://mspkapps.in/logo.png" alt="MSPK Apps" style="height:40px;margin-bottom:16px;" />
   <h2>Reset Your Password</h2>
   <p>Hello ${name},</p>
-  <p>You requested to reset your password. Click the link below to proceed:</p>
-  <a href="${resetUrl}" target="_blank" style="color:#1a73e8;">Reset Password</a>
-  <br /><br />
+  <p>You requested to reset your password. Click the button below to proceed:</p>
+  <p style="margin: 20px 0;">
+    <a href="${resetUrl}" target="_blank" style="background-color: #1a73e8; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block; font-size: 14px;">Reset Password</a>
+  </p>
+  <p style="font-size: 12px; color: #6b7280; margin-top: 10px;">
+    If the button above doesn't work, copy and paste this link into your browser:<br>
+    <a href="${resetUrl}" style="color: #1a73e8; word-break: break-all;">${resetUrl}</a>
+  </p>
+  <br />
   <p>This link will expire in 1 hour.</p>
   <p>If you didn't request this, please ignore this email.</p>
   <br />

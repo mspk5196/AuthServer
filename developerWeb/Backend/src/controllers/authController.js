@@ -203,7 +203,6 @@ const refreshToken = async (req, res) => {
     // Set cookies
     const accessMaxAge = parseExpiryToMs(process.env.JWT_EXPIRE || '15m');
     const refreshMaxAge = parseExpiryToMs(process.env.JWT_REFRESH_EXPIRE || '7d');
-    // const cookieOpts = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' };
     const cookieSecure = process.env.COOKIE_SECURE
       ? process.env.COOKIE_SECURE === 'true'
       : (process.env.NODE_ENV === 'production');
@@ -211,7 +210,7 @@ const refreshToken = async (req, res) => {
     const cookieOpts = {
       httpOnly: true,
       secure: cookieSecure,
-      sameSite: 'none',
+      sameSite: cookieSecure ? 'none' : 'lax',
       path: '/',
     };
     if (accessMaxAge) cookieOpts.maxAge = accessMaxAge;
@@ -245,10 +244,13 @@ const logout = async (req, res) => {
 
     // Clear cookies
     const cookieDomain = (() => {
-      try { return new URL(process.env.BACKEND_URL || '').hostname; } catch (e) { return undefined; }
+      try {
+        const h = new URL(process.env.BACKEND_URL || '').hostname;
+        return (h && h !== 'localhost' && h !== '127.0.0.1') ? h : undefined;
+      } catch (e) { return undefined; }
     })();
     const cookieSecure = process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : (process.env.NODE_ENV === 'production');
-    const clearOpts = { httpOnly: true, secure: cookieSecure, sameSite: 'none', maxAge: 0, path: '/' };
+    const clearOpts = { httpOnly: true, secure: cookieSecure, sameSite: cookieSecure ? 'none' : 'lax', maxAge: 0, path: '/' };
     if (cookieDomain) clearOpts.domain = cookieDomain;
     res.cookie('access_token', '', clearOpts);
     res.cookie('refresh_token', '', clearOpts);
@@ -318,11 +320,14 @@ const exchangeOAuthTokens = async (req, res) => {
       }
     };
 
-    const accessMaxAge = parseExpiryToMs(process.env.JWT_EXPIRE || '15m');
-    const refreshMaxAge = parseExpiryToMs(process.env.JWT_REFRESH_EXPIRE || '7d');
-    const cookieDomain = (() => { try { return new URL(process.env.BACKEND_URL || '').hostname; } catch(e) { return undefined; } })();
+    const cookieDomain = (() => {
+      try {
+        const h = new URL(process.env.BACKEND_URL || '').hostname;
+        return (h && h !== 'localhost' && h !== '127.0.0.1') ? h : undefined;
+      } catch(e) { return undefined; }
+    })();
     const cookieSecure = process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : (process.env.NODE_ENV === 'production');
-    const cookieOpts = { httpOnly: true, secure: cookieSecure, sameSite: 'none', path: '/' };
+    const cookieOpts = { httpOnly: true, secure: cookieSecure, sameSite: cookieSecure ? 'none' : 'lax', path: '/' };
     if (cookieDomain) cookieOpts.domain = cookieDomain;
     if (accessMaxAge) cookieOpts.maxAge = accessMaxAge;
 

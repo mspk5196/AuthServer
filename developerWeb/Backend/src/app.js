@@ -1,3 +1,9 @@
+const path = require('path');
+const appDir = path.resolve(__dirname, '..');
+require('dotenv').config({ path: path.join(appDir, '.env.local') });
+require('dotenv').config({ path: path.join(appDir, '.env') });
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -20,6 +26,36 @@ getRedis().catch(console.error);
 const app = express();
 
 const API_VERSION = process.env.API_VERSION || 'v1';
+
+// Dynamic CORS handling: supports production FRONTEND_URL and local dev origins with credentials
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  process.env.BASE_URL,
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:3000',
+  'http://localhost:4000',
+  'http://localhost:4001',
+  'http://localhost:4002',
+].filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (
+      allowedOrigins.includes(origin) ||
+      /^http:\/\/localhost(:\d+)?$/.test(origin) ||
+      /^http:\/\/127\.0\.0\.1(:\d+)?$/.test(origin) ||
+      origin.endsWith('.mspkapps.in')
+    ) {
+      return callback(null, true);
+    }
+    return callback(null, true);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-csrf-token'],
+}));
 
 // Capture raw body for webhook HMAC signature verification
 app.use(express.json({

@@ -82,11 +82,14 @@ const consumeTicket = async (req, res) => {
     const accessMaxAge = parseExpiryToMs(process.env.JWT_EXPIRE || '15m');
     const refreshMaxAge = parseExpiryToMs(process.env.JWT_REFRESH_EXPIRE || '7d');
 
+    const isProd = process.env.NODE_ENV === 'production';
     const cookieDomain = process.env.COOKIE_DOMAIN || undefined; // e.g. .mspkapps.in
+    const isLocal = !isProd || !cookieDomain;
+
     const cookieOpts = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'none', // required for cross-site cookie usage
+      secure: !isLocal,
+      sameSite: isLocal ? 'lax' : 'none',
       domain: cookieDomain,
     };
     if (accessMaxAge) cookieOpts.maxAge = accessMaxAge;

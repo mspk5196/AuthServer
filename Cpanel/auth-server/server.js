@@ -1,4 +1,8 @@
+const path = require('path');
 const dotenv = require('dotenv');
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+dotenv.config({ path: path.join(__dirname, '.env.local') });
+dotenv.config({ path: path.join(__dirname, '.env') });
 dotenv.config();
 
 const http = require('http');

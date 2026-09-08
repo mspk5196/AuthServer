@@ -1,25 +1,11 @@
-require('dotenv').config();
 const Razorpay = require('razorpay');
 const pool = require('../config/db');
 const { sendMail } = require('../utils/mailer');
 const { buildPlanChangeEmail, buildReceiptEmail } = require('../templates/emailTemplates');
 
-// Safe lazy Razorpay instance to prevent errors on startup if env vars are missing
-let razorpayInstance = null;
-const getRazorpayInstance = () => {
-  if (!razorpayInstance) {
-    razorpayInstance = new Razorpay({
-      key_id: process.env.RAZORPAY_KEY_ID || '',
-      key_secret: process.env.RAZORPAY_KEY_SECRET || '',
-    });
-  }
-  return razorpayInstance;
-};
-
-const razorpay = new Proxy({}, {
-  get(target, prop) {
-    return getRazorpayInstance()[prop];
-  }
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
 /**
@@ -37,6 +23,13 @@ const generateReceiptNumber = async (client) => {
 
 /**
  * Idempotent processor for successful payments.
+ * Handles:
+ * - Updating dev_payment_orders to 'paid'
+ * - Activating / renewing / upgrading plan in developer_plan_registrations
+ * - Resetting last_expiry_reminder_at and clearing outdated expiry reminders
+ * - Generating receipt in dev_payment_receipts
+ * - Recording in dev_plan_change_history
+ * - Sending confirmation and receipt emails
  *
  * @param {object} params
  * @param {string} params.orderId - Razorpay order ID (e.g. 'order_xxx')
@@ -282,7 +275,7 @@ const processSuccessfulPayment = async ({ orderId, paymentId, paymentMethod, dev
 
     await client.query('COMMIT');
 
-    // 10. Send notification emails
+    // 10. Send asynchronous notification emails
     const subjectMap = {
       initial_purchase: 'Plan Purchased - Auth Platform',
       upgrade: 'Plan Upgraded - Auth Platform',
@@ -345,3 +338,4 @@ module.exports = {
   generateReceiptNumber,
   razorpay,
 };
+

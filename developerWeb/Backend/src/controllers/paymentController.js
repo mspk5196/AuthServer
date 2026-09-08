@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const pool = require('../config/db');
 const { processSuccessfulPayment, razorpay } = require('../services/paymentProcessor');
+const { checkOrderStatus, handleMobileCallback } = require('./v2/paymentControllerV2');
 
 /**
  * Create Razorpay order for plan purchase
@@ -285,5 +286,7 @@ module.exports = {
   createOrder,
   verifyPayment,
   getPaymentHistory,
-  handleWebhook
+  handleWebhook,
+  checkOrderStatus,
+  handleMobileCallback,
 };

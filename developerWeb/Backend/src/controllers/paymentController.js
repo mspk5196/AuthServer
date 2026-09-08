@@ -1,14 +1,6 @@
-const Razorpay = require('razorpay');
 const crypto = require('crypto');
 const pool = require('../config/db');
-const { sendMail } = require('../utils/mailer');
-const { buildPlanChangeEmail } = require('../templates/emailTemplates');
-
-// Initialize Razorpay instance
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
+const { processSuccessfulPayment, razorpay } = require('../services/paymentProcessor');
 
 /**
  * Create Razorpay order for plan purchase
@@ -63,7 +55,6 @@ const createOrder = async (req, res) => {
     const developer = devResult.rows[0];
 
     // Create Razorpay order
-    // Receipt must be max 40 chars
     const receiptId = `rcpt_${Date.now()}`.slice(0, 40);
     
     const options = {
@@ -114,8 +105,6 @@ const createOrder = async (req, res) => {
  * Verify Razorpay payment signature
  */
 const verifyPayment = async (req, res) => {
-  const client = await pool.connect();
-
   try {
     const developerId = req.user.userId;
     const { 
@@ -144,190 +133,29 @@ const verifyPayment = async (req, res) => {
       });
     }
 
-    await client.query('BEGIN');
-
-    // Get order details
-    const orderResult = await client.query(
-      'SELECT id, developer_id, plan_id, amount, status FROM dev_payment_orders WHERE order_id = $1',
-      [razorpay_order_id]
-    );
-
-    if (orderResult.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({
-        success: false,
-        message: 'Order not found'
-      });
-    }
-
-    const order = orderResult.rows[0];
-
-    // Verify developer owns this order
-    if (order.developer_id !== developerId) {
-      await client.query('ROLLBACK');
-      return res.status(403).json({
-        success: false,
-        message: 'Unauthorized access to order'
-      });
-    }
-
-    // Check if already processed
-    if (order.status === 'paid') {
-      await client.query('ROLLBACK');
-      return res.status(400).json({
-        success: false,
-        message: 'Payment already processed'
-      });
-    }
-
-    // Fetch payment details from Razorpay
-    const payment = await razorpay.payments.fetch(razorpay_payment_id);
-
-    // Update payment order
-    await client.query(
-      `UPDATE dev_payment_orders 
-       SET payment_id = $1, 
-           status = $2, 
-           payment_method = $3,
-           updated_at = NOW()
-       WHERE order_id = $4`,
-      [razorpay_payment_id, 'paid', payment.method, razorpay_order_id]
-    );
-
-    // Get plan details
-    const planResult = await client.query(
-      'SELECT id, name, duration_days, price FROM dev_plans WHERE id = $1',
-      [order.plan_id]
-    );
-
-    const plan = planResult.rows[0];
-
-    // Developer details for email
-    const devRes = await client.query(
-      'SELECT id, email, name FROM developers WHERE id = $1',
-      [developerId]
-    );
-
-    // Active plan (if any)
-    const existingPlanResult = await client.query(
-      'SELECT id, plan_id, start_date, end_date, renewal_count FROM developer_plan_registrations WHERE developer_id = $1 AND is_active = true',
-      [developerId]
-    );
-
-    const existingPlan = existingPlanResult.rows[0];
-    let oldPlanId = existingPlan ? existingPlan.plan_id : null;
-    let action = 'initial_purchase';
-    let registrationRow;
-
-    const isRenewal = existingPlan && existingPlan.plan_id === order.plan_id && plan.duration_days;
-
-    if (isRenewal) {
-      action = 'renewal';
-      const updated = await client.query(
-        `UPDATE developer_plan_registrations
-           SET end_date = COALESCE(end_date, NOW()) + INTERVAL '${plan.duration_days} days',
-               renewal_count = renewal_count + 1,
-               updated_at = NOW()
-         WHERE id = $1
-         RETURNING id, start_date, end_date`,
-        [existingPlan.id]
-      );
-      registrationRow = updated.rows[0];
-    } else {
-      const endDateExpr = plan.duration_days 
-        ? `NOW() + INTERVAL '${plan.duration_days} days'`
-        : 'NULL';
-
-      if (existingPlan) {
-        // Upgrade: reuse existing registration row to avoid
-        // duplicate (developer_id, is_active) conflicts.
-        action = 'upgrade';
-        const updated = await client.query(
-          `UPDATE developer_plan_registrations
-             SET plan_id = $2,
-                 start_date = NOW(),
-                 end_date = ${endDateExpr},
-                 renewal_count = 0,
-                 is_active = true,
-                 updated_at = NOW()
-           WHERE id = $1
-           RETURNING id, start_date, end_date`,
-          [existingPlan.id, order.plan_id]
-        );
-        registrationRow = updated.rows[0];
-      } else {
-        const inserted = await client.query(
-          `INSERT INTO developer_plan_registrations 
-            (developer_id, plan_id, start_date, end_date, is_active, renewal_count, auto_renew, created_at, updated_at)
-           VALUES ($1, $2, NOW(), ${endDateExpr}, true, 0, false, NOW(), NOW())
-           RETURNING id, start_date, end_date`,
-          [developerId, order.plan_id]
-        );
-
-        registrationRow = inserted.rows[0];
-      }
-    }
-
-    // Record plan change in history
-    await client.query(
-      `INSERT INTO dev_plan_change_history 
-        (developer_id, old_plan_id, new_plan_id, changed_at, change_reason, remarks)
-       VALUES ($1, $2, $3, NOW(), $4, $5)`,
-      [
-        developerId,
-        oldPlanId,
-        order.plan_id,
-        action,
-        `Paid ₹${order.amount} via ${payment.method}`
-      ]
-    );
-
-    await client.query('COMMIT');
-
-    const subjectMap = {
-      initial_purchase: 'Plan Purchased - Auth Platform',
-      upgrade: 'Plan Upgraded - Auth Platform',
-      renewal: 'Plan Renewed - Auth Platform'
-    };
-
-    try {
-      await sendMail({
-        to: devRes.rows[0].email,
-        subject: subjectMap[action] || 'Plan Updated - Auth Platform',
-        html: buildPlanChangeEmail({
-          name: devRes.rows[0].name,
-          planName: plan.name,
-          action,
-          startDate: registrationRow.start_date,
-          endDate: registrationRow.end_date,
-          changedAt: new Date().toLocaleString()
-        }),
-      });
-    } catch (emailError) {
-      console.error('Failed to send plan change notification:', emailError);
-    }
+    const result = await processSuccessfulPayment({
+      orderId: razorpay_order_id,
+      paymentId: razorpay_payment_id,
+      developerId,
+    });
 
     res.status(200).json({
       success: true,
       message: 'Payment verified and plan activated successfully',
       data: {
-        action,
+        action: result.action,
         paymentId: razorpay_payment_id,
         orderId: razorpay_order_id,
-        registration: registrationRow
+        registration: result.registration,
       }
     });
 
   } catch (error) {
-    await client.query('ROLLBACK');
     console.error('Verify payment error:', error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
-      message: 'Payment verification failed',
-      error: error.message
+      message: error.message || 'Payment verification failed',
     });
-  } finally {
-    client.release();
   }
 };
 
@@ -374,55 +202,75 @@ const getPaymentHistory = async (req, res) => {
 };
 
 /**
- * Webhook to handle Razorpay events
+ * Webhook to handle Razorpay events (server-to-server)
  */
 const handleWebhook = async (req, res) => {
   try {
     const signature = req.headers['x-razorpay-signature'];
-    const body = JSON.stringify(req.body);
+    const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+
+    if (!secret) {
+      console.warn('RAZORPAY_WEBHOOK_SECRET is not configured in .env');
+      return res.status(500).json({ success: false, message: 'Webhook secret not configured' });
+    }
+
+    // Use rawBody buffer if available, or fall back to stringified req.body
+    const rawPayload = req.rawBody || Buffer.from(JSON.stringify(req.body));
 
     // Verify webhook signature
     const expectedSignature = crypto
-      .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
-      .update(body)
+      .createHmac('sha256', secret)
+      .update(rawPayload)
       .digest('hex');
 
     if (signature !== expectedSignature) {
+      console.error('Webhook signature mismatch. Received:', signature, 'Expected:', expectedSignature);
       return res.status(400).json({ success: false, message: 'Invalid signature' });
     }
 
     const event = req.body.event;
-    const payload = req.body.payload.payment.entity;
+    const paymentEntity = req.body.payload?.payment?.entity;
+    const orderEntity = req.body.payload?.order?.entity;
 
-    // console.log    console.log('Razorpay webhook event:', event);
+    console.log('Razorpay webhook event received:', event);
 
-    // Handle different events
     switch (event) {
       case 'payment.captured':
-        // Payment was successful
-        await pool.query(
-          `UPDATE dev_payment_orders 
-           SET status = 'paid', 
-               payment_method = $1,
-               updated_at = NOW()
-           WHERE payment_id = $2`,
-          [payload.method, payload.id]
-        );
-        break;
+      case 'order.paid': {
+        const orderId = paymentEntity?.order_id || orderEntity?.id;
+        const paymentId = paymentEntity?.id;
+        const paymentMethod = paymentEntity?.method || 'unknown';
 
-      case 'payment.failed':
-        // Payment failed
-        await pool.query(
-          `UPDATE dev_payment_orders 
-           SET status = 'failed',
-               updated_at = NOW()
-           WHERE order_id = $1`,
-          [payload.order_id]
-        );
+        if (orderId) {
+          await processSuccessfulPayment({
+            orderId,
+            paymentId,
+            paymentMethod,
+          });
+          console.log(`Webhook successfully fulfilled payment for order ${orderId}`);
+        } else {
+          console.warn('Webhook payment.captured/order.paid missing orderId:', req.body);
+        }
         break;
+      }
+
+      case 'payment.failed': {
+        const orderId = paymentEntity?.order_id;
+        if (orderId) {
+          await pool.query(
+            `UPDATE dev_payment_orders 
+             SET status = 'failed',
+                 updated_at = NOW()
+             WHERE order_id = $1`,
+            [orderId]
+          );
+          console.log(`Webhook marked order ${orderId} as failed`);
+        }
+        break;
+      }
 
       default:
-        // console.log        console.log('Unhandled webhook event:', event);
+        console.log('Unhandled webhook event:', event);
     }
 
     res.status(200).json({ success: true });

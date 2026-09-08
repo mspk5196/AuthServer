@@ -59,6 +59,49 @@ const Settings = () => {
       });
     }
     fetchCurrentPlan();
+
+    // Check for query param redirection from mobile callback
+    const searchParams = new URLSearchParams(window.location.search);
+    const paymentParam = searchParams.get('payment');
+
+    if (paymentParam === 'success') {
+      setActiveTab('plan');
+      setRenewMsg({
+        type: 'success',
+        text: 'Payment successful and plan updated! Your new validity is now active.',
+      });
+      paymentService.clearPendingPayment();
+      fetchCurrentPlan();
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (paymentParam === 'failed') {
+      setActiveTab('plan');
+      setRenewMsg({
+        type: 'error',
+        text: 'Payment was not completed or failed. Please try again.',
+      });
+      paymentService.clearPendingPayment();
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else {
+      // Check localStorage for pending payment
+      const pending = paymentService.getPendingPayment();
+      if (pending?.orderId) {
+        paymentService.checkOrderStatus(pending.orderId)
+          .then((res) => {
+            if (res.status === 'paid' || res.data?.status === 'paid') {
+              paymentService.clearPendingPayment();
+              setActiveTab('plan');
+              setRenewMsg({
+                type: 'success',
+                text: 'Payment verified and plan renewed successfully!',
+              });
+              fetchCurrentPlan();
+            }
+          })
+          .catch((e) => {
+            console.warn('Pending payment verification failed on Settings mount:', e);
+          });
+      }
+    }
   }, [developer]);
 
   const fetchCurrentPlan = async () => {
@@ -184,6 +227,12 @@ const Settings = () => {
         orderResponse.data,
         async (razorpayResponse) => {
           try {
+            if (razorpayResponse?.registration || razorpayResponse?.alreadyProcessed) {
+              setRenewMsg({ type: 'success', text: 'Plan renewed successfully! Your expiry date has been extended.' });
+              fetchCurrentPlan();
+              return;
+            }
+
             const verifyResponse = await paymentService.verifyPayment({
               razorpay_order_id: razorpayResponse.razorpay_order_id,
               razorpay_payment_id: razorpayResponse.razorpay_payment_id,

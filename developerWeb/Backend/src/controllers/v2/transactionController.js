@@ -1,12 +1,51 @@
 const pool = require('../../config/db');
+const { processSuccessfulPayment, razorpay } = require('../../services/paymentProcessor');
 
 /**
  * GET /transactions
  * List all payments with their receipt numbers for the authenticated developer.
+ * Automatically reconciles any recent pending ('created') orders against Razorpay.
  */
 const getTransactions = async (req, res) => {
   try {
     const developerId = req.user.userId;
+
+    // Check for recent pending orders to reconcile against Razorpay (e.g. from mobile drop-offs)
+    try {
+      const pendingOrders = await pool.query(
+        `SELECT order_id FROM dev_payment_orders
+         WHERE developer_id = $1 AND status = 'created'
+           AND created_at > NOW() - INTERVAL '48 hours'
+         LIMIT 5`,
+        [developerId]
+      );
+
+      if (pendingOrders.rows.length > 0) {
+        await Promise.allSettled(
+          pendingOrders.rows.map(async (row) => {
+            try {
+              const payments = await razorpay.orders.fetchPayments(row.order_id);
+              const captured = (payments?.items || []).find(
+                (p) => p.status === 'captured' || p.status === 'authorized'
+              );
+              if (captured) {
+                await processSuccessfulPayment({
+                  orderId: row.order_id,
+                  paymentId: captured.id,
+                  paymentMethod: captured.method,
+                  developerId,
+                });
+                console.log(`Auto-reconciled order ${row.order_id} to paid`);
+              }
+            } catch (reconErr) {
+              console.warn(`Reconciliation check failed for order ${row.order_id}:`, reconErr.message);
+            }
+          })
+        );
+      }
+    } catch (checkErr) {
+      console.warn('Pending order check error:', checkErr.message);
+    }
 
     const result = await pool.query(
       `SELECT

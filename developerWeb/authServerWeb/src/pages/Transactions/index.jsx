@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import transactionService from '../../services/transactionService';
+import paymentService from '../../services/paymentService';
 import Modal from '../../components/Modal';
 import './Transactions.scss';
 
@@ -12,6 +13,7 @@ const Transactions = () => {
   const [receipt, setReceipt] = useState(null);
   const [receiptLoading, setReceiptLoading] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [checkingOrderId, setCheckingOrderId] = useState(null);
 
   useEffect(() => {
     fetchTransactions();
@@ -43,6 +45,27 @@ const Transactions = () => {
       setReceiptLoading(false);
     }
   }, []);
+
+  const handleCheckStatus = async (orderId) => {
+    if (!orderId) return;
+    try {
+      setCheckingOrderId(orderId);
+      const res = await paymentService.checkOrderStatus(orderId);
+      if (res.status === 'paid' || res.data?.status === 'paid') {
+        alert('Payment confirmed and receipt generated successfully!');
+      } else if (res.status === 'failed' || res.data?.status === 'failed') {
+        alert('Payment failed or was cancelled on Razorpay.');
+      } else {
+        alert('Payment is still pending on Razorpay.');
+      }
+      fetchTransactions();
+    } catch (err) {
+      console.error('Status check error:', err);
+      alert('Could not verify status with payment gateway. Please try again.');
+    } finally {
+      setCheckingOrderId(null);
+    }
+  };
 
   const handlePrintReceipt = () => {
     const content = document.getElementById('receipt-print-area');
@@ -175,7 +198,7 @@ const Transactions = () => {
                       )}
                     </td>
                     <td>
-                      {tx.receipt_id && (
+                      {tx.receipt_id ? (
                         <button
                           className="btn-receipt"
                           onClick={() => handleViewReceipt(tx.receipt_id)}
@@ -183,7 +206,16 @@ const Transactions = () => {
                         >
                           {receiptLoading ? '...' : 'View Receipt'}
                         </button>
-                      )}
+                      ) : tx.status === 'created' ? (
+                        <button
+                          className="btn-receipt"
+                          style={{ borderColor: '#f59e0b', color: '#b45309' }}
+                          onClick={() => handleCheckStatus(tx.order_id)}
+                          disabled={checkingOrderId === tx.order_id}
+                        >
+                          {checkingOrderId === tx.order_id ? 'Checking...' : 'Check Status'}
+                        </button>
+                      ) : null}
                     </td>
                   </tr>
                 ))}

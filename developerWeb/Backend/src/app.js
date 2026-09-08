@@ -21,7 +21,12 @@ const app = express();
 
 const API_VERSION = process.env.API_VERSION || 'v1';
 
-app.use(express.json());
+// Capture raw body for webhook HMAC signature verification
+app.use(express.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 app.use(express.urlencoded({ extended: true }));
 app.use(
   helmet({
@@ -38,7 +43,7 @@ app.use((req, res, next) => {
 });
 
 // Razorpay webhook — intentionally unversioned (Razorpay callback URL is fixed)
-app.post('/api/razorpay/webhook', express.raw({ type: 'application/json' }), paymentController.handleWebhook);
+app.post('/api/razorpay/webhook', paymentController.handleWebhook);
 
 // ── Stable versionless Google OAuth callback (never changes regardless of API_VERSION) ──
 app.get('/api/developer/auth/google/callback', require('./controllers/authController').googleCallback);
@@ -58,52 +63,6 @@ app.use('/api/v2/developer', usageRoutes);
 app.use('/api/v2/developer', authRoutes);
 app.use('/api/v2/cpanel', cPanelRoutes);
 
-// block all non-API routes
-app.use((req, res, next) => {
-  if (
-    req.path === '/health' ||
-    req.path === '/'
-  ) {
-    return next();
-  }
-
-  if (!req.path.startsWith('/api')) {
-    return res.status(404).json({ error: 'Not found' });
-  }
-
-  next();
-});
-
-// error handler (simple)
-app.use((err, req, res, next) => {
-  console.error('Unhandled Error:', err);
-  res.status(500).json({ error: 'Internal server error' });
-});
-
-module.exports = app;
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(
-  helmet({
-    crossOriginOpenerPolicy: false,
-    crossOriginResourcePolicy: false,
-    contentSecurityPolicy: false
-  })
-);
- 
-// simple request logger
-app.use((req, res, next) => {
-  console.log(`[${req.method}] ${req.url}`);
-  next();
-});
-
-// Razorpay webhook — intentionally unversioned (Razorpay callback URL is fixed)
-app.post('/api/razorpay/webhook', express.raw({ type: 'application/json' }), paymentController.handleWebhook);
-
-// routes
-app.use(`/api/${API_VERSION}/developer`, authRoutes);
-app.use(`/api/${API_VERSION}/cpanel`, cPanelRoutes);
 // block all non-API routes
 app.use((req, res, next) => {
   if (

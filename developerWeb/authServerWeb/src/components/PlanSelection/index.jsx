@@ -25,6 +25,15 @@ const getDisplayFeatures = (plan) => {
   return lines;
 };
 
+const filterEligiblePlans = (planList, currPlanId) => {
+  if (!currPlanId) return planList;
+  const current = planList.find((p) => p.id === currPlanId);
+  if (!current) return planList;
+  const currentPrice = Number(current.price || 0);
+  // Show higher-priced plans (upgrades) AND the current plan itself (for renewals)
+  return planList.filter((p) => p.id === currPlanId || Number(p.price || 0) > currentPrice);
+};
+
 const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
   const [plans, setPlans] = useState([]);
   const [displayedPlans, setDisplayedPlans] = useState([]);
@@ -35,6 +44,23 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
 
   useEffect(() => {
     fetchPlans();
+
+    // Check for any pending payment order from mobile app-switch / reload
+    const pending = paymentService.getPendingPayment();
+    if (pending?.orderId) {
+      paymentService.checkOrderStatus(pending.orderId)
+        .then((res) => {
+          if (res.status === 'paid' || res.data?.status === 'paid') {
+            paymentService.clearPendingPayment();
+            if (onPlanSelected) {
+              onPlanSelected(res.data);
+            }
+          }
+        })
+        .catch((e) => {
+          console.warn('Pending payment verification failed on mount:', e);
+        });
+    }
   }, []);
 
   const fetchPlans = async () => {
@@ -44,17 +70,7 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
       const response = await api.get('/developer/plans');
       const fetched = response.data?.data?.plans || response.data?.plans || [];
       setPlans(fetched);
-      if (currentPlanId) {
-        const current = fetched.find((p) => p.id === currentPlanId);
-        if (current) {
-          const currentPrice = Number(current.price || 0);
-          setDisplayedPlans(fetched.filter((p) => Number(p.price || 0) > currentPrice));
-        } else {
-          setDisplayedPlans(fetched);
-        }
-      } else {
-        setDisplayedPlans(fetched);
-      }
+      setDisplayedPlans(filterEligiblePlans(fetched, currentPlanId));
     } catch (err) {
       console.error('Failed to fetch plans:', err);
       setError('Failed to load plans. Please refresh the page.');
@@ -66,20 +82,7 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
   // Update displayedPlans whenever plans or currentPlanId change
   useEffect(() => {
     if (!plans || plans.length === 0) return;
-    if (!currentPlanId) {
-      setDisplayedPlans(plans);
-      return;
-    }
-
-    const current = plans.find((p) => p.id === currentPlanId);
-    if (!current) {
-      setDisplayedPlans(plans);
-      return;
-    }
-
-    const currentPrice = Number(current.price || 0);
-    const higher = plans.filter((p) => Number(p.price || 0) > currentPrice);
-    setDisplayedPlans(higher);
+    setDisplayedPlans(filterEligiblePlans(plans, currentPlanId));
   }, [plans, currentPlanId]);
 
   const isFreePrice = (price) => {
@@ -127,6 +130,12 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
         orderResponse.data,
         async (razorpayResponse) => {
           try {
+            // If already verified through checkOrderStatus
+            if (razorpayResponse?.registration || razorpayResponse?.alreadyProcessed) {
+              onPlanSelected(razorpayResponse);
+              return;
+            }
+
             const verifyResponse = await paymentService.verifyPayment({
               razorpay_order_id: razorpayResponse.razorpay_order_id,
               razorpay_payment_id: razorpayResponse.razorpay_payment_id,
@@ -272,7 +281,7 @@ const PlanSelection = ({ onPlanSelected, currentPlanId }) => {
 
         <div className="plan-footer">
           <p className="plan-note">
-            You can upgrade your plan at any time from your dashboard settings.
+            You can upgrade or renew your plan at any time from your dashboard settings.
           </p>
         </div>
       </div>

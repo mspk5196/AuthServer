@@ -12,14 +12,18 @@ const DEVELOPER_PORTAL_URL = process.env.DEVELOPER_PORTAL_URL || 'https://authse
 
 /**
  * Send pre-expiry warning emails (7, 5, 2, 1 day before expiry).
- * Uses dev_plan_expiry_reminders to ensure each reminder is sent only once.
+ * Uses dev_plan_expiry_reminders to ensure each reminder is sent only once per cycle.
  */
 const sendExpiryWarnings = async () => {
-  const daysBefore = [7, 5, 2, 1];
-  for (const days of daysBefore) {
-    const reminderType = `${days}day`;
+  const brackets = [
+    { type: '7day', minDays: 5, maxDays: 7 },
+    { type: '5day', minDays: 2, maxDays: 5 },
+    { type: '2day', minDays: 1, maxDays: 2 },
+    { type: '1day', minDays: 0, maxDays: 1 },
+  ];
+
+  for (const b of brackets) {
     try {
-      // Find active registrations expiring in exactly `days` days (±30 min window)
       const result = await pool.query(
         `SELECT
            dpr.id AS registration_id,
@@ -34,25 +38,32 @@ const sendExpiryWarnings = async () => {
          WHERE dpr.is_active = true
            AND dpr.end_date IS NOT NULL
            AND COALESCE(dp.duration_days, 0) > 0
-           AND dpr.end_date BETWEEN NOW() + INTERVAL '${days} days' - INTERVAL '30 minutes'
-                                AND NOW() + INTERVAL '${days} days' + INTERVAL '30 minutes'
+           AND dpr.end_date > NOW() + INTERVAL '${b.minDays} days'
+           AND dpr.end_date <= NOW() + INTERVAL '${b.maxDays} days'
            AND NOT EXISTS (
              SELECT 1 FROM dev_plan_expiry_reminders r
               WHERE r.registration_id = dpr.id
                 AND r.reminder_type   = $1
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM developer_plan_registrations newer
+              WHERE newer.developer_id = dpr.developer_id
+                AND newer.id > dpr.id
+                AND newer.is_active = true
            )`,
-        [reminderType]
+        [b.type]
       );
 
       for (const row of result.rows) {
         try {
+          const daysLeft = b.maxDays;
           await sendMail({
             to: row.email,
-            subject: `Your plan expires in ${days} day${days === 1 ? '' : 's'} - Auth Platform`,
+            subject: `Your plan expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'} - Auth Platform`,
             html: buildPlanExpiryWarningEmail({
               name: row.name,
               planName: row.plan_name,
-              daysLeft: days,
+              daysLeft: daysLeft,
               endDate: row.end_date,
               renewUrl: `${DEVELOPER_PORTAL_URL}/plans`,
             }),
@@ -63,20 +74,21 @@ const sendExpiryWarnings = async () => {
               (registration_id, developer_id, reminder_type)
              VALUES ($1, $2, $3)
              ON CONFLICT DO NOTHING`,
-            [row.registration_id, row.developer_id, reminderType]
+            [row.registration_id, row.developer_id, b.type]
           );
         } catch (err) {
-          console.error(`Failed to send ${days}-day expiry warning for dev ${row.developer_id}:`, err);
+          console.error(`Failed to send ${b.type} expiry warning for dev ${row.developer_id}:`, err);
         }
       }
     } catch (err) {
-      console.error(`sendExpiryWarnings (${days}day) error:`, err);
+      console.error(`sendExpiryWarnings (${b.type}) error:`, err);
     }
   }
 };
 
 /**
  * Send post-expiry reminders every 2 days until developer renews.
+ * Only sends if the developer has NO currently active plan and only for the latest registration.
  */
 const sendPostExpiryReminders = async () => {
   try {
@@ -97,9 +109,23 @@ const sendPostExpiryReminders = async () => {
          AND COALESCE(dp.duration_days, 0) > 0
          AND dpr.end_date < NOW()
          AND (
-               dpr.last_expiry_reminder_at IS NULL
-               OR dpr.last_expiry_reminder_at < NOW() - INTERVAL '2 days'
-             )`
+           dpr.last_expiry_reminder_at IS NULL
+           OR dpr.last_expiry_reminder_at < NOW() - INTERVAL '2 days'
+         )
+         -- CRITICAL: Never send post-expiry reminders if the developer currently has ANY active plan
+         AND NOT EXISTS (
+           SELECT 1 FROM developer_plan_registrations active_dpr
+           WHERE active_dpr.developer_id = dpr.developer_id
+             AND active_dpr.is_active = true
+             AND (active_dpr.end_date IS NULL OR active_dpr.end_date > NOW())
+         )
+         -- Only send for the developer's most recent registration
+         AND dpr.id = (
+           SELECT id FROM developer_plan_registrations sub
+           WHERE sub.developer_id = dpr.developer_id
+           ORDER BY sub.created_at DESC NULLS LAST, sub.id DESC
+           LIMIT 1
+         )`
     );
 
     for (const row of result.rows) {

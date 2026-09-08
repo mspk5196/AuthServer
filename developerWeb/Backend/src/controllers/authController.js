@@ -320,6 +320,9 @@ const exchangeOAuthTokens = async (req, res) => {
       }
     };
 
+    const accessMaxAge = parseExpiryToMs(process.env.JWT_EXPIRE || '15m');
+    const refreshMaxAge = parseExpiryToMs(process.env.JWT_REFRESH_EXPIRE || '7d');
+
     const cookieDomain = (() => {
       try {
         const h = new URL(process.env.BACKEND_URL || '').hostname;

@@ -14,7 +14,7 @@ for i in {1..30}; do
   if [[ "$STATUS" == *"healthy"* ]]; then
     echo -e "\n✅ Local PostgreSQL is READY and seeded with Sql/public.sql!"
     echo "   Host: localhost:5432"
-    echo "   User: mspkapps | Password: Mskp@3922 | DB: authdb"
+    echo "   User: mspkapps | Password: Pranesh82 | DB: authdb"
     echo "   Redis: localhost:6379"
     exit 0
   fi

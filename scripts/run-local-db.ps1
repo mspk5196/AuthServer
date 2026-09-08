@@ -21,13 +21,13 @@ while ($elapsed -lt $timeout) {
     if ($status -like "*healthy*") {
         Write-Host "`n✅ Local PostgreSQL is READY and seeded with Sql/public.sql!" -ForegroundColor Green
         Write-Host "   Host: localhost:5432"
-        Write-Host "   User: mspkapps | Password: Mskp@3922 | DB: authdb"
+        Write-Host "   User: mspkapps | Password: Pranesh82 | DB: authdb"
         Write-Host "   Redis: localhost:6379"
         Write-Host "`n✨ You can now run your local dev servers:"
-        Write-Host "   1. Developer Backend: cd developerWeb\Backend && npm run dev"
-        Write-Host "   2. Developer Web:     cd developerWeb\authServerWeb && npm run dev (http://localhost:5173)"
-        Write-Host "   3. CPanel Backend:    cd Cpanel\auth-server && npm run dev"
-        Write-Host "   4. CPanel Web:        cd Cpanel\CpanelWeb && npm run dev (http://localhost:5174)"
+        Write-Host "   1. Developer Backend: cd developerWeb\Backend && npm run dev (http://localhost:5000)"
+        Write-Host "   2. Developer Web:     cd developerWeb\authServerWeb && npm run dev (http://localhost:4001)"
+        Write-Host "   3. CPanel Backend:    cd Cpanel\auth-server && npm run dev (http://localhost:5002)"
+        Write-Host "   4. CPanel Web:        cd Cpanel\CpanelWeb && npm run dev (http://localhost:4002)"
         exit 0
     }
     Start-Sleep -Seconds 2

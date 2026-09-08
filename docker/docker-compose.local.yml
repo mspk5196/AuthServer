@@ -9,10 +9,10 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: mspkapps
-      POSTGRES_PASSWORD: Mskp@3922
+      POSTGRES_PASSWORD: Pranesh82
       POSTGRES_DB: authdb
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - ../Sql/public.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
       - auth_local_pgdata:/var/lib/postgresql/data
@@ -53,9 +53,11 @@ services:
       NODE_ENV: development
       DB_HOST: local-postgres
       DB_PORT: 5432
+      DB_PASS: Pranesh82
       REDIS_URL: redis://local-redis:6379/
-      FRONTEND_URL: http://localhost:5173
+      FRONTEND_URL: http://localhost:4001
       BACKEND_URL: http://localhost:5000
+      CPANEL_URL: http://localhost:4002
     ports:
       - "5000:5000"
     depends_on:
@@ -79,8 +81,9 @@ services:
       NODE_ENV: development
       DB_HOST: local-postgres
       DB_PORT: 5432
+      DB_PASS: Pranesh82
       REDIS_URL: redis://local-redis:6379/
-      FRONTEND_URL: http://localhost:5174
+      FRONTEND_URL: http://localhost:4002
       BACKEND_URL: http://localhost:5002
       AUTH_API_BASE_URL: http://developer-backend:5000
     ports:

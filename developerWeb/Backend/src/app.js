@@ -90,6 +90,7 @@ app.use(`/api/${API_VERSION}/cpanel`, cPanelRoutes);
 
 // ── v2 routes (hardcoded — new/changed endpoints for v2 features) ───────────
 // Also mount existing auth+cpanel routes at v2 so frontend can point to /api/v2
+// ── Route Mounts (Mount across configured API_VERSION, v1, and v2) ───────────
 // IMPORTANT: v2-specific routes must be mounted BEFORE authRoutes so they win on overlapping paths (e.g. /plans, /my-plan)
 app.use('/api/v2/developer', planRoutesV2);
 app.use('/api/v2/developer', paymentRoutesV2);
@@ -98,6 +99,30 @@ app.use('/api/v2/developer', feedbackRoutes);
 app.use('/api/v2/developer', usageRoutes);
 app.use('/api/v2/developer', authRoutes);
 app.use('/api/v2/cpanel', cPanelRoutes);
+const developerPrefixes = Array.from(new Set([
+  `/api/${API_VERSION}/developer`,
+  '/api/v1/developer',
+  '/api/v2/developer',
+]));
+
+const cpanelPrefixes = Array.from(new Set([
+  `/api/${API_VERSION}/cpanel`,
+  '/api/v1/cpanel',
+  '/api/v2/cpanel',
+]));
+
+developerPrefixes.forEach((prefix) => {
+  app.use(prefix, planRoutesV2);
+  app.use(prefix, paymentRoutesV2);
+  app.use(prefix, transactionRoutes);
+  app.use(prefix, feedbackRoutes);
+  app.use(prefix, usageRoutes);
+  app.use(prefix, authRoutes);
+});
+
+cpanelPrefixes.forEach((prefix) => {
+  app.use(prefix, cPanelRoutes);
+});
 
 // block all non-API routes
 app.use((req, res, next) => {

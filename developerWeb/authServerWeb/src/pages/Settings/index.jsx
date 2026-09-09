@@ -2,11 +2,25 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../utils/api';
-import { authService } from '../../services/authService';
 import paymentService from '../../services/paymentService';
-import './Settings.scss';
+import Card from '../../components/UI/Card';
+import Badge from '../../components/UI/Badge';
+import {
+  User,
+  AtSign,
+  Mail,
+  Lock,
+  CreditCard,
+  CheckCircle2,
+  AlertCircle,
+  AlertTriangle,
+  Loader2,
+  Sparkles,
+  ArrowRight,
+  ShieldCheck,
+  Check
+} from 'lucide-react';
 
-/** Build display feature lines from features_desc (preferred) or features JSONB fallback */
 const getPlanFeatureLines = (plan) => {
   if (!plan) return [];
   const desc = plan.features_desc;
@@ -15,7 +29,7 @@ const getPlanFeatureLines = (plan) => {
   if (!f) return [];
   const unlimited = (v) => v === 0 || v === '0' || Number(v) === 0;
   const fmt = (v, singular, plural) =>
-    unlimited(v) ? `Unlimited ${plural || singular}` : `Up to ${v} ${Number(v) === 1 ? singular : (plural || singular)}`;
+    unlimited(v) ? `Unlimited ${plural}` : `Up to ${v} ${Number(v) === 1 ? singular : plural}`;
   const lines = [];
   if (f.max_apps != null)           lines.push(fmt(f.max_apps, 'app', 'apps'));
   if (f.max_api_calls != null)      lines.push(unlimited(f.max_api_calls) ? 'Unlimited API calls/month' : `${Number(f.max_api_calls).toLocaleString()} API calls/month`);
@@ -27,7 +41,7 @@ const getPlanFeatureLines = (plan) => {
 };
 
 const Settings = () => {
-  const { developer, updateDeveloper, logout } = useAuth();
+  const { developer, updateDeveloper } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('profile');
   const [loading, setLoading] = useState(false);
@@ -36,18 +50,10 @@ const Settings = () => {
   const [renewLoading, setRenewLoading] = useState(false);
   const [renewMsg, setRenewMsg] = useState({ type: '', text: '' });
 
-  // Profile form
   const [profileForm, setProfileForm] = useState({
     name: '',
     username: '',
     email: ''
-  });
-
-  // Password form
-  const [passwordForm, setPasswordForm] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: ''
   });
 
   useEffect(() => {
@@ -60,7 +66,6 @@ const Settings = () => {
     }
     fetchCurrentPlan();
 
-    // Check for query param redirection from mobile callback
     const searchParams = new URLSearchParams(window.location.search);
     const paymentParam = searchParams.get('payment');
 
@@ -81,33 +86,12 @@ const Settings = () => {
       });
       paymentService.clearPendingPayment();
       window.history.replaceState({}, document.title, window.location.pathname);
-    } else {
-      // Check localStorage for pending payment
-      const pending = paymentService.getPendingPayment();
-      if (pending?.orderId) {
-        paymentService.checkOrderStatus(pending.orderId)
-          .then((res) => {
-            if (res.status === 'paid' || res.data?.status === 'paid') {
-              paymentService.clearPendingPayment();
-              setActiveTab('plan');
-              setRenewMsg({
-                type: 'success',
-                text: 'Payment verified and plan renewed successfully!',
-              });
-              fetchCurrentPlan();
-            }
-          })
-          .catch((e) => {
-            console.warn('Pending payment verification failed on Settings mount:', e);
-          });
-      }
     }
   }, [developer]);
 
   const fetchCurrentPlan = async () => {
     try {
       const response = await api.get('/developer/my-plan');
-      // Support both v1 and v2 response shapes
       const data = response.data?.data || response.data;
       if (data?.hasPlan && data?.plan) {
         setCurrentPlan(data.plan);
@@ -124,61 +108,12 @@ const Settings = () => {
 
     try {
       const response = await api.put('/developer/profile', profileForm);
-      
       if (response.success) {
         updateDeveloper(response.data.developer);
-        setMessage({ 
-          type: 'success', 
-          text: response.message 
-        });
+        setMessage({ type: 'success', text: response.message || 'Profile updated successfully.' });
       }
     } catch (error) {
-      setMessage({ 
-        type: 'error', 
-        text: error.response?.data?.message || 'Failed to update profile' 
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePasswordChange = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setMessage({ type: '', text: '' });
-
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setMessage({ type: 'error', text: 'New passwords do not match' });
-      setLoading(false);
-      return;
-    }
-
-    if (passwordForm.newPassword.length < 8) {
-      setMessage({ type: 'error', text: 'Password must be at least 8 characters long' });
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const response = await api.post('/developer/change-password', {
-        currentPassword: passwordForm.currentPassword,
-        newPassword: passwordForm.newPassword
-      });
-
-      if (response.success) {
-        setMessage({ type: 'success', text: response.message });
-        setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
-        
-        // Logout after 3 seconds
-        setTimeout(() => {
-          logout().finally(() => navigate('/login', { replace: true }));
-        }, 3000);
-      }
-    } catch (error) {
-      setMessage({ 
-        type: 'error', 
-        text: error.response?.data?.message || 'Failed to change password' 
-      });
+      setMessage({ type: 'error', text: error.response?.data?.message || 'Failed to update profile' });
     } finally {
       setLoading(false);
     }
@@ -190,26 +125,18 @@ const Settings = () => {
 
     try {
       const response = await api.post('/developer/request-password-change', {});
-      setMessage({ 
-        type: 'success', 
-        text: response.message || 'Password change link sent to your email. Please check your inbox.' 
+      setMessage({
+        type: 'success',
+        text: response.message || 'Password change link sent to your registered email address.'
       });
     } catch (error) {
       console.error('Request password change error:', error);
-      setMessage({ 
-        type: 'error', 
-        text: error.message || 'Failed to send password change link' 
-      });
+      setMessage({ type: 'error', text: error.message || 'Failed to send password change link' });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleUpgradePlan = () => {
-    navigate('/plans');
-  };
-
-  /** Days remaining until plan end_date (negative = already expired) */
   const getDaysRemaining = (plan) => {
     if (!plan?.end_date) return null;
     return Math.ceil((new Date(plan.end_date) - new Date()) / (1000 * 60 * 60 * 24));
@@ -276,243 +203,323 @@ const Settings = () => {
   const isUnlimitedPlan = (plan) =>
     plan && (plan.duration_days === 0 || plan.duration_days === null || plan.duration_days === undefined || plan.duration_days === '0');
 
-  const getBillingCycleLabel = (plan) => {
-    if (!plan) return 'N/A';
-    const isFree = !plan.price || Number(plan.price) === 0;
-    if (isFree) return 'No Billing (Free plan)';
-    if (isUnlimitedPlan(plan)) return 'One-time (unlimited)';
-    const days = plan.duration_days;
-    if (days === 30) return 'Every 30 days (monthly)';
-    if (days === 365) return 'Every 365 days (yearly)';
-    return `Every ${days} days`;
-  };
-
   return (
-    <div className="settings-page">
-      <div className="settings-container">
-        <h1 className="settings-title">Account Settings</h1>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
+          Account Settings
+        </h1>
+        <p className="mt-1 text-sm text-slate-600 font-medium">
+          Manage your developer profile, credentials, and plan subscription.
+        </p>
+      </div>
 
-        <div className="settings-tabs">
-          <button 
-            className={`tab ${activeTab === 'profile' ? 'active' : ''}`}
-            onClick={() => setActiveTab('profile')}
-          >
-            Profile
-          </button>
-          <button 
-            className={`tab ${activeTab === 'password' ? 'active' : ''}`}
-            onClick={() => setActiveTab('password')}
-          >
-            Password
-          </button>
-          <button 
-            className={`tab ${activeTab === 'plan' ? 'active' : ''}`}
-            onClick={() => setActiveTab('plan')}
-          >
-            Plan & Billing
-          </button>
+      {/* Modern Tabs */}
+      <div className="flex border-b border-slate-200 gap-2">
+        <button
+          onClick={() => setActiveTab('profile')}
+          className={`flex items-center gap-2 px-4 py-3 text-sm font-bold border-b-2 transition-colors cursor-pointer ${
+            activeTab === 'profile'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <User className="h-4 w-4" />
+          Profile
+        </button>
+        <button
+          onClick={() => setActiveTab('password')}
+          className={`flex items-center gap-2 px-4 py-3 text-sm font-bold border-b-2 transition-colors cursor-pointer ${
+            activeTab === 'password'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Lock className="h-4 w-4" />
+          Password
+        </button>
+        <button
+          onClick={() => setActiveTab('plan')}
+          className={`flex items-center gap-2 px-4 py-3 text-sm font-bold border-b-2 transition-colors cursor-pointer ${
+            activeTab === 'plan'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <CreditCard className="h-4 w-4" />
+          Plan &amp; Billing
+        </button>
+      </div>
+
+      {/* Feedback Messages */}
+      {message.text && (
+        <div
+          className={`flex items-start gap-2.5 rounded-2xl border p-4 text-xs font-semibold ${
+            message.type === 'error'
+              ? 'border-rose-200 bg-rose-50 text-rose-700'
+              : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+          }`}
+        >
+          {message.type === 'error' ? (
+            <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+          ) : (
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+          )}
+          <span>{message.text}</span>
         </div>
+      )}
 
-        {message.text && (
-          <div className={`alert alert-${message.type}`}>
-            {message.text}
-          </div>
-        )}
+      {/* Tab 1: Profile */}
+      {activeTab === 'profile' && (
+        <Card className="max-w-2xl">
+          <h2 className="text-lg font-bold text-slate-900 tracking-tight">Developer Profile</h2>
+          <p className="mt-1 text-xs text-slate-500 font-medium">Update your public name, username, and account contact.</p>
 
-        {activeTab === 'profile' && (
-          <div className="settings-content">
-            <h2>Profile Information</h2>
-            <form onSubmit={handleProfileUpdate}>
-              <div className="form-group">
-                <label htmlFor="name">Full Name</label>
+          <form onSubmit={handleProfileUpdate} className="mt-6 space-y-4">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                Full Name
+              </label>
+              <div className="relative mt-1.5">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                  <User className="h-4 w-4" />
+                </div>
                 <input
                   type="text"
-                  id="name"
                   value={profileForm.name}
                   onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
                   required
+                  className="block w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-3.5 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium"
                 />
               </div>
+            </div>
 
-              <div className="form-group">
-                <label htmlFor="username">Username</label>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                Username
+              </label>
+              <div className="relative mt-1.5">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                  <AtSign className="h-4 w-4" />
+                </div>
                 <input
                   type="text"
-                  id="username"
                   value={profileForm.username}
                   onChange={(e) => setProfileForm({ ...profileForm, username: e.target.value })}
                   required
+                  className="block w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-3.5 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium"
                 />
               </div>
+            </div>
 
-              <div className="form-group">
-                <label htmlFor="email">Email Address</label>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                Email Address
+              </label>
+              <div className="relative mt-1.5">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                  <Mail className="h-4 w-4" />
+                </div>
                 <input
                   type="email"
-                  id="email"
                   value={profileForm.email}
                   onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
                   required
+                  className="block w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-3.5 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium"
                 />
-                <small className="form-hint">
-                  Changing your email will require verification before it takes effect.
-                </small>
               </div>
+              <p className="mt-1.5 text-[11px] text-slate-500 font-medium">
+                Changing your email address requires confirmation link verification before updating.
+              </p>
+            </div>
 
-              <div className="form-group">
-                <label>Email Verification Status</label>
-                <div className="verification-badge">
-                  {developer?.email_verified ? (
-                    <span className="badge badge-success">✓ Verified</span>
-                  ) : (
-                    <span className="badge badge-warning">⚠️ Not Verified</span>
-                  )}
-                </div>
-              </div>
-
-              <button type="submit" className="btn btn-primary" disabled={loading}>
-                {loading ? 'Updating...' : 'Update Profile'}
-              </button>
-            </form>
-          </div>
-        )}
-
-        {activeTab === 'password' && (
-          <div className="settings-content">
-            <h2>Change Password</h2>
-            
-            <div className="password-options">
-              <div className="option-card">
-                <h3>Change Password via Email</h3>
-                <p>We'll send you a secure link to your registered email address. Click the link to change your password.</p>
-                <button 
-                  type="button"
-                  className="btn btn-primary" 
-                  onClick={handleRequestPasswordChange}
-                  disabled={loading}
-                >
-                  {loading ? 'Sending...' : 'Send Password Change Link'}
-                </button>
+            <div className="pt-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                Email Verification Status
+              </label>
+              <div className="mt-2">
+                {developer?.email_verified ? (
+                  <Badge variant="success" size="md">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Verified Email
+                  </Badge>
+                ) : (
+                  <Badge variant="warning" size="md">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    Pending Verification
+                  </Badge>
+                )}
               </div>
             </div>
+
+            <div className="pt-4">
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-indigo-500 transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+                Save Changes
+              </button>
+            </div>
+          </form>
+        </Card>
+      )}
+
+      {/* Tab 2: Password */}
+      {activeTab === 'password' && (
+        <Card className="max-w-2xl">
+          <h2 className="text-lg font-bold text-slate-900 tracking-tight">Security &amp; Password</h2>
+          <p className="mt-1 text-xs text-slate-500 font-medium">
+            Send a secure single-use password reset link to your email to safely update your credentials.
+          </p>
+
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-6 space-y-4">
+            <div className="flex items-start gap-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600">
+                <Lock className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Password Change Link</h3>
+                <p className="mt-1 text-xs text-slate-600 leading-relaxed font-medium">
+                  Click the button below to dispatch a secure verification link to <strong>{developer?.email}</strong>.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleRequestPasswordChange}
+              disabled={loading}
+              className="mt-2 flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-indigo-500 transition-colors disabled:opacity-50 cursor-pointer"
+            >
+              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+              Send Password Reset Link
+            </button>
           </div>
-        )}
+        </Card>
+      )}
 
-        {activeTab === 'plan' && (
-          <div className="settings-content">
-            <h2>Current Plan</h2>
-            
-            {renewMsg.text && (
-              <div className={`alert alert-${renewMsg.type}`}>{renewMsg.text}</div>
-            )}
+      {/* Tab 3: Plan & Billing */}
+      {activeTab === 'plan' && (
+        <div className="space-y-6 max-w-3xl">
+          {renewMsg.text && (
+            <div
+              className={`flex items-start gap-2.5 rounded-2xl border p-4 text-xs font-semibold ${
+                renewMsg.type === 'error'
+                  ? 'border-rose-200 bg-rose-50 text-rose-700'
+                  : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+              }`}
+            >
+              {renewMsg.type === 'error' ? (
+                <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+              )}
+              <span>{renewMsg.text}</span>
+            </div>
+          )}
 
-            {currentPlan && !isUnlimitedPlan(currentPlan) && (() => {
-              const days = getDaysRemaining(currentPlan);
-              if (days === null) return null;
-              if (days < 0) return (
-                <div className="alert alert-error" style={{ marginBottom: '16px' }}>
-                  ⚠️ Your plan has expired. Renew now to continue using API features.
+          {currentPlan && !isUnlimitedPlan(currentPlan) && (() => {
+            const days = getDaysRemaining(currentPlan);
+            if (days === null) return null;
+            if (days < 0) {
+              return (
+                <div className="flex items-center gap-2.5 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700 font-semibold">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+                  <span>Your plan has expired. Renew now to restore full API quota and features.</span>
                 </div>
               );
-              if (days <= 7) return (
-                <div className="alert alert-warning" style={{ marginBottom: '16px' }}>
-                  ⚠️ Your plan expires in <strong>{days} day{days !== 1 ? 's' : ''}</strong>. Renew before it runs out to avoid any interruption.
+            }
+            if (days <= 7) {
+              return (
+                <div className="flex items-center gap-2.5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800 font-semibold">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+                  <span>Your plan expires in <strong>{days} day{days !== 1 ? 's' : ''}</strong>. Renew early to avoid interruption.</span>
                 </div>
               );
-              return null;
-            })()}
+            }
+            return null;
+          })()}
 
-            {currentPlan ? (
-              <div className="plan-info-card">
-                <div className="plan-info-header">
-                  <h3>{currentPlan.plan_name}</h3>
-                  <span className={`badge badge-${currentPlan.is_active ? 'success' : 'warning'}`}>
-                    {currentPlan.is_active ? 'Active' : 'Inactive'}
-                  </span>
+          {currentPlan ? (
+            <Card>
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900">{currentPlan.plan_name}</h3>
+                  <p className="text-xs text-slate-500 mt-0.5 font-medium">
+                    {currentPlan.price ? `₹${Number(currentPlan.price).toFixed(2)}` : 'Free Tier'}
+                  </p>
                 </div>
+                <Badge variant={currentPlan.is_active ? 'success' : 'warning'} size="md">
+                  {currentPlan.is_active ? 'Active' : 'Inactive'}
+                </Badge>
+              </div>
 
-                <div className="plan-info-body">
-                  <div className="plan-detail">
-                    <span className="label">Price:</span>
-                    <span className="value">
-                      {currentPlan.price ? `₹${parseFloat(currentPlan.price).toFixed(2)}` : 'Free'}
-                    </span>
-                  </div>
-
-                  <div className="plan-detail">
-                    <span className="label">Billing Cycle:</span>
-                    <span className="value">{getBillingCycleLabel(currentPlan)}</span>
-                  </div>
-
-                  <div className="plan-detail">
-                    <span className="label">Plan Duration:</span>
-                    <span className="value">
-                      {isUnlimitedPlan(currentPlan)
-                        ? 'Unlimited (no expiry)'
-                        : currentPlan.duration_label || `${currentPlan.duration_days} days`}
-                    </span>
-                  </div>
-
-                  <div className="plan-detail">
-                    <span className="label">Start Date:</span>
-                    <span className="value">{formatDate(currentPlan.start_date)}</span>
-                  </div>
-
-                  <div className="plan-detail">
-                    <span className="label">Expires On:</span>
-                    <span className="value">
-                      {isUnlimitedPlan(currentPlan) ? 'Unlimited' : formatDate(currentPlan.end_date)}
-                    </span>
-                  </div>
-
-                  {currentPlan.description && (
-                    <div className="plan-detail">
-                      <span className="label">Description:</span>
-                      <span className="value">{currentPlan.description}</span>
-                    </div>
-                  )}
-
-                  {(() => {
-                    const lines = getPlanFeatureLines(currentPlan);
-                    if (!lines.length) return null;
-                    return (
-                      <div className="plan-features">
-                        <span className="label">Features:</span>
-                        <ul>
-                          {lines.map((line, i) => <li key={i}>{line}</li>)}
-                        </ul>
-                      </div>
-                    );
-                  })()}
+              <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <span className="text-slate-500 font-medium">Start Date</span>
+                  <p className="mt-1 font-bold text-slate-900">{formatDate(currentPlan.start_date)}</p>
                 </div>
-
-                <div className="plan-info-footer">
-                  {!isUnlimitedPlan(currentPlan) && currentPlan.price && Number(currentPlan.price) > 0 && (
-                    <button
-                      className="btn btn-success"
-                      onClick={handleRenewPlan}
-                      disabled={renewLoading}
-                      style={{ marginRight: '10px' }}
-                    >
-                      {renewLoading ? 'Processing...' : `Renew Plan (+${currentPlan.duration_label || currentPlan.duration_days + ' days'})`}
-                    </button>
-                  )}
-                  <button className="btn btn-primary" onClick={handleUpgradePlan}>
-                    Upgrade Plan
-                  </button>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <span className="text-slate-500 font-medium">Expiry Date</span>
+                  <p className="mt-1 font-bold text-slate-900">
+                    {isUnlimitedPlan(currentPlan) ? 'Unlimited (No Expiry)' : formatDate(currentPlan.end_date)}
+                  </p>
                 </div>
               </div>
-            ) : (
-              <div className="no-plan">
-                <p>You don't have an active plan.</p>
-                <button className="btn btn-primary" onClick={handleUpgradePlan}>
-                  Select a Plan
+
+              {(() => {
+                const lines = getPlanFeatureLines(currentPlan);
+                if (!lines.length) return null;
+                return (
+                  <div className="mt-6 border-t border-slate-100 pt-6">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-3">Plan Limits</p>
+                    <ul className="space-y-2">
+                      {lines.map((line, i) => (
+                        <li key={i} className="flex items-center gap-2 text-xs text-slate-700 font-medium">
+                          <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                          <span>{line}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })()}
+
+              <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-6">
+                {!isUnlimitedPlan(currentPlan) && currentPlan.price && Number(currentPlan.price) > 0 && (
+                  <button
+                    onClick={handleRenewPlan}
+                    disabled={renewLoading}
+                    className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-emerald-500 transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
+                  >
+                    {renewLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    Renew Plan (+{currentPlan.duration_label || `${currentPlan.duration_days} days`})
+                  </button>
+                )}
+                <button
+                  onClick={() => navigate('/plans')}
+                  className="rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-indigo-500 transition-colors cursor-pointer shadow-xs"
+                >
+                  Upgrade or Change Plan
                 </button>
               </div>
-            )}
-          </div>
-        )}
-      </div>
+            </Card>
+          ) : (
+            <Card className="text-center py-12">
+              <p className="text-sm text-slate-600 font-medium">You do not have an active plan assigned.</p>
+              <button
+                onClick={() => navigate('/plans')}
+                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-indigo-500 shadow-xs"
+              >
+                Choose a Plan
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </Card>
+          )}
+        </div>
+      )}
     </div>
   );
 };

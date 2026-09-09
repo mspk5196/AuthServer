@@ -27,35 +27,38 @@ const app = express();
 
 const API_VERSION = process.env.API_VERSION || 'v1';
 
-// Dynamic CORS handling: supports production FRONTEND_URL and local dev origins with credentials
-const allowedOrigins = [
-  process.env.FRONTEND_URL,
-  process.env.BASE_URL,
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://localhost:3000',
-  'http://localhost:4000',
-  'http://localhost:4001',
-  'http://localhost:4002',
-].filter(Boolean);
+// Dynamic CORS handling: In production, Nginx/reverse proxy handles CORS headers.
+// Express CORS is enabled for local development or when explicitly enabled via ENABLE_CORS=true.
+if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_CORS === 'true') {
+  const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    process.env.BASE_URL,
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://localhost:3000',
+    'http://localhost:4000',
+    'http://localhost:4001',
+    'http://localhost:4002',
+  ].filter(Boolean);
 
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (
-      allowedOrigins.includes(origin) ||
-      /^http:\/\/localhost(:\d+)?$/.test(origin) ||
-      /^http:\/\/127\.0\.0\.1(:\d+)?$/.test(origin) ||
-      origin.endsWith('.mspkapps.in')
-    ) {
+  app.use(cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (
+        allowedOrigins.includes(origin) ||
+        /^http:\/\/localhost(:\d+)?$/.test(origin) ||
+        /^http:\/\/127\.0\.0\.1(:\d+)?$/.test(origin) ||
+        origin.endsWith('.mspkapps.in')
+      ) {
+        return callback(null, true);
+      }
       return callback(null, true);
-    }
-    return callback(null, true);
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-csrf-token'],
-}));
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-csrf-token'],
+  }));
+}
 
 // Capture raw body for webhook HMAC signature verification
 app.use(express.json({
@@ -84,21 +87,8 @@ app.post('/api/razorpay/webhook', paymentController.handleWebhook);
 // ── Stable versionless Google OAuth callback (never changes regardless of API_VERSION) ──
 app.get('/api/developer/auth/google/callback', require('./controllers/authController').googleCallback);
 
-// ── v1 routes (version controlled via API_VERSION env var) ──────────────────
-app.use(`/api/${API_VERSION}/developer`, authRoutes);
-app.use(`/api/${API_VERSION}/cpanel`, cPanelRoutes);
-
-// ── v2 routes (hardcoded — new/changed endpoints for v2 features) ───────────
-// Also mount existing auth+cpanel routes at v2 so frontend can point to /api/v2
-// ── Route Mounts (Mount across configured API_VERSION, v1, and v2) ───────────
+// ── Route Mounts (Mount across configured API_VERSION, v1, and v2 aliases) ───
 // IMPORTANT: v2-specific routes must be mounted BEFORE authRoutes so they win on overlapping paths (e.g. /plans, /my-plan)
-app.use('/api/v2/developer', planRoutesV2);
-app.use('/api/v2/developer', paymentRoutesV2);
-app.use('/api/v2/developer', transactionRoutes);
-app.use('/api/v2/developer', feedbackRoutes);
-app.use('/api/v2/developer', usageRoutes);
-app.use('/api/v2/developer', authRoutes);
-app.use('/api/v2/cpanel', cPanelRoutes);
 const developerPrefixes = Array.from(new Set([
   `/api/${API_VERSION}/developer`,
   '/api/v1/developer',

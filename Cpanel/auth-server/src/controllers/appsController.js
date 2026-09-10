@@ -910,16 +910,34 @@ const getAppSummary = async (req, res) => {
     const owner = await pool.query('SELECT id FROM dev_apps WHERE id = $1 AND developer_id = $2', [appId, developerId]);
     if (!owner.rows.length) return res.status(404).json({ success: false, message: 'App not found' });
 
-    const q = await pool.query(`
-      SELECT a.id, a.app_name, a.allow_google_signin, a.allow_email_signin, a.support_email, a.support_email_verified,
-        a.mail_sent_count, a.mail_quota_month,
-        COUNT(u.id) FILTER (WHERE u.id IS NOT NULL) AS total_users,
-        COUNT(u.id) FILTER (WHERE u.created_at >= NOW() - INTERVAL '30 days') AS new_users_30d
-      FROM dev_apps a
-      LEFT JOIN users u ON u.app_id = a.id
-      WHERE a.id = $1
-      GROUP BY a.id
-    `, [appId]);
+    let q;
+    try {
+      q = await pool.query(`
+        SELECT a.id, a.app_name, a.allow_google_signin, a.allow_email_signin, a.support_email, a.support_email_verified,
+          a.mail_sent_count, a.mail_quota_month,
+          COUNT(u.id) FILTER (WHERE u.id IS NOT NULL) AS total_users,
+          COUNT(u.id) FILTER (WHERE u.created_at >= NOW() - INTERVAL '30 days') AS new_users_30d
+        FROM dev_apps a
+        LEFT JOIN users u ON u.app_id = a.id
+        WHERE a.id = $1
+        GROUP BY a.id
+      `, [appId]);
+    } catch (queryErr) {
+      if (queryErr.code === '42703') {
+        q = await pool.query(`
+          SELECT a.id, a.app_name, a.allow_google_signin, a.allow_email_signin, a.support_email, a.support_email_verified,
+            0 AS mail_sent_count, NULL AS mail_quota_month,
+            COUNT(u.id) FILTER (WHERE u.id IS NOT NULL) AS total_users,
+            COUNT(u.id) FILTER (WHERE u.created_at >= NOW() - INTERVAL '30 days') AS new_users_30d
+          FROM dev_apps a
+          LEFT JOIN users u ON u.app_id = a.id
+          WHERE a.id = $1
+          GROUP BY a.id
+        `, [appId]);
+      } else {
+        throw queryErr;
+      }
+    }
 
     // usage this month
     const usage = await pool.query(`

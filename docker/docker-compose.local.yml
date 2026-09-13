@@ -86,6 +86,7 @@ services:
       FRONTEND_URL: http://localhost:4002
       BACKEND_URL: http://localhost:5002
       AUTH_API_BASE_URL: http://developer-backend:5000
+      SECRET_ENCRYPTION_KEY: f4c0721d1d0afd225c0f54058258fb519d7a145fa20ac4531a7a5810659a2e99
     ports:
       - "5002:5002"
     depends_on:

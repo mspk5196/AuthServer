@@ -23,6 +23,25 @@ function generatePublicApiKey() {
 }
 
 /**
+ * Encrypt the raw API secret using AES-256-GCM.
+ * Returns a string in the format "ivHex:authTagHex:cipherHex".
+ * Requires SECRET_ENCRYPTION_KEY env var (64 hex chars = 32 bytes).
+ * Used to store a recoverable form of the secret for HMAC-SHA256 verification (v0.2+ clients).
+ */
+function encryptSecret(secret) {
+  const keyHex = process.env.SECRET_ENCRYPTION_KEY;
+  if (!keyHex || keyHex.length !== 64) {
+    throw new Error('SECRET_ENCRYPTION_KEY env var must be set to 64 hex characters (32 bytes).');
+  }
+  const key = Buffer.from(keyHex, 'hex');
+  const iv = crypto.randomBytes(12); // 96-bit IV recommended for GCM
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const encrypted = cipher.update(secret, 'utf8', 'hex') + cipher.final('hex');
+  const authTag = cipher.getAuthTag();
+  return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
+}
+
+/**
  * Safely parse numeric limits from plan features.
  * Returns a number, or null when unlimited/not set.
  */
@@ -171,22 +190,24 @@ const createApp = async (req, res) => {
     // Generate credentials
     const { apiKey, apiSecret } = generateApiCredentials();
     
-    // Hash the secret BEFORE storing
+    // Hash the secret BEFORE storing (kept for backward compat with v0.1.x clients)
     const hashedSecret = crypto.createHash('sha256').update(apiSecret).digest('hex');
+    // Also store AES-256-GCM encrypted secret for HMAC-SHA256 verification (v0.2+ clients)
+    const encryptedSecret = encryptSecret(apiSecret);
 
     // console.log    console.log('Creating app with credentials...');
 
-    // Create app with hashed secret and email pending verification
+    // Create app with hashed secret, encrypted secret, and email pending verification
     const result = await pool.query(`
       INSERT INTO dev_apps (
-        developer_id, app_name, support_email, api_key, api_secret_hash,
+        developer_id, app_name, support_email, api_key, api_secret_hash, api_secret_encrypted,
         allow_google_signin, allow_email_signin, support_email_verified,
         group_id, created_at, updated_at
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, false, $8, NOW(), NOW()
+        $1, $2, $3, $4, $5, $6, $7, $8, false, $9, NOW(), NOW()
       )
       RETURNING id, app_name, support_email, api_key, allow_google_signin, allow_email_signin, support_email_verified, group_id, created_at
-    `, [developerId, app_name, support_email, apiKey, hashedSecret, allow_google_signin, allow_email_signin, resolvedGroupId]);
+    `, [developerId, app_name, support_email, apiKey, hashedSecret, encryptedSecret, allow_google_signin, allow_email_signin, resolvedGroupId]);
 
     const app = result.rows[0];
     // console.log    console.log('App created successfully:', app.id);
@@ -870,11 +891,12 @@ const regenerateApiKey = async (req, res) => {
     // Generate new credentials
     const { apiKey, apiSecret } = generateApiCredentials();
     const hashedSecret = crypto.createHash('sha256').update(apiSecret).digest('hex');
+    const encryptedSecret = encryptSecret(apiSecret);
 
-    // Update credentials
+    // Update credentials (both hash for legacy v0.1.x and encrypted for v0.2+ HMAC)
     await pool.query(
-      'UPDATE dev_apps SET api_key = $1, api_secret_hash = $2, updated_at = NOW() WHERE id = $3',
-      [apiKey, hashedSecret, appId]
+      'UPDATE dev_apps SET api_key = $1, api_secret_hash = $2, api_secret_encrypted = $3, updated_at = NOW() WHERE id = $4',
+      [apiKey, hashedSecret, encryptedSecret, appId]
     );
 
     res.json({

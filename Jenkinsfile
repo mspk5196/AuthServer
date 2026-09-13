@@ -6,6 +6,7 @@ pipeline {
     APP = "auth-server"
     RUNTIME_ROOT = "/opt/runtime/${APP}"
     EMAIL = "ci@mspkapps.in"
+    SECRET_ENCRYPTION_KEY = credentials('cpanel-secret-encryption-key')
   }
 
   stages {

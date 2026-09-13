@@ -117,27 +117,191 @@ const verifyDeveloperCredentials = async (req, res, next) => {
 };
 
 /**
- * Middleware to verify app credentials (API Key + Secret)
+ * Decrypt an AES-256-GCM encrypted secret stored in the DB.
+ * Format of `encrypted`: "ivHex:authTagHex:cipherHex"
+ * Requires SECRET_ENCRYPTION_KEY env var (64 hex chars = 32 bytes).
+ */
+function decryptSecret(encrypted) {
+  const keyHex = process.env.SECRET_ENCRYPTION_KEY;
+  if (!keyHex || keyHex.length !== 64) {
+    throw new Error('SECRET_ENCRYPTION_KEY env var must be set to 64 hex characters (32 bytes).');
+  }
+  const key = Buffer.from(keyHex, 'hex');
+  const [ivHex, authTagHex, cipherHex] = encrypted.split(':');
+  const iv = Buffer.from(ivHex, 'hex');
+  const authTag = Buffer.from(authTagHex, 'hex');
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(authTag);
+  return decipher.update(cipherHex, 'hex', 'utf8') + decipher.final('utf8');
+}
+
+const HMAC_TIMESTAMP_TOLERANCE_SEC = 300; // ±5 minutes
+
+/**
+ * Middleware to verify app credentials.
+ *
+ * Supports two modes (auto-detected by presence of X-Signature header):
+ *
+ * Mode A — HMAC-SHA256 (v0.2+, preferred):
+ *   X-API-Key: <apiKey>
+ *   X-Timestamp: <unix_seconds>
+ *   X-Signature: HMAC-SHA256(secret, "METHOD:pathname:timestamp:body_sha256")
+ *   → Secret is NEVER transmitted. Signatures are time-limited (±5 min).
+ *
+ * Mode B — Legacy hash (v0.1.x, backward compat):
+ *   X-API-Key: <apiKey>
+ *   X-API-Secret: <rawSecret>   ← still works but less secure
  */
 const verifyAppCredentials = async (req, res, next) => {
   try {
     const apiKey = req.params.apiKey || req.headers['x-api-key'];
-    const apiSecret = req.headers['x-api-secret'];
+    const xSignature = req.headers['x-signature'];
+    const isHmacMode = !!xSignature;
 
-    if (!apiKey || !apiSecret) {
+    if (!apiKey) {
       return res.status(401).json({
         success: false,
         error: 'Missing API credentials',
-        message: 'Both X-API-Key and X-API-Secret headers are required'
+        message: 'X-API-Key header is required'
       });
     }
 
-    // Hash the provided secret
+    // ── Mode A: HMAC-SHA256 verification (v0.2+) ──────────────────────────────
+    if (isHmacMode) {
+      const xTimestamp = req.headers['x-timestamp'];
+
+      if (!xTimestamp || !xSignature) {
+        return res.status(401).json({
+          success: false,
+          error: 'Missing HMAC headers',
+          message: 'X-Timestamp and X-Signature are required when using HMAC mode'
+        });
+      }
+
+      // Reject stale/future timestamps — prevents replay attacks
+      const now = Math.floor(Date.now() / 1000);
+      const reqTime = parseInt(xTimestamp, 10);
+      if (isNaN(reqTime) || Math.abs(now - reqTime) > HMAC_TIMESTAMP_TOLERANCE_SEC) {
+        return res.status(401).json({
+          success: false,
+          error: 'TIMESTAMP_EXPIRED',
+          message: 'Request timestamp is expired or too far in the future (±5 min allowed)'
+        });
+      }
+
+      // Load app — must have encrypted secret for HMAC mode
+      const result = await pool.query(`
+        SELECT
+          a.*,
+          d.id as developer_id,
+          d.name as developer_name,
+          d.email as developer_email,
+          d.mail_sending_blocked as developer_mail_sending_blocked
+        FROM dev_apps a
+        JOIN developers d ON a.developer_id = d.id
+        WHERE a.api_key = $1
+      `, [apiKey]);
+
+      if (result.rows.length === 0) {
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid API credentials',
+          message: 'API key is incorrect'
+        });
+      }
+
+      const app = result.rows[0];
+
+      if (!app.api_secret_encrypted) {
+        return res.status(401).json({
+          success: false,
+          error: 'HMAC_NOT_SUPPORTED',
+          message: 'This app was created before HMAC signing was supported. Please regenerate your API credentials.'
+        });
+      }
+
+      // Decrypt stored secret and verify HMAC
+      let rawSecret;
+      try {
+        rawSecret = decryptSecret(app.api_secret_encrypted);
+      } catch (decryptErr) {
+        console.error('Secret decryption failed:', decryptErr);
+        return res.status(500).json({
+          success: false,
+          error: 'Internal server error',
+          message: 'Failed to verify credentials'
+        });
+      }
+
+      // Reconstruct the exact message the client signed
+      const bodyStr = req.body && Object.keys(req.body).length > 0 ? JSON.stringify(req.body) : '';
+      const bodyHash = crypto.createHash('sha256').update(bodyStr).digest('hex');
+      const pathname = req.baseUrl + req.path; // e.g. /api/v1/ak_xxx.../auth/login
+      const message = `${req.method.toUpperCase()}:${pathname}:${xTimestamp}:${bodyHash}`;
+      const expected = crypto.createHmac('sha256', rawSecret).update(message).digest('hex');
+
+      // Constant-time comparison to prevent timing attacks
+      let signaturesMatch = false;
+      try {
+        const sigBuf = Buffer.from(xSignature, 'hex');
+        const expBuf = Buffer.from(expected, 'hex');
+        signaturesMatch = sigBuf.length === expBuf.length && crypto.timingSafeEqual(sigBuf, expBuf);
+      } catch {
+        signaturesMatch = false;
+      }
+
+      if (!signaturesMatch) {
+        return res.status(401).json({
+          success: false,
+          error: 'INVALID_SIGNATURE',
+          message: 'Request signature is invalid'
+        });
+      }
+
+      // Check plan
+      const planCheck = await pool.query(`
+        SELECT p.features, dpr.is_active, dpr.end_date
+        FROM developer_plan_registrations dpr
+        JOIN dev_plans p ON dpr.plan_id = p.id
+        WHERE dpr.developer_id = $1 AND dpr.is_active = true
+        LIMIT 1
+      `, [app.developer_id]);
+
+      if (planCheck.rows.length === 0) {
+        return res.status(403).json({
+          success: false,
+          error: 'Plan inactive',
+          message: 'Developer plan is not active. Please contact the app owner.'
+        });
+      }
+
+      req.devApp = app;
+      req.plan = planCheck.rows[0];
+
+      const _trackStart = Date.now();
+      res.on('finish', () => {
+        trackApiCall(app.id, app.developer_id, req, res.statusCode, Date.now() - _trackStart)
+          .catch(err => console.error('API tracking error:', err));
+      });
+
+      return next();
+    }
+
+    // ── Mode B: Legacy SHA-256 hash verification (v0.1.x backward compat) ────
+    const apiSecret = req.headers['x-api-secret'];
+
+    if (!apiSecret) {
+      return res.status(401).json({
+        success: false,
+        error: 'Missing API credentials',
+        message: 'X-API-Secret header is required (or use HMAC mode with X-Signature)'
+      });
+    }
+
     const hashedSecret = crypto.createHash('sha256').update(apiSecret).digest('hex');
 
-    // Verify credentials and get app details
     const result = await pool.query(`
-      SELECT 
+      SELECT
         a.*,
         d.id as developer_id,
         d.name as developer_name,
@@ -158,12 +322,8 @@ const verifyAppCredentials = async (req, res, next) => {
 
     const app = result.rows[0];
 
-    // Check if developer's plan is active
     const planCheck = await pool.query(`
-      SELECT 
-        p.features,
-        dpr.is_active,
-        dpr.end_date
+      SELECT p.features, dpr.is_active, dpr.end_date
       FROM developer_plan_registrations dpr
       JOIN dev_plans p ON dpr.plan_id = p.id
       WHERE dpr.developer_id = $1 AND dpr.is_active = true
@@ -178,11 +338,9 @@ const verifyAppCredentials = async (req, res, next) => {
       });
     }
 
-    // Attach app and plan info to request (avoid shadowing Express req.app)
     req.devApp = app;
     req.plan = planCheck.rows[0];
 
-    // Track API call after response so status_code and response_time_ms are available
     const _trackStart = Date.now();
     res.on('finish', () => {
       trackApiCall(app.id, app.developer_id, req, res.statusCode, Date.now() - _trackStart)
@@ -198,6 +356,7 @@ const verifyAppCredentials = async (req, res, next) => {
       message: 'Failed to verify API credentials'
     });
   }
+
 };
 
 /**

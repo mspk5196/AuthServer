@@ -4,11 +4,8 @@ pipeline {
 
   environment {
     APP = "auth-server"
-    RUNTIME_ROOT = "/opt/runtime/${APP}"
     RUNTIME_ROOT = "/opt/runtime/auth-server"
     EMAIL = "ci@mspkapps.in"
-    // SECRET_ENCRYPTION_KEY is loaded from /opt/envs/cpanel-backend.env on the server
-    // via scripts/load-env.sh — no Jenkins credential binding needed
   }
 
   stages {
@@ -127,7 +124,6 @@ pipeline {
   post {
     success {
       emailext(
-        to: env.EMAIL,
         to: "ci@mspkapps.in",
         subject: "✅ ${env.APP} deployed to PRODUCTION (Build #${env.BUILD_NUMBER})",
         body: """
@@ -145,14 +141,11 @@ Branch      : main
 
     failure {
       emailext(
-        to: env.EMAIL,
-        subject: "❌ ${env.APP} CI FAILED (Build #${env.BUILD_NUMBER})",
         to: "ci@mspkapps.in",
         subject: "❌ ${env.APP ?: 'auth-server'} CI FAILED (Build #${env.BUILD_NUMBER})",
         body: """
 FAILURE ❌
 
-Application : ${env.APP}
 Application : ${env.APP ?: 'auth-server'}
 Build Number: ${env.BUILD_NUMBER}
 Branch      : test → main

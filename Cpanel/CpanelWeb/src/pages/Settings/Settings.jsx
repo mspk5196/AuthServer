@@ -64,7 +64,7 @@ const Settings = () => {
   };
 
   const handleUpgradePlanClick = () => {
-    window.open('https://authservices.mspkapps.in/plans', '_blank', 'noopener');
+    window.open('https://authservices.mspk.in/plans', '_blank', 'noopener');
   };
 
   const copyDevId = () => {
@@ -131,25 +131,18 @@ const Settings = () => {
         </p>
       </div>
 
-      {/* Account Info Notice Banner */}
-      <div className="p-4 bg-indigo-50/60 border border-indigo-100 rounded-2xl flex items-start gap-3.5 text-xs text-indigo-900">
-        <div className="p-2 bg-indigo-100 text-indigo-700 rounded-xl shrink-0 mt-0.5">
-          <Info className="w-4 h-4" />
-        </div>
-        <div className="flex-1 space-y-1">
-          <h4 className="font-bold text-indigo-950 text-sm">Main Account Management</h4>
-          <p className="text-indigo-800 leading-relaxed">
-            To update your primary profile, configure Two-Factor Authentication (2FA), or change passwords, please visit the{' '}
-            <a
-              href="https://authservices.mspkapps.in/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-bold underline hover:text-indigo-950 inline-flex items-center gap-0.5"
-            >
-              Main Developer Portal
-              <ExternalLink className="w-3 h-3 inline" />
-            </a>.
-          </p>
+      <div className="info-banner">
+        <svg className="info-banner-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="16" x2="12" y2="12" />
+          <line x1="12" y1="8" x2="12.01" y2="8" />
+        </svg>
+        <div className="info-banner-content">
+          <div className="info-banner-title">Account Management</div>
+          <div className="info-banner-text">
+            To edit your profile, enable two-factor authentication, or reset your password,
+            please visit the <a href="https://authservices.mspk.in/" target="_blank" rel="noopener noreferrer">main developer portal</a>.
+          </div>
         </div>
       </div>
 
@@ -367,15 +360,22 @@ const Settings = () => {
             </div>
           </div>
 
-          <a
-            href="https://docs.mspkapps.in/developer-api"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-semibold transition-colors shrink-0"
-          >
-            Developer API Docs
-            <ExternalLink className="w-3.5 h-3.5" />
-          </a>
+        <div className="settings-row">
+          <div className="settings-label">
+            <div className="settings-label-title">API Documentation</div>
+            <div className="settings-label-desc">Learn how to use your Developer ID</div>
+          </div>
+          <div className="settings-value">
+            <a 
+              href="https://docs.mspk.in/developer-api" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="btn btn-secondary"
+              style={{ padding: '0.5rem 1rem' }}
+            >
+              View Docs
+            </a>
+          </div>
         </div>
       </div>
 

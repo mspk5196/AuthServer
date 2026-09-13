@@ -14,6 +14,7 @@ const {
   buildPasswordResetEmail,
   buildPasswordChangedEmail
 } = require('../templates/emailTemplates');
+const client = require('prom-client');
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -322,13 +323,7 @@ const exchangeOAuthTokens = async (req, res) => {
 
     const accessMaxAge = parseExpiryToMs(process.env.JWT_EXPIRE || '15m');
     const refreshMaxAge = parseExpiryToMs(process.env.JWT_REFRESH_EXPIRE || '7d');
-
-    const cookieDomain = (() => {
-      try {
-        const h = new URL(process.env.BACKEND_URL || '').hostname;
-        return (h && h !== 'localhost' && h !== '127.0.0.1') ? h : undefined;
-      } catch(e) { return undefined; }
-    })();
+    const cookieDomain = (() => { try { return new URL(process.env.BACKEND_URL || '').hostname; } catch (e) { return undefined; } })();
     const cookieSecure = process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : (process.env.NODE_ENV === 'production');
     const cookieOpts = { httpOnly: true, secure: cookieSecure, sameSite: cookieSecure ? 'none' : 'lax', path: '/' };
     if (cookieDomain) cookieOpts.domain = cookieDomain;
@@ -346,7 +341,17 @@ const exchangeOAuthTokens = async (req, res) => {
   }
 };
 
+const loginFailures = new client.Counter({
+  name: 'login_failures_total',
+  help: 'Total login failures',
+  labelNames: ['app'],
+});
 
+const loginSuccess = new client.Counter({
+  name: 'login_success_total',
+  help: 'Total login success',
+  labelNames: ['app'],
+});
 
 /**
  * Developer login
@@ -369,6 +374,7 @@ const developerLogin = async (req, res) => {
     );
 
     if (developers.rows.length === 0) {
+      loginFailures.inc({app: "dev-web"});
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials',
@@ -380,6 +386,7 @@ const developerLogin = async (req, res) => {
 
     // Check if account is blocked
     if (developer.is_blocked) {
+      loginFailures.inc({app: "dev-web"});
       return res.status(403).json({
         success: false,
         message: 'This email is blocked. Please contact support.',
@@ -389,6 +396,7 @@ const developerLogin = async (req, res) => {
 
     // Check if account is locked due to failed attempts
     if (developer.locked_until && new Date() < new Date(developer.locked_until)) {
+      loginFailures.inc({app: "dev-web"});
       return res.status(423).json({
         success: false,
         message: 'Account is temporarily locked due to multiple failed login attempts',
@@ -401,6 +409,7 @@ const developerLogin = async (req, res) => {
     const isValidPassword = await bcrypt.compare(encryptedPassword, developer.password_hash);
 
     if (!isValidPassword) {
+      loginFailures.inc({app: "dev-web"});
       // Increment failed login attempts
       const failedAttempts = (developer.failed_login_attempts || 0) + 1;
       const lockUntil = failedAttempts >= 5 ? new Date(Date.now() + 30 * 60 * 1000) : null;
@@ -420,6 +429,7 @@ const developerLogin = async (req, res) => {
 
     // Check if email is verified
     if (!developer.email_verified) {
+      loginFailures.inc({app: "dev-web"});
       return res.status(403).json({
         success: false,
         message: 'Please verify your email first',
@@ -545,6 +555,7 @@ const developerLogin = async (req, res) => {
     if (refreshMaxAge) refreshOpts.maxAge = refreshMaxAge;
     res.cookie('refresh_token', refreshToken, refreshOpts);
 
+    loginSuccess.inc({app: "dev-web"});
     // Return user payload only; tokens are stored in httpOnly cookies
     res.status(200).json({
       success: true,

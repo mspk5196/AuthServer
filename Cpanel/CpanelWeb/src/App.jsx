@@ -20,7 +20,7 @@ function App() {
   const { developer, setDeveloper, loading, setLoading } = useAuth();
   const consumedOnceRef = useRef(false);
   const [ssoDebug, setSsoDebug] = useState(null);
-  const mainPortalUrl = import.meta.env.VITE_MAIN_PORTAL_URL || 'https://authservices.mspkapps.in';
+  const mainPortalUrl = import.meta.env.VITE_MAIN_PORTAL_URL || 'https://authservices.mspk.in';
 
   const ticket = useMemo(() => {
     const qsTicket = new URLSearchParams(window.location.search).get('ticket');
@@ -85,8 +85,10 @@ function App() {
   // If not authenticated after initialization, redirect back to main developer portal
   useEffect(() => {
     if (!loading && !developer) {
-      const base = mainPortalUrl || 'https://authservices.mspkapps.in';
-      const delay = ticket ? 8000 : 2500;
+      // If we arrived via SSO ticket, give a longer delay so the
+      // on-screen debug panel can be read. Otherwise use a short delay.
+      const base = mainPortalUrl || 'https://authservices.mspk.in';
+      const delay = ticket ? 10000 : 3000;
       const timer = setTimeout(() => {
         window.location.href = base;
       }, delay);

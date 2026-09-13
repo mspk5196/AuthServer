@@ -7,6 +7,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const client = require('prom-client');
 
 const authRoutes = require('./routes/authRoutes.js');
 const cPanelRoutes = require('./routes/cPanelRoutes.js');
@@ -81,38 +82,39 @@ app.use((req, res, next) => {
   next();
 });
 
-// Razorpay webhook — intentionally unversioned (Razorpay callback URL is fixed)
-app.post('/api/razorpay/webhook', paymentController.handleWebhook);
+// collect default metrics (CPU, memory, etc.)
+client.collectDefaultMetrics();
 
-// ── Stable versionless Google OAuth callback (never changes regardless of API_VERSION) ──
-app.get('/api/developer/auth/google/callback', require('./controllers/authController').googleCallback);
-
-// ── Route Mounts (Mount across configured API_VERSION, v1, and v2 aliases) ───
-// IMPORTANT: v2-specific routes must be mounted BEFORE authRoutes so they win on overlapping paths (e.g. /plans, /my-plan)
-const developerPrefixes = Array.from(new Set([
-  `/api/${API_VERSION}/developer`,
-  '/api/v1/developer',
-  '/api/v2/developer',
-]));
-
-const cpanelPrefixes = Array.from(new Set([
-  `/api/${API_VERSION}/cpanel`,
-  '/api/v1/cpanel',
-  '/api/v2/cpanel',
-]));
-
-developerPrefixes.forEach((prefix) => {
-  app.use(prefix, planRoutesV2);
-  app.use(prefix, paymentRoutesV2);
-  app.use(prefix, transactionRoutes);
-  app.use(prefix, feedbackRoutes);
-  app.use(prefix, usageRoutes);
-  app.use(prefix, authRoutes);
+// custom metric: request duration
+const httpRequestDuration = new client.Histogram({
+  name: 'http_request_duration_seconds',
+  help: 'HTTP request duration',
+  labelNames: ['method', 'route', 'status'],
 });
 
-cpanelPrefixes.forEach((prefix) => {
-  app.use(prefix, cPanelRoutes);
+// middleware
+app.use((req, res, next) => {
+  const end = httpRequestDuration.startTimer();
+
+  res.on('finish', () => {
+    end({
+      method: req.method,
+      route: req.path,
+      status: res.statusCode,
+    });
+  });
+
+  next();
 });
+
+// metrics endpoint
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', client.register.contentType);
+  res.end(await client.register.metrics());
+});
+
+// Razorpay webhook (must be before json parsing for raw body)
+app.post('/api/razorpay/webhook', express.raw({ type: 'application/json' }), paymentController.handleWebhook);
 
 // block all non-API routes
 app.use((req, res, next) => {

@@ -4,8 +4,9 @@ pipeline {
 
   environment {
     APP = "auth-server"
-    RUNTIME_ROOT = "/opt/runtime/auth-server"
-    EMAIL = "ci@mspkapps.in"
+    RUNTIME_ROOT = "/opt/runtime/${APP}"
+    EMAIL = "ci@mspk.in"
+    IMAGE_TAG = "prod-${BUILD_NUMBER}"
   }
 
   stages {
@@ -39,9 +40,9 @@ pipeline {
           sh '''
             set -e
             git config user.name "Jenkins CI"
-            git config user.email "ci@mspkapps.in"
+            git config user.email "ci@mspk.in"
 
-            git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@github.com/MSPK-APPS/auth-server.git
+            git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@github.com/mspk5196/AuthServer.git
 
             git fetch origin \
               +refs/heads/main:refs/remotes/origin/main \
@@ -73,7 +74,7 @@ pipeline {
               echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
 
               echo "🏗️ Building images..."
-              docker compose \
+              COMPOSE_DOCKER_CLI_BUILD=0 docker compose \
                 -f docker/docker-compose.ci.yml \
                 build
 
@@ -105,10 +106,10 @@ pipeline {
         sh '''
           set -e
 
-          docker pull mspkapps/cpanel-backend:${IMAGE_TAG}
-          docker pull mspkapps/cpanel-frontend:${IMAGE_TAG}
-          docker pull mspkapps/dev-backend:${IMAGE_TAG}
-          docker pull mspkapps/dev-frontend:${IMAGE_TAG}
+          docker pull mspk5196/cpanel-backend:${IMAGE_TAG}
+          docker pull mspk5196/cpanel-frontend:${IMAGE_TAG}
+          docker pull mspk5196/dev-backend:${IMAGE_TAG}
+          docker pull mspk5196/dev-frontend:${IMAGE_TAG}
 
           cd ${RUNTIME_ROOT}
 
@@ -157,4 +158,5 @@ Branch      : test → main
       )
     }
   }
+
 }

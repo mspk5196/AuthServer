@@ -34,7 +34,7 @@ Headers:
 ## Getting Your Developer ID
 
 ### Via Cpanel Settings
-1. Log in to [Cpanel](https://cpanel.mspkapps.in)
+1. Log in to [Cpanel](https://cpanel.mspk.in)
 2. Navigate to **Settings**
 3. Find **Developer Credentials** section
 4. Copy your `dev_id` (UUID format)
@@ -308,18 +308,18 @@ const groups = await client.getDeveloperGroups();
 ### Manual Testing with cURL
 ```bash
 # Get developer groups
-curl -X GET 'https://cpanel-backend.mspkapps.in/api/v1/developer/groups' \
+curl -X GET 'https://cpanel-backend.mspk.in/api/v1/developer/groups' \
   -H 'X-Developer-Id: your-dev-id-uuid'
 
 # Get all apps
-curl -X GET 'https://cpanel-backend.mspkapps.in/api/v1/developer/apps' \
+curl -X GET 'https://cpanel-backend.mspk.in/api/v1/developer/apps' \
   -H 'X-Developer-Id: your-dev-id-uuid'
 ```
 
 ### Testing with Postman
 1. Create new request
 2. Add header: `X-Developer-Id: your-dev-id-uuid`
-3. Set URL: `https://cpanel-backend.mspkapps.in/api/v1/developer/groups`
+3. Set URL: `https://cpanel-backend.mspk.in/api/v1/developer/groups`
 4. Send GET request
 
 ---
@@ -361,6 +361,6 @@ A: Yes. Use API credentials for app operations, Developer ID for developer opera
 ## Support
 
 For issues or questions:
-- Email: support@mspkapps.in
-- Documentation: https://cpanel.mspkapps.in/docs
+- Email: support@mspk.in
+- Documentation: https://cpanel.mspk.in/docs
 - GitHub Issues: (your repo link)

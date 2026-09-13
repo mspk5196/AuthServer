@@ -82,8 +82,8 @@ const corsOptions = {
     const allowedOrigins = [
       process.env.FRONTEND_URL,
       'http://localhost:3000',
-      'https://mspkapps.in',
-      'https://admin.mspkapps.in',
+      'https://mspk.in',
+      'https://admin.mspk.in',
       'https://accounts.google.com'
     ];
     

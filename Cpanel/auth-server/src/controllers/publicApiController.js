@@ -3,7 +3,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const pool = require('../config/db');
 const { passwordEncryptAES, passwordDecryptAES } = require('../utils/decryptAES');
-const { sendMail } = require('../utils/mailer');
+const { sendAppUserEmail } = require('../utils/emailServiceClient');
 const {
   buildWelcomeVerificationEmail,
   buildPasswordResetEmail,
@@ -600,7 +600,7 @@ const registerUser = async (req, res) => {
     // Send verification email (non-blocking)
     const verificationUrl = `${process.env.BACKEND_URL}/api/v1/auth/verify-email?token=${verificationToken}`;
 
-    sendMail({
+    sendAppUserEmail({
       to: email,
       subject: 'Verify Your Email',
       html: buildWelcomeVerificationEmail({ appName: app.app_name, verificationUrl, supportEmail: app.support_email }),
@@ -1001,7 +1001,7 @@ const requestPasswordReset = async (req, res) => {
 
     // Send reset email
     const resetUrl = `${process.env.BACKEND_URL}/api/v1/auth/reset-password?token=${resetToken}`;
-    sendMail({
+    sendAppUserEmail({
       to: email,
       subject: 'Reset Your Password',
       html: buildPasswordResetEmail({ name: user.name, resetUrl, supportEmail: app.support_email }),
@@ -1077,7 +1077,7 @@ const requestChangePasswordLink = async (req, res) => {
 
     const verificationUrl = `${process.env.BACKEND_URL}/api/v1/auth/verify-change-password?token=${verificationToken}`;
 
-    sendMail({
+    sendAppUserEmail({
       to: user.email,
       subject: 'Change your password',
       html: buildChangePasswordLinkEmail({ appName: app.app_name, name: user.name, verificationUrl, supportEmail: app.support_email }),
@@ -1174,7 +1174,7 @@ const changePassword = async (req, res) => {
       [hashedPassword, user.id]
     );
 
-    sendMail({
+    sendAppUserEmail({
       to: user.email,
       subject: 'Account password changed successfully',
       html: buildPasswordChangedEmail({ appName: app.app_name, changedAt: new Date().toLocaleString(), supportEmail: app.support_email }),
@@ -1274,7 +1274,7 @@ const resendVerification = async (req, res) => {
 
     // Send verification email
     const verificationUrl = `${process.env.BACKEND_URL}/api/v1/auth/verify-email?token=${verificationToken}`;
-    sendMail({
+    sendAppUserEmail({
       to: email,
       subject: 'Verify Your Email',
       html: buildEmailVerificationEmail({ name: user.name, verificationUrl, verifyPurpose, supportEmail: app.support_email }),
@@ -1625,7 +1625,7 @@ const completePasswordReset = async (req, res) => {
 
     // Find valid reset token and get current password
     const result = await pool.query(`
-      SELECT pr.id, pr.user_id, u.password_hash, u.email, u.app_id, a.app_name, a.support_email
+      SELECT pr.id, pr.user_id, u.password_hash, u.email, u.app_id, a.app_name, a.support_email, a.email_smtp_profile_name
       FROM password_resets pr
       JOIN users u ON pr.user_id = u.id
       JOIN dev_apps a ON u.app_id = a.id
@@ -1673,10 +1673,11 @@ const completePasswordReset = async (req, res) => {
       [resetRecord.user_id]
     );
 
-    sendMail({
+    sendAppUserEmail({
       to: resetRecord.email,
       subject: 'Account password changed successfully',
       html: buildPasswordChangedEmail({ appName: resetRecord.app_name, changedAt: new Date().toLocaleString(), supportEmail: resetRecord.support_email }),
+      smtpProfileName: resetRecord.email_smtp_profile_name
     }).catch(err => console.error('Send verification email error:', err));
 
     res.json({
@@ -1741,7 +1742,7 @@ const deleteAccount = async (req, res) => {
     // Send verification email (non-blocking)
     const verificationUrl = `${process.env.BACKEND_URL}/api/v1/auth/verify-delete-email?token=${verificationToken}`;
 
-    sendMail({
+    sendAppUserEmail({
       to: email,
       subject: 'Delete Your Account',
       html: buildDeleteAccountEmail({ appName: app.app_name, verificationUrl, supportEmail: app.support_email }),
@@ -1821,7 +1822,7 @@ const verifyDeleteEmail = async (req, res) => {
     const verification = result.rows[0];
 
     const appData = await pool.query(
-      'SELECT app_name, support_email FROM dev_apps WHERE id = $1',
+      'SELECT app_name, support_email, email_smtp_profile_name FROM dev_apps WHERE id = $1',
       [verification.app_id]
     );
     const app = appData.rows[0];
@@ -2236,7 +2237,7 @@ const verifyDeleteEmail = async (req, res) => {
     await pool.query('DELETE FROM user_login_history WHERE user_id = $1', [user.id]);
     await pool.query('UPDATE user_email_verifications SET used = true WHERE id = $1', [verification.id]);
 
-    sendMail({
+    sendAppUserEmail({
       to: user.email,
       subject: 'Account deleted successfully',
       html: buildAccountDeletedEmail({ appName: app.app_name, deletedAt: new Date().toLocaleString(), supportEmail: app.support_email }),
@@ -2386,7 +2387,7 @@ const googleAuth = async (req, res) => {
         // Send verification email
         const verificationUrl = `${process.env.BACKEND_URL}/api/v1/auth/verify-email-set-password-google-user?token=${verificationToken}`;
 
-        sendMail({
+        sendAppUserEmail({
           to: googleUser.email?.toLowerCase(),
           subject: 'Welcome to ' + app.app_name,
           html: buildGoogleUserWelcomeEmail({ appName: app.app_name, email: googleUser.email?.toLowerCase(), verificationUrl, name: googleUser.name, supportEmail: app.support_email }),
@@ -2527,7 +2528,7 @@ const setPasswordGoogleUser = async (req, res) => {
 
     // Send verification email
     const verificationUrl = `${process.env.BACKEND_URL}/api/v1/auth/verify-email-set-password-google-user?token=${verificationToken}`;
-    sendMail({
+    sendAppUserEmail({
       to: email,
       subject: 'Link to set your password',
       html: buildSetPasswordGoogleUserEmail({ appName: app.app_name, name: user.name, verificationUrl, supportEmail: app.support_email }),
@@ -2613,7 +2614,7 @@ const verifyEmailSetPasswordGoogleUser = async (req, res) => {
 
       // Get user and app details
       const userRes = await pool.query(
-        'SELECT u.id, u.email, u.password_hash, a.app_name, a.support_email FROM users u JOIN dev_apps a ON u.app_id = a.id WHERE u.id = $1 AND u.app_id = $2',
+        'SELECT u.id, u.email, u.password_hash, a.app_name, a.support_email, a.email_smtp_profile_name FROM users u JOIN dev_apps a ON u.app_id = a.id WHERE u.id = $1 AND u.app_id = $2',
         [verification.user_id, verification.app_id]
       );
 
@@ -2648,10 +2649,11 @@ const verifyEmailSetPasswordGoogleUser = async (req, res) => {
       await pool.query('UPDATE user_email_verifications SET used = true WHERE id = $1', [verification.id]);
 
       // Send confirmation email
-      sendMail({
+      sendAppUserEmail({
         to: user.email,
         subject: 'Password linked to your account',
         html: buildPasswordSetConfirmationEmail({ changedAt: new Date().toLocaleString(), supportEmail: user.support_email }),
+        smtpProfileName: user.email_smtp_profile_name
       }).catch(err => console.error('Send password setup confirmation email error:', err));
 
       return res.json({
@@ -2875,7 +2877,7 @@ const verifyChangePassword = async (req, res) => {
 
     const verification = result.rows[0];
 
-    const appData = await pool.query('SELECT app_name, support_email FROM dev_apps WHERE id = $1', [verification.app_id]);
+    const appData = await pool.query('SELECT app_name, support_email, email_smtp_profile_name FROM dev_apps WHERE id = $1', [verification.app_id]);
     const app = appData.rows[0] || { app_name: 'your app' };
 
     const userRes = await pool.query(
@@ -2968,7 +2970,7 @@ const verifyChangePassword = async (req, res) => {
 
       await pool.query('UPDATE user_email_verifications SET used = true WHERE id = $1', [verification.id]);
 
-      sendMail({
+      sendAppUserEmail({
         to: user.email,
         subject: 'Password changed successfully',
         html: buildPasswordChangedEmail({ appName: app.app_name, changedAt: new Date().toLocaleString(), supportEmail: app.support_email }),
@@ -3145,7 +3147,7 @@ const patchUserProfile = async (req, res) => {
 
       const verificationUrl = `${process.env.BACKEND_URL}/api/v1/user/confirm-update?token=${verificationToken}`;
       const changesSummary = Object.keys(allowed).join(', ');
-      sendMail({ to: allowed.email, subject: 'Confirm profile changes', html: buildProfileUpdateVerificationEmail({ name: user.name, verificationUrl, changesSummary, supportEmail: app.support_email }) }).catch(err => console.error('Send profile update verification email error:', err));
+      sendAppUserEmail({ to: allowed.email, subject: 'Confirm profile changes', html: buildProfileUpdateVerificationEmail({ name: user.name, verificationUrl, changesSummary, supportEmail: app.support_email }) }).catch(err => console.error('Send profile update verification email error:', err));
 
       return res.status(202).json({ success: true, verification_required: true, message: 'Verification sent to new email address' });
     }
@@ -3569,11 +3571,13 @@ const sendAppMail = async (req, res) => {
     const senderName = (fromName && fromName.trim()) ? fromName.trim() : app.app_name;
     const finalHtml = buildDeveloperCustomEmail({ body: html, supportEmail: app.support_email });
 
-    const mailResult = await sendMail({
-      from: `"${senderName}" <${process.env.FROM_EMAIL}>`,
-      to: recipients.join(', '),
+    const mailResult = await sendAppUserEmail({
+      to: recipients,
+      fromName: senderName,
       subject: subject.trim(),
-      html: finalHtml
+      html: finalHtml,
+      smtpProfileName: app.email_smtp_profile_name,
+      metadata: { type: 'dev_custom_mail', appId: app.id }
     });
 
     if (!mailResult.success) {

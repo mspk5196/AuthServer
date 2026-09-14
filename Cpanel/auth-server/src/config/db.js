@@ -21,10 +21,12 @@ const pool = new Pool({
     console.log('⏰ DB Time:', res.rows[0].now);
 
     // Auto-migration for missing mail quota columns on dev_apps
+    // Auto-migration for missing mail quota & email profile columns on dev_apps
     try {
       await client.query(`
         ALTER TABLE dev_apps ADD COLUMN IF NOT EXISTS mail_sent_count integer DEFAULT 0;
         ALTER TABLE dev_apps ADD COLUMN IF NOT EXISTS mail_quota_month varchar(7) DEFAULT NULL;
+        ALTER TABLE dev_apps ADD COLUMN IF NOT EXISTS email_smtp_profile_name varchar(100) DEFAULT NULL;
       `);
     } catch (migErr) {
       console.warn('⚠️  Auto-migration notice:', migErr.message);

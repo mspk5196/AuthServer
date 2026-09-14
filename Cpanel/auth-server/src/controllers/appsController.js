@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
-const { sendMail } = require('../utils/mailer');
+const { sendDevEmail, sendAppUserEmail } = require('../utils/emailServiceClient');
 const { Parser } = require('json2csv');
 const {
   buildAppSupportEmailVerificationEmail,
@@ -221,10 +221,11 @@ const createApp = async (req, res) => {
 
     // Send verification email
     const verificationUrl = `${process.env.BACKEND_URL}/api/v1/developer/apps/verify-app-email/${verificationToken}`;
-    sendMail({
+    sendDevEmail({
       to: support_email,
       subject: `Verify Your App Support Email - ${app_name}`,
       html: buildAppSupportEmailVerificationEmail({ appName: app_name, verificationUrl, supportEmail: process.env.FROM_EMAIL }),
+      metadata: { type: 'app_support_email_verification', developerId }
     }).catch(err => console.error('Send verification email error:', err));
 
     // Return response with plaintext secret and pending verification status
@@ -770,7 +771,7 @@ const requestAppDeletion = async (req, res) => {
     const confirmationUrl = `${baseUrl}/api/developer/apps/confirm-delete/${token}`;
 
     // Send confirmation email
-    sendMail({
+    sendDevEmail({
       to: email,
       subject: `Confirm deletion of app - ${app_name}`,
       html: buildAppDeleteConfirmationEmail({
@@ -779,6 +780,7 @@ const requestAppDeletion = async (req, res) => {
         confirmationUrl,
         supportEmail: app_support_email
       }),
+      metadata: { type: 'app_delete_confirmation' }
     }).catch((err) => console.error('Send app delete confirmation email error:', err));
 
     return res.json({
@@ -1407,10 +1409,11 @@ const updateAppSupportEmail = async (req, res) => {
 
     // Send verification email
     const verificationUrl = `${process.env.BACKEND_URL}/api/v1/developer/apps/verify-app-email/${verificationToken}`;
-    sendMail({
+    sendDevEmail({
       to: support_email,
       subject: `Verify Updated Support Email - ${app.app_name}`,
       html: buildAppSupportEmailUpdateEmail({ appName: app.app_name, verificationUrl, supportEmail: process.env.FROM_EMAIL }),
+      metadata: { type: 'app_support_email_update', developerId }
     }).catch(err => console.error('Send verification email error:', err));
 
     res.json({
@@ -1656,13 +1659,13 @@ const mergeUsersAcrossApps = async (req, res) => {
           // notify user
           const userRes = await client.query('SELECT email FROM users WHERE id = $1', [uid]);
           if (userRes.rows[0] && userRes.rows[0].email) {
-            sendMail({ to: userRes.rows[0].email, subject: 'Your username was updated', html: `<p>Your username has been changed to <strong>${newName}</strong> by the application owner.</p>` }).catch(e => console.error('sendMail error', e));
+            sendAppUserEmail({ to: userRes.rows[0].email, subject: 'Your username was updated', html: `<p>Your username has been changed to <strong>${newName}</strong> by the application owner.</p>`, metadata: { type: 'username_update' } }).catch(e => console.error('sendAppUserEmail error', e));
           }
         } else {
           await client.query(`UPDATE users SET username = $1 WHERE id = $2`, [sanitized, uid]);
           const userRes = await client.query('SELECT email FROM users WHERE id = $1', [uid]);
           if (userRes.rows[0] && userRes.rows[0].email) {
-            sendMail({ to: userRes.rows[0].email, subject: 'Your username was updated', html: `<p>Your username has been changed to <strong>${sanitized}</strong> by the application owner.</p>` }).catch(e => console.error('sendMail error', e));
+            sendAppUserEmail({ to: userRes.rows[0].email, subject: 'Your username was updated', html: `<p>Your username has been changed to <strong>${sanitized}</strong> by the application owner.</p>`, metadata: { type: 'username_update' } }).catch(e => console.error('sendAppUserEmail error', e));
           }
         }
       }
@@ -1670,7 +1673,7 @@ const mergeUsersAcrossApps = async (req, res) => {
       // Notify kept user about merge
       const keptRes = await client.query('SELECT email FROM users WHERE id = $1', [keepUserId]);
       if (keptRes.rows[0] && keptRes.rows[0].email) {
-        sendMail({ to: keptRes.rows[0].email, subject: 'Accounts merged', html: `<p>Your accounts across multiple applications owned by the same developer have been consolidated. If you have questions, contact support.</p>` }).catch(e => console.error('sendMail error', e));
+        sendAppUserEmail({ to: keptRes.rows[0].email, subject: 'Accounts merged', html: `<p>Your accounts across multiple applications owned by the same developer have been consolidated. If you have questions, contact support.</p>`, metadata: { type: 'accounts_merged' } }).catch(e => console.error('sendAppUserEmail error', e));
       }
     }
 

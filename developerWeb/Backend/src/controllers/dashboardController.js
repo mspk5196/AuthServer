@@ -35,18 +35,20 @@ const getDashboardStats = async (req, res) => {
     try {
       const todayCallsResult = await pool.query(
         `SELECT COUNT(*) as count
-         FROM dev_api_calls
-         WHERE developer_id = $1
-           AND DATE(created_at) = CURRENT_DATE`,
+         FROM dev_api_calls dac
+         JOIN dev_apps a ON dac.app_id = a.id
+         WHERE a.developer_id = $1
+           AND DATE(dac.created_at) = CURRENT_DATE`,
         [developerId]
       );
       todayApiCalls = parseInt(todayCallsResult.rows[0]?.count || 0, 10);
 
       const monthCallsResult = await pool.query(
         `SELECT COUNT(*) as count
-         FROM dev_api_calls
-         WHERE developer_id = $1
-           AND DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE)`,
+         FROM dev_api_calls dac
+         JOIN dev_apps a ON dac.app_id = a.id
+         WHERE a.developer_id = $1
+           AND DATE_TRUNC('month', dac.created_at) = DATE_TRUNC('month', CURRENT_DATE)`,
         [developerId]
       );
       monthApiCalls = parseInt(monthCallsResult.rows[0]?.count || 0, 10);

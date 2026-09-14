@@ -191,9 +191,15 @@ const buildPasswordChangeRequestEmail = ({ name, changeUrl }) => `
   <img src="https://mspk.in/logo.png" alt="MSPK Apps" style="height:40px;margin-bottom:16px;" />
   <h2>Password Change Request</h2>
   <p>Hello ${name},</p>
-  <p>You requested to change your password. Click the link below to proceed:</p>
-  <a href="${changeUrl}" target="_blank" style="color:#1a73e8;">Change Password</a>
-  <br /><br />
+  <p>You requested to change your password. Click the button below to proceed:</p>
+  <p style="margin: 20px 0;">
+    <a href="${changeUrl}" target="_blank" style="background-color: #1a73e8; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block; font-size: 14px;">Change Password</a>
+  </p>
+  <p style="font-size: 12px; color: #6b7280; margin-top: 10px;">
+    If the button above doesn't work, copy and paste this link into your browser:<br>
+    <a href="${changeUrl}" style="color: #1a73e8; word-break: break-all;">${changeUrl}</a>
+  </p>
+  <br />
   <p>This link will expire in 1 hour.</p>
   <p>If you didn't request this, please ignore this email.</p>
   <br />
@@ -206,15 +212,185 @@ const buildPasswordResetEmail = ({ name, resetUrl }) => `
   <img src="https://mspk.in/logo.png" alt="MSPK Apps" style="height:40px;margin-bottom:16px;" />
   <h2>Reset Your Password</h2>
   <p>Hello ${name},</p>
-  <p>You requested to reset your password. Click the link below to proceed:</p>
-  <a href="${resetUrl}" target="_blank" style="color:#1a73e8;">Reset Password</a>
-  <br /><br />
+  <p>You requested to reset your password. Click the button below to proceed:</p>
+  <p style="margin: 20px 0;">
+    <a href="${resetUrl}" target="_blank" style="background-color: #1a73e8; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block; font-size: 14px;">Reset Password</a>
+  </p>
+  <p style="font-size: 12px; color: #6b7280; margin-top: 10px;">
+    If the button above doesn't work, copy and paste this link into your browser:<br>
+    <a href="${resetUrl}" style="color: #1a73e8; word-break: break-all;">${resetUrl}</a>
+  </p>
+  <br />
   <p>This link will expire in 1 hour.</p>
   <p>If you didn't request this, please ignore this email.</p>
   <br />
   <p>Best regards,<br />MSPK Auth Platform Support</p>
   <p>Contact support at <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a></p>
     <p>Powered by MSPK™ Apps</p>
+`;
+
+/**
+ * Plan expiry warning — sent 7, 5, 2, 1 day(s) before end_date
+ * @param {object} p
+ * @param {string} p.name
+ * @param {string} p.planName
+ * @param {number} p.daysLeft
+ * @param {Date}   p.endDate
+ * @param {string} p.renewUrl
+ */
+const buildPlanExpiryWarningEmail = ({ name, planName, daysLeft, endDate, renewUrl }) => {
+  const endDateText = endDate ? new Date(endDate).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Soon';
+  const urgency = daysLeft === 1 ? '🚨 Last day!' : daysLeft <= 2 ? '⚠️ Expiring very soon' : '⏰ Expiring soon';
+  return `
+  <img src="https://mspkapps.in/logo.png" alt="MSPK™ Apps" style="height:40px;margin-bottom:16px;" />
+  <h2>${urgency} — Your plan expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}</h2>
+  <p>Hello ${name},</p>
+  <p>Your plan <strong>${planName}</strong> will expire on <strong>${endDateText}</strong>.</p>
+  <p>To keep uninterrupted access to your apps and APIs, please renew before the expiry date.</p>
+  <p style="margin-top:20px;">
+    <a href="${renewUrl || '#'}" target="_blank"
+       style="background:#1a73e8;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;">
+      Renew Now
+    </a>
+  </p>
+  <br />
+  <p>Best regards,<br />MSPK™ Auth Platform Support</p>
+  <p>Contact support at <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a></p>
+  <p>Powered by MSPK™ Apps</p>
+`;
+};
+
+/**
+ * Post-expiry reminder — sent every 2 days after plan has expired
+ * @param {object} p
+ * @param {string} p.name
+ * @param {string} p.planName
+ * @param {Date}   p.endDate
+ * @param {string} p.renewUrl
+ */
+const buildPostExpiryReminderEmail = ({ name, planName, endDate, renewUrl }) => {
+  const endDateText = endDate ? new Date(endDate).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : 'expired';
+  return `
+  <img src="https://mspkapps.in/logo.png" alt="MSPK™ Apps" style="height:40px;margin-bottom:16px;" />
+  <h2>Your plan has expired — API access is restricted</h2>
+  <p>Hello ${name},</p>
+  <p>Your plan <strong>${planName}</strong> expired on <strong>${endDateText}</strong>.</p>
+  <p>All API requests from your apps are currently <strong>blocked</strong> until you renew or select a new plan.</p>
+  <p style="margin-top:20px;">
+    <a href="${renewUrl || '#'}" target="_blank"
+       style="background:#d93025;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;">
+      Renew / Upgrade Plan
+    </a>
+  </p>
+  <br />
+  <p>Best regards,<br />MSPK™ Auth Platform Support</p>
+  <p>Contact support at <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a></p>
+  <p>Powered by MSPK™ Apps</p>
+`;
+};
+
+/**
+ * Payment receipt email
+ * @param {object} p
+ * @param {string} p.name
+ * @param {string} p.receiptNumber
+ * @param {string} p.planName
+ * @param {string} p.paymentType  — initial_purchase | renewal | upgrade
+ * @param {number} p.amount
+ * @param {string} p.currency
+ * @param {string} p.paymentMethod
+ * @param {string} p.paymentId
+ * @param {string} p.orderId
+ * @param {Date}   p.planStartDate
+ * @param {Date}   p.planEndDate
+ * @param {Date}   p.createdAt
+ */
+const buildReceiptEmail = ({
+  name, receiptNumber, planName, paymentType, amount, currency,
+  paymentMethod, paymentId, orderId, planStartDate, planEndDate, createdAt
+}) => {
+  const typeLabel = { initial_purchase: 'New Purchase', renewal: 'Renewal', upgrade: 'Upgrade' }[paymentType] || 'Payment';
+  const startText = planStartDate ? new Date(planStartDate).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
+  const endText = planEndDate ? new Date(planEndDate).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : 'No expiry';
+  const dateText = createdAt ? new Date(createdAt).toLocaleString('en-IN') : new Date().toLocaleString('en-IN');
+  return `
+  <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;">
+    <div style="background:#1a73e8;padding:24px;text-align:center;">
+      <img src="https://mspkapps.in/logo.png" alt="MSPK™ Apps" style="height:40px;margin-bottom:8px;" />
+      <h2 style="color:#fff;margin:0;">Payment Receipt</h2>
+    </div>
+    <div style="padding:24px;">
+      <p>Hello ${name},</p>
+      <p>Thank you for your payment. Your receipt is below.</p>
+      <table style="width:100%;border-collapse:collapse;margin-top:16px;">
+        <tr style="background:#f5f5f5;">
+          <td style="padding:8px 12px;font-weight:bold;width:45%;">Receipt No.</td>
+          <td style="padding:8px 12px;">${receiptNumber}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 12px;font-weight:bold;">Transaction Type</td>
+          <td style="padding:8px 12px;">${typeLabel}</td>
+        </tr>
+        <tr style="background:#f5f5f5;">
+          <td style="padding:8px 12px;font-weight:bold;">Plan</td>
+          <td style="padding:8px 12px;">${planName}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 12px;font-weight:bold;">Amount Paid</td>
+          <td style="padding:8px 12px;font-size:18px;font-weight:bold;color:#1a73e8;">₹${parseFloat(amount).toFixed(2)} ${currency}</td>
+        </tr>
+        <tr style="background:#f5f5f5;">
+          <td style="padding:8px 12px;font-weight:bold;">Payment Method</td>
+          <td style="padding:8px 12px;">${paymentMethod || '—'}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 12px;font-weight:bold;">Payment ID</td>
+          <td style="padding:8px 12px;font-size:12px;">${paymentId || '—'}</td>
+        </tr>
+        <tr style="background:#f5f5f5;">
+          <td style="padding:8px 12px;font-weight:bold;">Order ID</td>
+          <td style="padding:8px 12px;font-size:12px;">${orderId}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 12px;font-weight:bold;">Plan Active From</td>
+          <td style="padding:8px 12px;">${startText}</td>
+        </tr>
+        <tr style="background:#f5f5f5;">
+          <td style="padding:8px 12px;font-weight:bold;">Plan Valid Until</td>
+          <td style="padding:8px 12px;">${endText}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 12px;font-weight:bold;">Date</td>
+          <td style="padding:8px 12px;">${dateText}</td>
+        </tr>
+      </table>
+      <br />
+      <p>Please keep this email as your payment confirmation.</p>
+      <p>Best regards,<br />MSPK™ Auth Platform Support</p>
+      <p>Contact support at <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a></p>
+      <p style="color:#888;font-size:12px;">Powered by MSPK™ Apps</p>
+    </div>
+  </div>
+`;
+};
+
+/**
+ * Feedback acknowledgement email
+ * @param {object} p
+ * @param {string} p.name
+ * @param {string} p.type  — feedback | issue
+ * @param {string} p.title
+ */
+const buildFeedbackAckEmail = ({ name, type, title }) => `
+  <img src="https://mspkapps.in/logo.png" alt="MSPK™ Apps" style="height:40px;margin-bottom:16px;" />
+  <h2>We received your ${type === 'issue' ? 'Issue Report' : 'Feedback'}</h2>
+  <p>Hello ${name},</p>
+  <p>Thank you for submitting your ${type === 'issue' ? 'issue' : 'feedback'}${title ? `: <strong>${title}</strong>` : ''}.</p>
+  <p>Our team will review it and get back to you if needed.</p>
+  <br />
+  <p>Best regards,<br />MSPK™ Auth Platform Support</p>
+  <p>Contact support at <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a></p>
+  <p>Powered by MSPK™ Apps</p>
 `;
 
 module.exports = {
@@ -229,4 +405,8 @@ module.exports = {
   buildPasswordResetEmail,
   buildPlanCancelledEmail,
   buildUsageReminderEmail,
+  buildPlanExpiryWarningEmail,
+  buildPostExpiryReminderEmail,
+  buildReceiptEmail,
+  buildFeedbackAckEmail,
 };

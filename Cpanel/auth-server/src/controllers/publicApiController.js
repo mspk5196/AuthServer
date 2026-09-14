@@ -16,6 +16,7 @@ const {
   buildSetPasswordGoogleUserEmail,
   buildPasswordSetConfirmationEmail,
   buildProfileUpdateVerificationEmail,
+  buildDeveloperCustomEmail,
 } = require('../templates/emailTemplates');
 const { log, error } = require('console');
 
@@ -71,6 +72,7 @@ const verifyDeveloperCredentials = async (req, res, next) => {
     const planCheck = await pool.query(`
       SELECT 
         p.features,
+        p.duration_days,
         dpr.is_active,
         dpr.end_date
       FROM developer_plan_registrations dpr
@@ -82,8 +84,9 @@ const verifyDeveloperCredentials = async (req, res, next) => {
 
     if (planCheck.rows.length > 0) {
       const plan = planCheck.rows[0];
-      
-      if (!plan.is_active) {
+      const isUnlimitedPlan = (plan.duration_days === 0 || plan.duration_days === null);
+
+      if (!plan.is_active && !isUnlimitedPlan) {
         return res.status(403).json({
           success: false,
           error: 'Plan inactive',
@@ -91,7 +94,7 @@ const verifyDeveloperCredentials = async (req, res, next) => {
         });
       }
 
-      if (plan.end_date && new Date(plan.end_date) < new Date()) {
+      if (!isUnlimitedPlan && plan.end_date && new Date(plan.end_date) < new Date()) {
         return res.status(403).json({
           success: false,
           error: 'Plan expired',
@@ -114,31 +117,196 @@ const verifyDeveloperCredentials = async (req, res, next) => {
 };
 
 /**
- * Middleware to verify app credentials (API Key + Secret)
+ * Decrypt an AES-256-GCM encrypted secret stored in the DB.
+ * Format of `encrypted`: "ivHex:authTagHex:cipherHex"
+ * Requires SECRET_ENCRYPTION_KEY env var (64 hex chars = 32 bytes).
+ */
+function decryptSecret(encrypted) {
+  const keyHex = process.env.SECRET_ENCRYPTION_KEY;
+  if (!keyHex || keyHex.length !== 64) {
+    throw new Error('SECRET_ENCRYPTION_KEY env var must be set to 64 hex characters (32 bytes).');
+  }
+  const key = Buffer.from(keyHex, 'hex');
+  const [ivHex, authTagHex, cipherHex] = encrypted.split(':');
+  const iv = Buffer.from(ivHex, 'hex');
+  const authTag = Buffer.from(authTagHex, 'hex');
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(authTag);
+  return decipher.update(cipherHex, 'hex', 'utf8') + decipher.final('utf8');
+}
+
+const HMAC_TIMESTAMP_TOLERANCE_SEC = 300; // ±5 minutes
+
+/**
+ * Middleware to verify app credentials.
+ *
+ * Supports two modes (auto-detected by presence of X-Signature header):
+ *
+ * Mode A — HMAC-SHA256 (v0.2+, preferred):
+ *   X-API-Key: <apiKey>
+ *   X-Timestamp: <unix_seconds>
+ *   X-Signature: HMAC-SHA256(secret, "METHOD:pathname:timestamp:body_sha256")
+ *   → Secret is NEVER transmitted. Signatures are time-limited (±5 min).
+ *
+ * Mode B — Legacy hash (v0.1.x, backward compat):
+ *   X-API-Key: <apiKey>
+ *   X-API-Secret: <rawSecret>   ← still works but less secure
  */
 const verifyAppCredentials = async (req, res, next) => {
   try {
     const apiKey = req.params.apiKey || req.headers['x-api-key'];
-    const apiSecret = req.headers['x-api-secret'];
+    const xSignature = req.headers['x-signature'];
+    const isHmacMode = !!xSignature;
 
-    if (!apiKey || !apiSecret) {
+    if (!apiKey) {
       return res.status(401).json({
         success: false,
         error: 'Missing API credentials',
-        message: 'Both X-API-Key and X-API-Secret headers are required'
+        message: 'X-API-Key header is required'
       });
     }
 
-    // Hash the provided secret
+    // ── Mode A: HMAC-SHA256 verification (v0.2+) ──────────────────────────────
+    if (isHmacMode) {
+      const xTimestamp = req.headers['x-timestamp'];
+
+      if (!xTimestamp || !xSignature) {
+        return res.status(401).json({
+          success: false,
+          error: 'Missing HMAC headers',
+          message: 'X-Timestamp and X-Signature are required when using HMAC mode'
+        });
+      }
+
+      // Reject stale/future timestamps — prevents replay attacks
+      const now = Math.floor(Date.now() / 1000);
+      const reqTime = parseInt(xTimestamp, 10);
+      if (isNaN(reqTime) || Math.abs(now - reqTime) > HMAC_TIMESTAMP_TOLERANCE_SEC) {
+        return res.status(401).json({
+          success: false,
+          error: 'TIMESTAMP_EXPIRED',
+          message: 'Request timestamp is expired or too far in the future (±5 min allowed)'
+        });
+      }
+
+      // Load app — must have encrypted secret for HMAC mode
+      const result = await pool.query(`
+        SELECT
+          a.*,
+          d.id as developer_id,
+          d.name as developer_name,
+          d.email as developer_email,
+          d.mail_sending_blocked as developer_mail_sending_blocked
+        FROM dev_apps a
+        JOIN developers d ON a.developer_id = d.id
+        WHERE a.api_key = $1
+      `, [apiKey]);
+
+      if (result.rows.length === 0) {
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid API credentials',
+          message: 'API key is incorrect'
+        });
+      }
+
+      const app = result.rows[0];
+
+      if (!app.api_secret_encrypted) {
+        return res.status(401).json({
+          success: false,
+          error: 'HMAC_NOT_SUPPORTED',
+          message: 'This app was created before HMAC signing was supported. Please regenerate your API credentials.'
+        });
+      }
+
+      // Decrypt stored secret and verify HMAC
+      let rawSecret;
+      try {
+        rawSecret = decryptSecret(app.api_secret_encrypted);
+      } catch (decryptErr) {
+        console.error('Secret decryption failed:', decryptErr);
+        return res.status(500).json({
+          success: false,
+          error: 'Internal server error',
+          message: 'Failed to verify credentials'
+        });
+      }
+
+      // Reconstruct the exact message the client signed
+      const bodyStr = req.body && Object.keys(req.body).length > 0 ? JSON.stringify(req.body) : '';
+      const bodyHash = crypto.createHash('sha256').update(bodyStr).digest('hex');
+      const pathname = req.baseUrl + req.path; // e.g. /api/v1/ak_xxx.../auth/login
+      const message = `${req.method.toUpperCase()}:${pathname}:${xTimestamp}:${bodyHash}`;
+      const expected = crypto.createHmac('sha256', rawSecret).update(message).digest('hex');
+
+      // Constant-time comparison to prevent timing attacks
+      let signaturesMatch = false;
+      try {
+        const sigBuf = Buffer.from(xSignature, 'hex');
+        const expBuf = Buffer.from(expected, 'hex');
+        signaturesMatch = sigBuf.length === expBuf.length && crypto.timingSafeEqual(sigBuf, expBuf);
+      } catch {
+        signaturesMatch = false;
+      }
+
+      if (!signaturesMatch) {
+        return res.status(401).json({
+          success: false,
+          error: 'INVALID_SIGNATURE',
+          message: 'Request signature is invalid'
+        });
+      }
+
+      // Check plan
+      const planCheck = await pool.query(`
+        SELECT p.features, dpr.is_active, dpr.end_date
+        FROM developer_plan_registrations dpr
+        JOIN dev_plans p ON dpr.plan_id = p.id
+        WHERE dpr.developer_id = $1 AND dpr.is_active = true
+        LIMIT 1
+      `, [app.developer_id]);
+
+      if (planCheck.rows.length === 0) {
+        return res.status(403).json({
+          success: false,
+          error: 'Plan inactive',
+          message: 'Developer plan is not active. Please contact the app owner.'
+        });
+      }
+
+      req.devApp = app;
+      req.plan = planCheck.rows[0];
+
+      const _trackStart = Date.now();
+      res.on('finish', () => {
+        trackApiCall(app.id, app.developer_id, req, res.statusCode, Date.now() - _trackStart)
+          .catch(err => console.error('API tracking error:', err));
+      });
+
+      return next();
+    }
+
+    // ── Mode B: Legacy SHA-256 hash verification (v0.1.x backward compat) ────
+    const apiSecret = req.headers['x-api-secret'];
+
+    if (!apiSecret) {
+      return res.status(401).json({
+        success: false,
+        error: 'Missing API credentials',
+        message: 'X-API-Secret header is required (or use HMAC mode with X-Signature)'
+      });
+    }
+
     const hashedSecret = crypto.createHash('sha256').update(apiSecret).digest('hex');
 
-    // Verify credentials and get app details
     const result = await pool.query(`
-      SELECT 
+      SELECT
         a.*,
         d.id as developer_id,
         d.name as developer_name,
-        d.email as developer_email
+        d.email as developer_email,
+        d.mail_sending_blocked as developer_mail_sending_blocked
       FROM dev_apps a
       JOIN developers d ON a.developer_id = d.id
       WHERE a.api_key = $1 AND a.api_secret_hash = $2
@@ -154,12 +322,8 @@ const verifyAppCredentials = async (req, res, next) => {
 
     const app = result.rows[0];
 
-    // Check if developer's plan is active
     const planCheck = await pool.query(`
-      SELECT 
-        p.features,
-        dpr.is_active,
-        dpr.end_date
+      SELECT p.features, dpr.is_active, dpr.end_date
       FROM developer_plan_registrations dpr
       JOIN dev_plans p ON dpr.plan_id = p.id
       WHERE dpr.developer_id = $1 AND dpr.is_active = true
@@ -174,14 +338,14 @@ const verifyAppCredentials = async (req, res, next) => {
       });
     }
 
-    // Attach app and plan info to request (avoid shadowing Express req.app)
     req.devApp = app;
     req.plan = planCheck.rows[0];
 
-    // Track API call (non-blocking)
-    trackApiCall(app.id, app.developer_id, req).catch(err =>
-      console.error('API tracking error:', err)
-    );
+    const _trackStart = Date.now();
+    res.on('finish', () => {
+      trackApiCall(app.id, app.developer_id, req, res.statusCode, Date.now() - _trackStart)
+        .catch(err => console.error('API tracking error:', err));
+    });
 
     next();
   } catch (error) {
@@ -192,25 +356,42 @@ const verifyAppCredentials = async (req, res, next) => {
       message: 'Failed to verify API credentials'
     });
   }
+
 };
+
+/**
+ * Extract the real client IP, preferring X-Forwarded-For over req.ip.
+ * Handles comma-separated lists (e.g. "clientIp, proxy1, proxy2").
+ */
+function getClientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) {
+    const first = forwarded.split(',')[0].trim();
+    if (first) return first;
+  }
+  return req.headers['x-real-ip'] || req.ip || null;
+}
 
 /**
  * Track API call for analytics and billing
  */
-async function trackApiCall(appId, developerId, req) {
+async function trackApiCall(appId, developerId, req, statusCode, responseTimeMs) {
   try {
     await pool.query(`
       INSERT INTO dev_api_calls (
-        app_id, developer_id, endpoint, method, 
+        app_id, developer_id, endpoint, method,
+        status_code, response_time_ms,
         ip_address, user_agent, created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
     `, [
       appId,
       developerId,
       req.path,
       req.method,
-      req.ip,
-      req.headers['user-agent']
+      statusCode ?? null,
+      responseTimeMs ?? null,
+      getClientIp(req),
+      req.headers['user-agent'],
     ]);
   } catch (error) {
     // Silently fail - don't block the request
@@ -1491,9 +1672,10 @@ const completePasswordReset = async (req, res) => {
 
     // Find valid reset token and get current password
     const result = await pool.query(`
-      SELECT pr.id, pr.user_id, u.password_hash, u.email
+      SELECT pr.id, pr.user_id, u.password_hash, u.email, u.app_id, a.app_name, a.support_email
       FROM password_resets pr
       JOIN users u ON pr.user_id = u.id
+      JOIN dev_apps a ON u.app_id = a.id
       WHERE pr.token = $1 AND pr.expires_at > NOW() AND pr.used = false
     `, [token]);
 
@@ -1541,7 +1723,7 @@ const completePasswordReset = async (req, res) => {
     sendMail({
       to: resetRecord.email,
       subject: 'Account password changed successfully',
-      html: buildPasswordChangedEmail({ appName: app.app_name, changedAt: new Date().toLocaleString(), supportEmail: app.support_email }),
+      html: buildPasswordChangedEmail({ appName: resetRecord.app_name, changedAt: new Date().toLocaleString(), supportEmail: resetRecord.support_email }),
     }).catch(err => console.error('Send verification email error:', err));
 
     res.json({
@@ -1686,7 +1868,7 @@ const verifyDeleteEmail = async (req, res) => {
     const verification = result.rows[0];
 
     const appData = await pool.query(
-      'SELECT app_name FROM dev_apps WHERE id = $1',
+      'SELECT app_name, support_email FROM dev_apps WHERE id = $1',
       [verification.app_id]
     );
     const app = appData.rows[0];
@@ -2476,9 +2658,9 @@ const verifyEmailSetPasswordGoogleUser = async (req, res) => {
         });
       }
 
-      // Get user
+      // Get user and app details
       const userRes = await pool.query(
-        'SELECT id, email, password_hash FROM users WHERE id = $1 AND app_id = $2',
+        'SELECT u.id, u.email, u.password_hash, a.app_name, a.support_email FROM users u JOIN dev_apps a ON u.app_id = a.id WHERE u.id = $1 AND u.app_id = $2',
         [verification.user_id, verification.app_id]
       );
 
@@ -2516,7 +2698,7 @@ const verifyEmailSetPasswordGoogleUser = async (req, res) => {
       sendMail({
         to: user.email,
         subject: 'Password linked to your account',
-        html: buildPasswordSetConfirmationEmail({ changedAt: new Date().toLocaleString(), supportEmail: 'Contact your app support.' }),
+        html: buildPasswordSetConfirmationEmail({ changedAt: new Date().toLocaleString(), supportEmail: user.support_email }),
       }).catch(err => console.error('Send password setup confirmation email error:', err));
 
       return res.json({
@@ -2740,7 +2922,7 @@ const verifyChangePassword = async (req, res) => {
 
     const verification = result.rows[0];
 
-    const appData = await pool.query('SELECT app_name FROM dev_apps WHERE id = $1', [verification.app_id]);
+    const appData = await pool.query('SELECT app_name, support_email FROM dev_apps WHERE id = $1', [verification.app_id]);
     const app = appData.rows[0] || { app_name: 'your app' };
 
     const userRes = await pool.query(
@@ -3034,6 +3216,9 @@ const patchUserProfile = async (req, res) => {
     res.json({ success: true, message: 'Profile updated' });
 
   } catch (error) {
+    if (error.code === '23505' && error.detail && error.detail.includes('username')) {
+      return res.status(409).json({ success: false, message: 'Username already exists' });
+    }
     console.error('Patch user profile error:', error);
     res.status(500).json({ success: false, message: 'Failed to update profile' });
   }
@@ -3079,6 +3264,9 @@ const confirmUserUpdate = async (req, res) => {
     `);
 
   } catch (error) {
+    if (error.code === '23505' && error.detail && error.detail.includes('username')) {
+      return res.status(409).json({ success: false, message: 'Username already exists' });
+    }
     console.error('Confirm user update error:', error);
     res.status(500).json({ success: false, message: 'Failed to confirm update' });
   }
@@ -3327,6 +3515,141 @@ const getUserData = async (req, res) => {
   }
 };
 
+/**
+ * Send custom mail via app API (developer-initiated)
+ * POST /:apiKey/mail/send
+ * Headers: X-API-Key, X-API-Secret (via verifyAppCredentials)
+ * Body: { to, subject, html, fromName? }
+ *   to        - string or array of email strings (max 10)
+ *   subject   - required string
+ *   html      - required HTML string
+ *   fromName  - optional string, defaults to app_name
+ */
+const sendAppMail = async (req, res) => {
+  try {
+    const app = req.devApp;
+    const plan = req.plan;
+
+    // ── 1. Check mail sending blocks ────────────────────────────────────────
+    if (app.developer_mail_sending_blocked) {
+      return res.status(403).json({
+        success: false,
+        code: 'MAIL_SENDING_BLOCKED',
+        message: 'Mail sending has been disabled for your developer account. Please contact MSPK Apps support.'
+      });
+    }
+    if (app.mail_sending_blocked) {
+      return res.status(403).json({
+        success: false,
+        code: 'MAIL_SENDING_BLOCKED',
+        message: 'Mail sending has been disabled for this app. Please contact MSPK Apps support.'
+      });
+    }
+
+    // ── 2. Check plan quota ──────────────────────────────────────────────────
+    const planFeatures = plan?.features || {};
+    // monthly_mail_quota: 0 = unlimited, positive integer = cap per month
+    // If key is absent from features, default to 0 (unlimited)
+    const monthlyQuota = planFeatures.monthly_mail_quota !== undefined
+      ? Number(planFeatures.monthly_mail_quota)
+      : 0;
+
+    // ── 2. Load current app mail usage & maybe reset counter ─────────────────
+    const appRow = await pool.query(
+      'SELECT mail_sent_count, mail_quota_month FROM dev_apps WHERE id = $1',
+      [app.id]
+    );
+    if (appRow.rows.length === 0) return res.status(404).json({ success: false, message: 'App not found' });
+
+    const { mail_sent_count, mail_quota_month } = appRow.rows[0];
+    const currentMonth = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+
+    let currentCount = mail_sent_count || 0;
+    if (mail_quota_month !== currentMonth) {
+      // New month — reset counter
+      await pool.query(
+        'UPDATE dev_apps SET mail_sent_count = 0, mail_quota_month = $1, updated_at = NOW() WHERE id = $2',
+        [currentMonth, app.id]
+      );
+      currentCount = 0;
+    }
+
+    // ── 3. Enforce quota (0 = unlimited) ─────────────────────────────────────
+    if (monthlyQuota > 0 && currentCount >= monthlyQuota) {
+      return res.status(429).json({
+        success: false,
+        message: `Monthly mail quota of ${monthlyQuota} exceeded for this app`,
+        quota: monthlyQuota,
+        sent_this_month: currentCount
+      });
+    }
+
+    // ── 4. Validate request body ─────────────────────────────────────────────
+    const { to, subject, html, fromName } = req.body || {};
+
+    if (!to || (!Array.isArray(to) && typeof to !== 'string')) {
+      return res.status(400).json({ success: false, message: '"to" is required (string or array of emails)' });
+    }
+    if (!subject || typeof subject !== 'string' || !subject.trim()) {
+      return res.status(400).json({ success: false, message: '"subject" is required' });
+    }
+    if (!html || typeof html !== 'string' || !html.trim()) {
+      return res.status(400).json({ success: false, message: '"html" body is required' });
+    }
+
+    const recipients = Array.isArray(to) ? to : [to];
+    if (recipients.length === 0) {
+      return res.status(400).json({ success: false, message: '"to" must have at least one recipient' });
+    }
+    if (recipients.length > 10) {
+      return res.status(400).json({ success: false, message: '"to" cannot have more than 10 recipients per call' });
+    }
+    // Basic email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    for (const addr of recipients) {
+      if (!emailRegex.test(addr)) {
+        return res.status(400).json({ success: false, message: `Invalid email address: ${addr}` });
+      }
+    }
+
+    // ── 5. Build and send ────────────────────────────────────────────────────
+    const senderName = (fromName && fromName.trim()) ? fromName.trim() : app.app_name;
+    const finalHtml = buildDeveloperCustomEmail({ body: html, supportEmail: app.support_email });
+
+    const mailResult = await sendMail({
+      from: `"${senderName}" <${process.env.FROM_EMAIL}>`,
+      to: recipients.join(', '),
+      subject: subject.trim(),
+      html: finalHtml
+    });
+
+    if (!mailResult.success) {
+      console.error('sendAppMail: mail sending failed:', mailResult.error);
+      return res.status(502).json({ success: false, message: 'Failed to send mail' });
+    }
+
+    // ── 6. Increment counter ─────────────────────────────────────────────────
+    await pool.query(
+      'UPDATE dev_apps SET mail_sent_count = mail_sent_count + 1, mail_quota_month = $1, updated_at = NOW() WHERE id = $2',
+      [currentMonth, app.id]
+    );
+
+    const newCount = currentCount + 1;
+    const remaining = monthlyQuota === 0 ? null : monthlyQuota - newCount;
+
+    return res.json({
+      success: true,
+      message: 'Mail sent successfully',
+      sent_this_month: newCount,
+      ...(remaining !== null ? { remaining_quota: remaining } : { remaining_quota: 'unlimited' })
+    });
+
+  } catch (error) {
+    console.error('sendAppMail error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to send mail' });
+  }
+};
+
 module.exports = {
   verifyAppCredentials,
   registerUser,
@@ -3353,5 +3676,6 @@ module.exports = {
   getDeveloperGroups,
   getDeveloperApps,
   getAppUsers,
-  getUserData
+  getUserData,
+  sendAppMail,
 };

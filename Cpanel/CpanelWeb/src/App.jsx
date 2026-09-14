@@ -8,15 +8,13 @@ import Home from './pages/Home/Home';
 import Apps from './pages/Apps/AppHome/Apps';
 import AppDetails from './pages/Apps/AppDetails/AppDetails';
 import AppSettings from './pages/Apps/AppSettings/AppSettings';
-// import AllUsers from './pages/Apps/AllUsers/AllUsers';
 import Settings from './pages/Settings/Settings';
 import Documentation from './pages/Documentation/Documentation';
 import Groups from './pages/Groups/Groups';
 import GroupSettings from './pages/Groups/GroupSettings/GroupSettings';
-import './App.css';
 import VerifyAppEmail from './pages/Apps/VerifyAppEmail/VerifyAppEmail';
-
-// use shared api service imported above
+import { Loader2, ShieldAlert, ExternalLink, ArrowRight } from 'lucide-react';
+import './App.css';
 
 function App() {
   const { developer, setDeveloper, loading, setLoading } = useAuth();
@@ -27,7 +25,6 @@ function App() {
   const ticket = useMemo(() => {
     const qsTicket = new URLSearchParams(window.location.search).get('ticket');
     if (qsTicket) return qsTicket;
-    // Support /sso/:ticket anywhere in the path
     const path = window.location.pathname || '';
     const marker = '/sso/';
     const idx = path.indexOf(marker);
@@ -43,7 +40,6 @@ function App() {
     const init = async () => {
       try {
         if (ticket) {
-          // Guard against React StrictMode double-invocation
           if (consumedOnceRef.current) return;
           consumedOnceRef.current = true;
           
@@ -51,10 +47,8 @@ function App() {
           const dev = resp?.data?.developer || resp?.developer;
           if (dev) setDeveloper(dev);
 
-          // expose response for debugging in the UI so user can inspect
           setSsoDebug(resp);
           
-          // Clean up URL
           const url = new URL(window.location.href);
           const hadQueryTicket = url.searchParams.has('ticket');
           url.searchParams.delete('ticket');
@@ -70,13 +64,11 @@ function App() {
           }
           
           window.history.replaceState({}, '', newUrl);
-          } else {
-          // Check current session via backend (httpOnly cookies)
+        } else {
           try {
             const dev = await authService.getCurrentDeveloper();
             if (dev) setDeveloper(dev);
           } catch (e) {
-            // unexpected failure - rethrow so error surfaces
             console.error('Auth check failed:', e);
           }
         }
@@ -106,28 +98,44 @@ function App() {
 
   if (loading) {
     return (
-      <div className="container">
-        <h2>Loading...</h2>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-3 bg-white p-8 rounded-2xl border border-slate-200 shadow-xs max-w-sm w-full text-center">
+          <Loader2 className="w-9 h-9 animate-spin text-indigo-600" />
+          <h2 className="text-base font-bold text-slate-900">Authenticating cPanel Session…</h2>
+          <p className="text-xs text-slate-500 font-medium">Validating credentials and permissions</p>
+        </div>
       </div>
     );
   }
+
   if (!developer) {
     return (
-        <div className="container">
-          <h2>Redirecting...</h2>
-          <p style={{ color: 'var(--danger-color, crimson)' }}>
-            Your session has expired or you are not authenticated. You will be redirected to the main portal shortly.
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-xs max-w-md w-full space-y-4 text-center">
+          <div className="mx-auto w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600">
+            <ShieldAlert className="w-6 h-6" />
+          </div>
+          <h2 className="text-xl font-black text-slate-900 tracking-tight">Session Expired or Required</h2>
+          <p className="text-sm text-slate-600 font-medium leading-relaxed">
+            Your cPanel ticket has expired or you are not signed in. You will be redirected to the main developer portal momentarily.
           </p>
-          <p style={{ marginTop: '1rem' }}>
-            If you want to stay and inspect the SSO response, the redirect will occur shortly. You can also <a href={mainPortalUrl}>click here</a> to go now.
-          </p>
+          <div className="pt-2">
+            <a
+              href={mainPortalUrl}
+              className="inline-flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-xs"
+            >
+              Go to Developer Portal Now
+              <ArrowRight className="w-4 h-4" />
+            </a>
+          </div>
           {ssoDebug && (
-            <div style={{ marginTop: '1rem', padding: '0.75rem', border: '1px solid #ddd', borderRadius: 6, background: '#fff' }}>
-              <h4>SSO Debug Response</h4>
-              <pre style={{ maxHeight: 240, overflow: 'auto', whiteSpace: 'pre-wrap' }}>{JSON.stringify(ssoDebug, null, 2)}</pre>
+            <div className="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-xl text-left text-xs">
+              <span className="font-bold text-slate-700 block mb-1">SSO Diagnostics:</span>
+              <pre className="max-h-36 overflow-auto text-[11px] text-slate-600 font-mono">{JSON.stringify(ssoDebug, null, 2)}</pre>
             </div>
           )}
         </div>
+      </div>
     );
   }
 
@@ -138,7 +146,6 @@ function App() {
         <Route path="apps" element={<Apps />} />
         <Route path="apps/:appId" element={<AppDetails />} />
         <Route path="apps/:appId/settings" element={<AppSettings />} />
-        {/* <Route path="apps/all-users" element={<AllUsers />} /> */}
         <Route path="groups" element={<Groups />} />
         <Route path="groups/:groupId/settings" element={<GroupSettings />} />
         <Route path="settings" element={<Settings />} />

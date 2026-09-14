@@ -3,10 +3,10 @@
  */
 
 
-// Base URL that already includes the /api prefix
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-// Host-level URL (no /api) for building full absolute links (e.g. OAuth redirects)
-export const API_URL = import.meta.env.VITE_API_URL || API_BASE_URL;
+// Base URL that includes the /api/vN prefix (e.g. https://host/api/v1)
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+// Host-level URL derived from API_BASE_URL by stripping /api/... — no separate env var needed
+export const API_URL = API_BASE_URL.replace(/\/api\/.*$/, '');
 
 class ApiError extends Error {
   constructor(message, status, data) {

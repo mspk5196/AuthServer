@@ -1,3 +1,10 @@
+const path = require('path');
+const dotenv = require('dotenv');
+const appDir = path.resolve(__dirname, '..');
+dotenv.config({ path: path.join(appDir, '.env.local') });
+dotenv.config({ path: path.join(appDir, '.env') });
+dotenv.config();
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -61,11 +68,11 @@ app.get('/metrics', async (req, res) => {
 });
 
 // routes
-app.use('/api/developer', authRoutes);
-app.use('/api/developer', settingsRoutes);
-app.use('/api/developer/apps', appRoutes);
-app.use('/api/developer/group-settings', groupSettingsRoutes);
-app.use('/api/v1', publicApiRoutes);
+app.use(`/api/${API_VERSION}/developer`, authRoutes);
+app.use(`/api/${API_VERSION}/developer`, settingsRoutes);
+app.use(`/api/${API_VERSION}/developer/apps`, appRoutes);
+app.use(`/api/${API_VERSION}/developer/group-settings`, groupSettingsRoutes);
+app.use(`/api/${API_VERSION}`, publicApiRoutes);
 
 // error handler (simple)
 app.use((err, req, res, next) => {

@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 
-const SECRET_KEY_PASSWORD = Buffer.from(process.env.AES_SECRET_KEY_PASSWORD, 'hex');
-const IV_PASSWORD = Buffer.from(process.env.AES_IV_PASSWORD, 'hex');
+const SECRET_KEY_PASSWORD = Buffer.from(process.env.AES_SECRET_KEY_PASSWORD || '96FD20C91162FF0D541F9340152820455F7407EA513EE4CC98EC7C5B47B68091', 'hex');
+const IV_PASSWORD = Buffer.from(process.env.AES_IV_PASSWORD || 'EA9015CDDE6C4755792536FF6E6B34AE', 'hex');
 
 // const SECRET_KEY_GROUP = Buffer.from(process.env.AES_SECRET_KEY_GROUP, 'hex');
 // const IV_GROUP = Buffer.from(process.env.AES_IV_GROUP, 'hex');

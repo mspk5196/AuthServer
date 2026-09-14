@@ -1,11 +1,22 @@
 // helper for support contact line (app's support email must be passed)
 const supportLine = (supportEmail) => supportEmail ? `<p>For support contact: <a href="mailto:${supportEmail}">${supportEmail}</a></p>` : '';
 
+// Helper to build a styled email action button with fallback link
+const actionButton = (url, label, bgColor = '#1a73e8') => `
+  <p style="margin: 20px 0;">
+    <a href="${url}" target="_blank" style="background-color: ${bgColor}; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block; font-size: 14px;">${label}</a>
+  </p>
+  <p style="font-size: 12px; color: #6b7280; margin-top: 10px;">
+    If the button above doesn't work, copy and paste this link into your browser:<br>
+    <a href="${url}" style="color: ${bgColor}; word-break: break-all;">${url}</a>
+  </p>
+`;
+
 // User registration and verification
 const buildWelcomeVerificationEmail = ({ appName, verificationUrl, supportEmail }) => `
   <h2>Welcome to ${appName}!</h2>
-  <p>Please verify your email address by clicking the link below:</p>
-  <a href="${verificationUrl}">${verificationUrl}</a>
+  <p>Please verify your email address by clicking the button below:</p>
+  ${actionButton(verificationUrl, 'Verify Email')}
   <p>This link will expire in 24 hours.</p>
   ${supportLine(supportEmail)}
 `;
@@ -14,8 +25,8 @@ const buildWelcomeVerificationEmail = ({ appName, verificationUrl, supportEmail 
 const buildPasswordResetEmail = ({ name, resetUrl, supportEmail }) => `
   <h2>Password Reset Request</h2>
   <p>Hi ${name || 'there'},</p>
-  <p>Click the link below to reset your password:</p>
-  <a href="${resetUrl}">${resetUrl}</a>
+  <p>Click the button below to reset your password:</p>
+  ${actionButton(resetUrl, 'Reset Password')}
   <p>This link will expire in 1 hour.</p>
   <p>If you didn't request this, please ignore this email.</p>
   ${supportLine(supportEmail)}
@@ -25,8 +36,8 @@ const buildPasswordResetEmail = ({ name, resetUrl, supportEmail }) => `
 const buildChangePasswordLinkEmail = ({ appName, name, verificationUrl, supportEmail }) => `
   <h2>Change your password on ${appName}</h2>
   <p>Hi ${name || 'there'},</p>
-  <p>Click the link below to open the password change page:</p>
-  <a href="${verificationUrl}">${verificationUrl}</a>
+  <p>Click the button below to open the password change page:</p>
+  ${actionButton(verificationUrl, 'Change Password')}
   <p>This link will expire in 24 hours.</p>
   <p>If you didn't request this, you can ignore this email.</p>
   ${supportLine(supportEmail)}
@@ -44,8 +55,8 @@ const buildPasswordChangedEmail = ({ appName, changedAt, supportEmail }) => `
 const buildEmailVerificationEmail = ({ name, verificationUrl, verifyPurpose, supportEmail }) => `
   <h2>Email Verification</h2>
   <p>Hi ${name || 'there'},</p>
-  <p>Please verify your email address by clicking the link below:</p>
-  <a href="${verificationUrl}">${verificationUrl}</a>
+  <p>Please verify your email address by clicking the button below:</p>
+  ${actionButton(verificationUrl, 'Verify Email')}
   <p>This link will expire in 24 hours.</p>
   <p>Purpose: ${verifyPurpose}</p>
   ${supportLine(supportEmail)}
@@ -54,8 +65,8 @@ const buildEmailVerificationEmail = ({ name, verificationUrl, verifyPurpose, sup
 // Account deletion request
 const buildDeleteAccountEmail = ({ appName, verificationUrl, supportEmail }) => `
   <h2>Reconsider deleting your account on ${appName}!</h2>
-  <p>If you still want to proceed, please confirm your email address by clicking the link below:</p>
-  <a href="${verificationUrl}">${verificationUrl}</a>
+  <p>If you still want to proceed, please confirm your email address by clicking the button below:</p>
+  ${actionButton(verificationUrl, 'Confirm Account Deletion', '#dc3545')}
   <p style="color:blue;">This link will expire in 24 hours.</p>
   <p style="color:red;">All Data associated with your account will be permanently deleted upon confirmation.</p>
   <p style="color:red;">This action is irreversible.</p>
@@ -75,7 +86,7 @@ const buildGoogleUserWelcomeEmail = ({ appName, email, verificationUrl, supportE
   <h2>Welcome to ${appName}!</h2>
   <p>Your account has been created with Google Sign-In: ${email}</p>
   <p>To enable traditional email/password login, you can optionally set a password:</p>
-  <a href="${verificationUrl}">${verificationUrl}</a>
+  ${actionButton(verificationUrl, 'Set Password')}
   <p>This link will expire in 24 hours.</p>
   <p>Authentication system powered by MSPK™ Apps (mspk.in).</p>
   ${supportLine(supportEmail)}
@@ -85,8 +96,8 @@ const buildGoogleUserWelcomeEmail = ({ appName, email, verificationUrl, supportE
 const buildSetPasswordGoogleUserEmail = ({ appName, name, verificationUrl, supportEmail }) => `
   <h2>Here is your link requested to set password for ${appName}</h2>
   <p>Hi ${name || 'there'},</p>
-  <p>Please set your password by clicking the link below:</p>
-  <a href="${verificationUrl}">${verificationUrl}</a>
+  <p>Please set your password by clicking the button below:</p>
+  ${actionButton(verificationUrl, 'Set Password')}
   <p>This link will expire in 24 hours.</p>
   <p>Purpose: Set Password - Google User</p>
   <p>Authentication system powered by MSPK™ Apps (mspk.in).</p>
@@ -106,8 +117,8 @@ const buildPasswordSetConfirmationEmail = ({ changedAt, supportEmail }) => `
 const buildProfileUpdateVerificationEmail = ({ name, verificationUrl, changesSummary, supportEmail }) => `
   <h2>Confirm your profile changes</h2>
   <p>Hi ${name || 'there'},</p>
-  <p>We received a request to update your account. Please confirm the changes by clicking the link below:</p>
-  <a href="${verificationUrl}">Confirm profile changes</a>
+  <p>We received a request to update your account. Please confirm the changes by clicking the button below:</p>
+  ${actionButton(verificationUrl, 'Confirm Profile Changes')}
   <p>This link will expire in 24 hours.</p>
   ${changesSummary ? `<p>Changes: ${changesSummary}</p>` : ''}
   <p>If you did not request this change, please contact support immediately.</p>
@@ -118,8 +129,8 @@ const buildProfileUpdateVerificationEmail = ({ name, verificationUrl, changesSum
 const buildAppSupportEmailVerificationEmail = ({ appName, verificationUrl, supportEmail }) => `
   <h2>Verify Your App Support Email</h2>
   <p>Hi Developer,</p>
-  <p>Please verify the support email for your application <strong>${appName}</strong> by clicking the link below:</p>
-  <a href="${verificationUrl}">Verify Email</a>
+  <p>Please verify the support email for your application <strong>${appName}</strong> by clicking the button below:</p>
+  ${actionButton(verificationUrl, 'Verify Support Email')}
   <p>This link will expire in 24 hours.</p>
   <p>If you didn't create this app, you can ignore this email.</p>
   ${supportLine(supportEmail)}
@@ -129,10 +140,21 @@ const buildAppSupportEmailVerificationEmail = ({ appName, verificationUrl, suppo
 const buildAppSupportEmailUpdateEmail = ({ appName, verificationUrl, supportEmail }) => `
   <h2>Verify Updated Support Email</h2>
   <p>Hi Developer,</p>
-  <p>You've updated the support email for your application <strong>${appName}</strong>. Please verify this new email by clicking the link below:</p>
-  <a href="${verificationUrl}">Verify Email</a>
+  <p>You've updated the support email for your application <strong>${appName}</strong>. Please verify this new email by clicking the button below:</p>
+  ${actionButton(verificationUrl, 'Verify Support Email')}
   <p>This link will expire in 24 hours.</p>
   ${supportLine(supportEmail)}
+`;
+
+// Developer custom email — sent via POST /:apiKey/mail/send
+// Wraps developer-provided HTML body and appends mandatory MSPK footer.
+const buildDeveloperCustomEmail = ({ body, supportEmail }) => `
+  ${body}
+  <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;">
+  <p style="font-size:12px;color:#6b7280;margin:0;">
+    For any queries contact <a href="mailto:${supportEmail}" style="color:#6b7280;">${supportEmail}</a><br>
+    This service is provided by MSPK Apps
+  </p>
 `;
 
 // App deletion confirmation (developer-initiated from cPanel)
@@ -181,4 +203,5 @@ module.exports = {
   buildAppSupportEmailUpdateEmail,
   buildAppDeleteConfirmationEmail,
   buildProfileUpdateVerificationEmail,
+  buildDeveloperCustomEmail,
 };

@@ -41,6 +41,9 @@ router.get('/plans', planController.getPlans);
 router.get('/change-password', authController.changePasswordWithToken);
 router.post('/change-password', authController.changePasswordWithToken);
 
+// Public Razorpay mobile callback (unauthenticated redirect)
+router.post('/payment/razorpay-callback', paymentController.handleMobileCallback);
+
 // Protected routes (authentication required)
 router.use(authenticateToken);
 
@@ -67,6 +70,7 @@ router.get('/dashboard/stats', dashboardController.getDashboardStats);
 // Payment routes (authenticated)
 router.post('/payment/create-order', paymentController.createOrder);
 router.post('/payment/verify', paymentController.verifyPayment);
+router.post('/payment/check-status/:orderId', paymentController.checkOrderStatus);
 router.get('/payment/history', paymentController.getPaymentHistory);
 
 module.exports = router;

@@ -23,6 +23,25 @@ function generatePublicApiKey() {
 }
 
 /**
+ * Encrypt the raw API secret using AES-256-GCM.
+ * Returns a string in the format "ivHex:authTagHex:cipherHex".
+ * Requires SECRET_ENCRYPTION_KEY env var (64 hex chars = 32 bytes).
+ * Used to store a recoverable form of the secret for HMAC-SHA256 verification (v0.2+ clients).
+ */
+function encryptSecret(secret) {
+  const keyHex = process.env.SECRET_ENCRYPTION_KEY;
+  if (!keyHex || keyHex.length !== 64) {
+    throw new Error('SECRET_ENCRYPTION_KEY env var must be set to 64 hex characters (32 bytes).');
+  }
+  const key = Buffer.from(keyHex, 'hex');
+  const iv = crypto.randomBytes(12); // 96-bit IV recommended for GCM
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const encrypted = cipher.update(secret, 'utf8', 'hex') + cipher.final('hex');
+  const authTag = cipher.getAuthTag();
+  return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
+}
+
+/**
  * Safely parse numeric limits from plan features.
  * Returns a number, or null when unlimited/not set.
  */
@@ -171,22 +190,24 @@ const createApp = async (req, res) => {
     // Generate credentials
     const { apiKey, apiSecret } = generateApiCredentials();
     
-    // Hash the secret BEFORE storing
+    // Hash the secret BEFORE storing (kept for backward compat with v0.1.x clients)
     const hashedSecret = crypto.createHash('sha256').update(apiSecret).digest('hex');
+    // Also store AES-256-GCM encrypted secret for HMAC-SHA256 verification (v0.2+ clients)
+    const encryptedSecret = encryptSecret(apiSecret);
 
     // console.log    console.log('Creating app with credentials...');
 
-    // Create app with hashed secret and email pending verification
+    // Create app with hashed secret, encrypted secret, and email pending verification
     const result = await pool.query(`
       INSERT INTO dev_apps (
-        developer_id, app_name, support_email, api_key, api_secret_hash,
+        developer_id, app_name, support_email, api_key, api_secret_hash, api_secret_encrypted,
         allow_google_signin, allow_email_signin, support_email_verified,
         group_id, created_at, updated_at
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, false, $8, NOW(), NOW()
+        $1, $2, $3, $4, $5, $6, $7, $8, false, $9, NOW(), NOW()
       )
       RETURNING id, app_name, support_email, api_key, allow_google_signin, allow_email_signin, support_email_verified, group_id, created_at
-    `, [developerId, app_name, support_email, apiKey, hashedSecret, allow_google_signin, allow_email_signin, resolvedGroupId]);
+    `, [developerId, app_name, support_email, apiKey, hashedSecret, encryptedSecret, allow_google_signin, allow_email_signin, resolvedGroupId]);
 
     const app = result.rows[0];
     // console.log    console.log('App created successfully:', app.id);
@@ -196,14 +217,14 @@ const createApp = async (req, res) => {
     await pool.query(`
       INSERT INTO dev_email_verifications (dev_id, token, expires_at, verify_type, created_at)
       VALUES ($1, $2, NOW() + INTERVAL '24 hours', 'App Support Email', NOW())
-    `, [developerId, verificationToken]);
+    `, [developerId, verificationToken]); 
 
     // Send verification email
-    const verificationUrl = `${process.env.BACKEND_URL}/api/developer/apps/verify-app-email/${verificationToken}`;
+    const verificationUrl = `${process.env.BACKEND_URL}/api/v1/developer/apps/verify-app-email/${verificationToken}`;
     sendMail({
       to: support_email,
       subject: `Verify Your App Support Email - ${app_name}`,
-      html: buildAppSupportEmailVerificationEmail({ appName: app_name, verificationUrl, supportEmail: support_email }),
+      html: buildAppSupportEmailVerificationEmail({ appName: app_name, verificationUrl, supportEmail: process.env.FROM_EMAIL }),
     }).catch(err => console.error('Send verification email error:', err));
 
     // Return response with plaintext secret and pending verification status
@@ -870,11 +891,12 @@ const regenerateApiKey = async (req, res) => {
     // Generate new credentials
     const { apiKey, apiSecret } = generateApiCredentials();
     const hashedSecret = crypto.createHash('sha256').update(apiSecret).digest('hex');
+    const encryptedSecret = encryptSecret(apiSecret);
 
-    // Update credentials
+    // Update credentials (both hash for legacy v0.1.x and encrypted for v0.2+ HMAC)
     await pool.query(
-      'UPDATE dev_apps SET api_key = $1, api_secret_hash = $2, updated_at = NOW() WHERE id = $3',
-      [apiKey, hashedSecret, appId]
+      'UPDATE dev_apps SET api_key = $1, api_secret_hash = $2, api_secret_encrypted = $3, updated_at = NOW() WHERE id = $4',
+      [apiKey, hashedSecret, encryptedSecret, appId]
     );
 
     res.json({
@@ -910,15 +932,34 @@ const getAppSummary = async (req, res) => {
     const owner = await pool.query('SELECT id FROM dev_apps WHERE id = $1 AND developer_id = $2', [appId, developerId]);
     if (!owner.rows.length) return res.status(404).json({ success: false, message: 'App not found' });
 
-    const q = await pool.query(`
-      SELECT a.id, a.app_name, a.allow_google_signin, a.allow_email_signin, a.support_email, a.support_email_verified,
-        COUNT(u.id) FILTER (WHERE u.id IS NOT NULL) AS total_users,
-        COUNT(u.id) FILTER (WHERE u.created_at >= NOW() - INTERVAL '30 days') AS new_users_30d
-      FROM dev_apps a
-      LEFT JOIN users u ON u.app_id = a.id
-      WHERE a.id = $1
-      GROUP BY a.id
-    `, [appId]);
+    let q;
+    try {
+      q = await pool.query(`
+        SELECT a.id, a.app_name, a.allow_google_signin, a.allow_email_signin, a.support_email, a.support_email_verified,
+          a.mail_sent_count, a.mail_quota_month,
+          COUNT(u.id) FILTER (WHERE u.id IS NOT NULL) AS total_users,
+          COUNT(u.id) FILTER (WHERE u.created_at >= NOW() - INTERVAL '30 days') AS new_users_30d
+        FROM dev_apps a
+        LEFT JOIN users u ON u.app_id = a.id
+        WHERE a.id = $1
+        GROUP BY a.id
+      `, [appId]);
+    } catch (queryErr) {
+      if (queryErr.code === '42703') {
+        q = await pool.query(`
+          SELECT a.id, a.app_name, a.allow_google_signin, a.allow_email_signin, a.support_email, a.support_email_verified,
+            0 AS mail_sent_count, NULL AS mail_quota_month,
+            COUNT(u.id) FILTER (WHERE u.id IS NOT NULL) AS total_users,
+            COUNT(u.id) FILTER (WHERE u.created_at >= NOW() - INTERVAL '30 days') AS new_users_30d
+          FROM dev_apps a
+          LEFT JOIN users u ON u.app_id = a.id
+          WHERE a.id = $1
+          GROUP BY a.id
+        `, [appId]);
+      } else {
+        throw queryErr;
+      }
+    }
 
     // usage this month
     const usage = await pool.query(`
@@ -942,6 +983,7 @@ const getAppSummary = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
 
 /**
  * List app users (paginated, filters)
@@ -1087,8 +1129,13 @@ const getAppUsage = async (req, res) => {
     const developerId = req.user.developerId;
     const { appId } = req.params;
 
-    const owner = await pool.query('SELECT id FROM dev_apps WHERE id = $1 AND developer_id = $2', [appId, developerId]);
+    const owner = await pool.query(
+      'SELECT id, mail_sent_count, mail_quota_month FROM dev_apps WHERE id = $1 AND developer_id = $2',
+      [appId, developerId]
+    );
     if (!owner.rows.length) return res.status(404).json({ success: false, message: 'App not found' });
+
+    const { mail_sent_count, mail_quota_month } = owner.rows[0];
 
     const total = await pool.query('SELECT count(*) as total_calls FROM dev_api_calls WHERE app_id = $1', [appId]);
     const perEndpoint = await pool.query(`
@@ -1098,12 +1145,21 @@ const getAppUsage = async (req, res) => {
       GROUP BY endpoint ORDER BY calls DESC LIMIT 50
     `, [appId]);
 
-    res.json({ success: true, data: { total_calls: parseInt(total.rows[0].total_calls, 10), per_endpoint: perEndpoint.rows } });
+    res.json({
+      success: true,
+      data: {
+        total_calls: parseInt(total.rows[0].total_calls, 10),
+        per_endpoint: perEndpoint.rows,
+        mail_sent_this_month: mail_sent_count || 0,
+        mail_quota_month: mail_quota_month || null,
+      }
+    });
   } catch (err) {
     console.error('getAppUsage error', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
 
 /**
  * Get dashboard statistics
@@ -1350,11 +1406,11 @@ const updateAppSupportEmail = async (req, res) => {
     `, [developerId, verificationToken]);
 
     // Send verification email
-    const verificationUrl = `${process.env.BACKEND_URL}/api/developer/apps/verify-app-email/${verificationToken}`;
+    const verificationUrl = `${process.env.BACKEND_URL}/api/v1/developer/apps/verify-app-email/${verificationToken}`;
     sendMail({
       to: support_email,
       subject: `Verify Updated Support Email - ${app.app_name}`,
-      html: buildAppSupportEmailUpdateEmail({ appName: app.app_name, verificationUrl, supportEmail: support_email }),
+      html: buildAppSupportEmailUpdateEmail({ appName: app.app_name, verificationUrl, supportEmail: process.env.FROM_EMAIL }),
     }).catch(err => console.error('Send verification email error:', err));
 
     res.json({

@@ -3,11 +3,20 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { authService } from '../../services/authService';
 import { api } from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
-import { validateEmail, validatePassword } from '../../utils/validators';
-import { tokenService } from '../../services/tokenService';
+import { validateEmail } from '../../utils/validators';
 import Modal from '../../components/Modal';
-import { API_URL } from '../../utils/api';
-import './Login.scss';
+import { API_BASE_URL } from '../../utils/api';
+import {
+  LogIn,
+  AlertCircle,
+  CheckCircle2,
+  AlertTriangle,
+  Loader2,
+  Mail,
+  Lock,
+  ArrowRight,
+  ExternalLink
+} from 'lucide-react';
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -40,11 +49,9 @@ const Login = () => {
     const policyToken = params.get('token');
 
     if (error === 'policy_not_accepted' && policyToken) {
-      // Show modal for policy acceptance
       setOauthPolicyToken(policyToken);
       setShowOAuthPolicyModal(true);
       setOauthPolicyAccepted(false);
-      // Clean up URL
       window.history.replaceState({}, '', '/login');
     } else if (error) {
       const errorMessages = {
@@ -59,17 +66,13 @@ const Login = () => {
         type: 'error',
         text: errorMessages[error] || 'Google authentication failed / Session expired. Please try again.',
       });
-      // Clean up URL
       window.history.replaceState({}, '', '/login');
     } else if (token && refreshToken) {
-      // Send tokens to backend so server sets httpOnly cookies and establishes session
       (async () => {
         try {
           const resp = await api.post('/developer/exchange-tokens', { token, refreshToken });
           if (resp.success) {
-            // Refresh client-side developer state from backend
             try { await checkAuth(); } catch(e) {}
-            // Clean up URL and navigate
             window.history.replaceState({}, '', '/login');
             navigate('/dashboard');
           } else {
@@ -83,7 +86,7 @@ const Login = () => {
         }
       })();
     }
-  }, [location, navigate]);
+  }, [location, navigate, checkAuth]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -95,17 +98,14 @@ const Login = () => {
 
   const validate = () => {
     const newErrors = {};
-
     if (!formData.email) {
       newErrors.email = 'Email is required';
     } else if (!validateEmail(formData.email)) {
       newErrors.email = 'Invalid email format';
     }
-
     if (!formData.password) {
       newErrors.password = 'Password is required';
     }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -124,7 +124,6 @@ const Login = () => {
       await login(formData);
       navigate('/dashboard');
     } catch (error) {
-      // Handle specific error codes
       if (error.error === 'EMAIL_NOT_VERIFIED') {
         setUnverifiedEmail(formData.email);
         setMessage({
@@ -141,15 +140,14 @@ const Login = () => {
           type: 'error',
           text: error.message || 'Account is temporarily locked due to multiple failed login attempts.',
         });
-      }  else if (error.error === 'POLICY_NOT_ACCEPTED') {
+      } else if (error.error === 'POLICY_NOT_ACCEPTED') {
         setPendingPolicies(error.data?.policies || []);
         setPolicyAccepted(false);
         setMessage({
           type: 'info',
-          text: 'Please review and accept the latest terms, privacy and refund policies to continue.',
+          text: 'Please review and accept the latest platform policies to continue.',
         });
-      }
-      else {
+      } else {
         setMessage({
           type: 'error',
           text: error.message || 'Login failed. Please check your credentials.',
@@ -162,7 +160,6 @@ const Login = () => {
 
   const handleAcceptPolicies = async () => {
     if (!pendingPolicies || !policyAccepted) return;
-
     setAcceptingPolicies(true);
     setMessage({ type: '', text: '' });
 
@@ -170,17 +167,10 @@ const Login = () => {
       await login({ ...formData, acceptPolicies: true });
       navigate('/dashboard');
     } catch (error) {
-      if (error.error === 'POLICY_NOT_ACCEPTED') {
-        setMessage({
-          type: 'error',
-          text: 'Unable to record policy acceptance. Please try again.',
-        });
-      } else {
-        setMessage({
-          type: 'error',
-          text: error.message || 'Login failed while accepting policies.',
-        });
-      }
+      setMessage({
+        type: 'error',
+        text: error.message || 'Login failed while accepting policies.',
+      });
     } finally {
       setAcceptingPolicies(false);
     }
@@ -188,7 +178,6 @@ const Login = () => {
 
   const handleResendVerification = async () => {
     if (!unverifiedEmail) return;
-
     setResendingEmail(true);
     setMessage({ type: '', text: '' });
 
@@ -211,44 +200,33 @@ const Login = () => {
 
   const handleAcceptOAuthPolicies = async () => {
     if (!oauthPolicyToken || !oauthPolicyAccepted) return;
-
     setAcceptingOAuthPolicies(true);
 
     try {
-      const response = await fetch(`${API_URL}/api/developer/accept-policies-oauth`, {
+      const response = await fetch(`${API_BASE_URL}/developer/accept-policies-oauth`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: oauthPolicyToken }),
       });
-
       const data = await response.json();
-
       if (!response.ok || !data.success) {
         throw new Error(data.message || 'Failed to accept policies');
       }
 
-      // Close modal
       setShowOAuthPolicyModal(false);
       setOauthPolicyToken(null);
       setOauthPolicyAccepted(false);
-
-      // Show success message
       setMessage({
         type: 'success',
         text: 'Policies accepted! Redirecting to Google sign-in...',
       });
-
-      // Retry Google OAuth after a short delay
       setTimeout(() => {
-        window.location.href = `${API_URL}/api/developer/auth/google`;
+        window.location.href = `${API_BASE_URL}/developer/auth/google`;
       }, 1500);
-
-    } catch (error) {
+    } catch (err) {
       setMessage({
         type: 'error',
-        text: error.message || 'Failed to accept policies. Please try again.',
+        text: err.message || 'Failed to accept policies. Please try again.',
       });
     } finally {
       setAcceptingOAuthPolicies(false);
@@ -256,7 +234,8 @@ const Login = () => {
   };
 
   return (
-    <div className="auth-page">
+    <div className="flex min-h-[80vh] items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
+      {/* OAuth Policy Modal */}
       <Modal
         isOpen={showOAuthPolicyModal}
         onClose={() => {
@@ -266,214 +245,230 @@ const Login = () => {
         }}
         title="Policy Acceptance Required"
       >
-        <div className="oauth-policy-modal">
-          <p style={{ marginBottom: '1rem', lineHeight: '1.6' }}>
-            To continue with Google sign-in, you need to review and accept our latest policies.
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600 leading-relaxed font-medium">
+            To continue with Google sign-in, please review and accept our latest developer platform policies.
           </p>
-          
-          <div style={{ marginBottom: '1.5rem' }}>
-            <Link 
-              to="/policies" 
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <Link
+              to="/policies"
               target="_blank"
               rel="noopener noreferrer"
-              style={{ 
-                color: '#4285F4', 
-                textDecoration: 'underline',
-                fontSize: '0.95rem'
-              }}
+              className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:underline"
             >
-              View all policies (opens in new tab)
+              View all platform policies <ExternalLink className="h-3.5 w-3.5" />
             </Link>
           </div>
-
-          <label className="policy-checkbox" style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+          <label className="flex items-start gap-3 cursor-pointer">
             <input
               type="checkbox"
               checked={oauthPolicyAccepted}
               onChange={(e) => setOauthPolicyAccepted(e.target.checked)}
-              style={{ marginTop: '0.25rem' }}
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
             />
-            <span style={{ lineHeight: '1.5' }}>
+            <span className="text-xs text-slate-700 font-medium">
               I have read and agree to the{' '}
-              <Link to="/terms" target="_blank" rel="noopener noreferrer">Terms</Link>,{' '}
-              <Link to="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</Link>, and{' '}
-              <Link to="/refund" target="_blank" rel="noopener noreferrer">Refund Policy</Link>.
+              <Link to="/terms" target="_blank" className="text-indigo-600 font-bold hover:underline">Terms</Link>,{' '}
+              <Link to="/privacy" target="_blank" className="text-indigo-600 font-bold hover:underline">Privacy Policy</Link>, and{' '}
+              <Link to="/refund" target="_blank" className="text-indigo-600 font-bold hover:underline">Refund Policy</Link>.
             </span>
           </label>
-
           <button
             type="button"
-            className="btn btn-primary btn-block btn-lg"
+            className="w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-indigo-500 transition-colors disabled:opacity-50 cursor-pointer"
             onClick={handleAcceptOAuthPolicies}
             disabled={!oauthPolicyAccepted || acceptingOAuthPolicies}
-            style={{ marginTop: '1.5rem' }}
           >
-            {acceptingOAuthPolicies ? 'Accepting...' : 'Accept & Continue with Google'}
+            {acceptingOAuthPolicies ? 'Accepting…' : 'Accept & Continue with Google'}
           </button>
         </div>
       </Modal>
 
-      <div className="auth-container">
-        <div className="auth-card">
-          <div className="auth-header">
-            <h1>Welcome Back</h1>
-            <p>Sign in to your developer account</p>
+      {/* Main Login Card */}
+      <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xl">
+        <div className="text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-600">
+            <LogIn className="h-6 w-6" />
+          </div>
+          <h1 className="mt-4 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
+            Welcome back
+          </h1>
+          <p className="mt-1 text-sm text-slate-500 font-medium">
+            Sign in to access your developer portal
+          </p>
+        </div>
+
+        {/* Alert Messages */}
+        {message.text && (
+          <div
+            className={`mt-6 flex items-start gap-2.5 rounded-xl border p-3.5 text-xs font-semibold ${
+              message.type === 'error'
+                ? 'border-rose-200 bg-rose-50 text-rose-700'
+                : message.type === 'warning'
+                ? 'border-amber-200 bg-amber-50 text-amber-700'
+                : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+            }`}
+          >
+            {message.type === 'error' ? (
+              <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+            ) : message.type === 'warning' ? (
+              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+            ) : (
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+            )}
+            <span className="leading-relaxed">{message.text}</span>
+          </div>
+        )}
+
+        {/* Resend Verification Notice */}
+        {unverifiedEmail && (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-800">
+            <p className="font-semibold">Your email is not verified yet.</p>
+            <button
+              onClick={handleResendVerification}
+              disabled={resendingEmail}
+              className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 font-bold text-amber-800 hover:bg-amber-100 transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
+            >
+              {resendingEmail ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+              {resendingEmail ? 'Sending…' : 'Resend Verification Email'}
+            </button>
+          </div>
+        )}
+
+        {/* Login Form */}
+        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+              Email address
+            </label>
+            <div className="relative mt-1.5">
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                <Mail className="h-4 w-4" />
+              </div>
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="developer@example.com"
+                autoComplete="email"
+                className={`block w-full rounded-xl border bg-slate-50 py-2.5 pl-10 pr-3.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 font-medium ${
+                  errors.email ? 'border-rose-500 focus:ring-rose-500/20' : 'border-slate-200 focus:border-indigo-500 focus:ring-indigo-500/20'
+                }`}
+              />
+            </div>
+            {errors.email && <p className="mt-1 text-xs text-rose-600 font-semibold">{errors.email}</p>}
           </div>
 
-          {message.text && (
-            <div className={`alert alert-${message.type}`}>
-              {message.text}
+          <div>
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                Password
+              </label>
+              <Link to="/forgot-password" className="text-xs font-bold text-indigo-600 hover:underline">
+                Forgot password?
+              </Link>
             </div>
-          )}
+            <div className="relative mt-1.5">
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                <Lock className="h-4 w-4" />
+              </div>
+              <input
+                type="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                placeholder="••••••••"
+                autoComplete="current-password"
+                className={`block w-full rounded-xl border bg-slate-50 py-2.5 pl-10 pr-3.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 font-medium ${
+                  errors.password ? 'border-rose-500 focus:ring-rose-500/20' : 'border-slate-200 focus:border-indigo-500 focus:ring-indigo-500/20'
+                }`}
+              />
+            </div>
+            {errors.password && <p className="mt-1 text-xs text-rose-600 font-semibold">{errors.password}</p>}
+          </div>
 
-          {unverifiedEmail && (
-            <div className="alert alert-warning" style={{ marginTop: '1rem' }}>
-              <p style={{ marginBottom: '0.5rem' }}>
-                Your email is not verified yet.
+          {/* Pending Policies Acceptance Block */}
+          {pendingPolicies && (
+            <div className="rounded-2xl border border-indigo-200 bg-indigo-50/80 p-4 space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-800">Updated Policies Required</h4>
+              <p className="text-xs text-slate-700 leading-relaxed font-medium">
+                Please accept our updated terms to proceed. Review full documents at{' '}
+                <Link to="/policies" target="_blank" className="text-indigo-600 underline font-bold">Policies</Link>.
               </p>
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={policyAccepted}
+                  onChange={(e) => setPolicyAccepted(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span className="text-xs text-slate-700 font-medium">
+                  I agree to the Terms, Privacy Policy, and Refund Policy.
+                </span>
+              </label>
               <button
-                onClick={handleResendVerification}
-                disabled={resendingEmail}
-                className="btn btn-sm"
-                style={{ 
-                  marginTop: '0.5rem',
-                  padding: '0.5rem 1rem',
-                  fontSize: '0.9rem',
-                  backgroundColor: '#fff',
-                  color: '#856404',
-                  border: '1px solid #856404'
-                }}
+                type="button"
+                onClick={handleAcceptPolicies}
+                disabled={!policyAccepted || acceptingPolicies}
+                className="w-full rounded-xl bg-indigo-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-indigo-500 transition-colors disabled:opacity-50 cursor-pointer"
               >
-                {resendingEmail ? 'Sending...' : 'Resend Verification Email'}
+                {acceptingPolicies ? 'Saving…' : 'Accept Policies & Proceed'}
               </button>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="auth-form">
-            <div className="form-group">
-              <label htmlFor="email">Email</label>
-              <input
-                type="email"
-                id="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                className={errors.email ? 'error' : ''}
-                placeholder="Enter your email"
-                autoComplete="email"
-              />
-              {errors.email && (
-                <span className="error-message">{errors.email}</span>
-              )}
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="password">Password</label>
-              <input
-                type="password"
-                id="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                className={errors.password ? 'error' : ''}
-                placeholder="Enter your password"
-                autoComplete="current-password"
-              />
-              {errors.password && (
-                <span className="error-message">{errors.password}</span>
-              )}
-            </div>
-
-            <div className="form-footer">
-              <Link to="/forgot-password" className="forgot-link">
-                Forgot password?
-              </Link>
-            </div>
-
-            <button
-              type="submit"
-              className="btn btn-primary btn-block btn-lg"
-              disabled={loading}
-            >
-              {loading ? 'Signing in...' : 'Sign In'}
-            </button>
-
-            {pendingPolicies && (
-              <div className="policy-consent">
-                <h3>Policy Update</h3>
-                <p className="policy-intro">
-                  To continue, please review and accept the following policies. You can also read them any time on the public pages.
-                </p>
-                <p className="policy-intro" style={{ marginTop: '0.25rem' }}>
-                  You can open the full documents here:
-                  {' '}
-                  <Link to="/policies">All Policies</Link>,{' '}
-                  <Link to="/terms">Terms</Link>,{' '}
-                  <Link to="/privacy">Privacy</Link>,{' '}
-                  <Link to="/refund">Refund Policy</Link>
-                  .
-                </p>
-                <div className="policy-list">
-                  {pendingPolicies.map((policy) => (
-                    <div key={policy.id} className="policy-item">
-                      <h4>{policy.title}</h4>
-                      <div className="policy-content">
-                        <p>{policy.content}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="policy-actions">
-                  <label className="policy-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={policyAccepted}
-                      onChange={(e) => setPolicyAccepted(e.target.checked)}
-                    />
-                    <span>
-                      I have read and agree to the Terms, Privacy Policy and Refund Policy.
-                    </span>
-                  </label>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-block btn-lg"
-                    onClick={handleAcceptPolicies}
-                    disabled={!policyAccepted || acceptingPolicies}
-                    style={{ marginTop: '0.75rem' }}
-                  >
-                    {acceptingPolicies ? 'Saving acceptance...' : 'Accept & Continue'}
-                  </button>
-                </div>
-              </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 py-3 text-sm font-bold text-white shadow-md shadow-indigo-600/20 hover:from-indigo-500 hover:to-indigo-400 transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60 cursor-pointer"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Signing in…
+              </>
+            ) : (
+              <>
+                Sign In
+                <ArrowRight className="h-4 w-4" />
+              </>
             )}
+          </button>
 
-            <div className="divider">
-              <span>OR</span>
+          {/* Divider */}
+          <div className="relative my-6 flex items-center justify-center">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-200"></div>
             </div>
-
-            <button
-              type="button"
-              className="btn btn-google btn-block btn-lg"
-              onClick={() => {
-                window.location.href = `${import.meta.env.VITE_API_URL}/api/developer/auth/google`;
-              }}
-            >
-              <svg viewBox="0 0 24 24" width="20" height="20" style={{ marginRight: '10px' }}>
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-              </svg>
-              Sign in with Google
-            </button>
-          </form>
-
-          <div className="auth-footer">
-            <p>
-              Don't have an account?{' '}
-              <Link to="/register">Sign up</Link>
-            </p>
+            <div className="relative bg-white px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              Or continue with
+            </div>
           </div>
+
+          {/* Google OAuth Button */}
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href = `${API_BASE_URL}/developer/auth/google`;
+            }}
+            className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white py-2.5 px-4 text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all cursor-pointer shadow-xs"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+            Sign in with Google
+          </button>
+        </form>
+
+        <div className="mt-6 text-center text-xs text-slate-500 font-medium">
+          Don't have an account?{' '}
+          <Link to="/register" className="font-bold text-indigo-600 hover:underline">
+            Sign up free
+          </Link>
         </div>
       </div>
     </div>

@@ -17,6 +17,19 @@ pipeline {
       }
     }
 
+    stage('Set Version') {
+      steps {
+        script {
+          def tag = sh(script: 'git describe --tags --exact-match 2>/dev/null || true', returnStdout: true).trim()
+          if (!tag) {
+            error('No Git tag found on this commit. Tag the commit (e.g. git tag v1.0.0 && git push origin v1.0.0) before triggering a build.')
+          }
+          env.IMAGE_TAG = tag
+          echo "Image tag: ${tag}"
+        }
+      }
+    }
+
     stage('Merge test → main') {
       steps {
         withCredentials([usernamePassword(
@@ -112,14 +125,14 @@ pipeline {
   post {
     success {
       emailext(
-        to: EMAIL,
-        subject: "✅ ${APP} deployed to PRODUCTION (Build #${BUILD_NUMBER})",
+        to: "ci@mspkapps.in",
+        subject: "✅ ${env.APP} deployed to PRODUCTION (Build #${env.BUILD_NUMBER})",
         body: """
 SUCCESS ✅
 
-Application : ${APP}
-Build Number: ${BUILD_NUMBER}
-Image Tag   : ${IMAGE_TAG}
+Application : ${env.APP}
+Build Number: ${env.BUILD_NUMBER}
+Image Tag   : ${env.IMAGE_TAG}
 Branch      : main
 """,
         attachLog: true,
@@ -129,13 +142,13 @@ Branch      : main
 
     failure {
       emailext(
-        to: EMAIL,
-        subject: "❌ ${APP} CI FAILED (Build #${BUILD_NUMBER})",
+        to: "ci@mspkapps.in",
+        subject: "❌ ${env.APP ?: 'auth-server'} CI FAILED (Build #${env.BUILD_NUMBER})",
         body: """
 FAILURE ❌
 
-Application : ${APP}
-Build Number: ${BUILD_NUMBER}
+Application : ${env.APP ?: 'auth-server'}
+Build Number: ${env.BUILD_NUMBER}
 Branch      : test → main
 
 ❌ Production was NOT touched.

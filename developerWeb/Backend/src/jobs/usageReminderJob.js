@@ -46,9 +46,10 @@ const scheduleUsageReminderJob = () => {
         try {
           const apiRes = await pool.query(
             `SELECT COUNT(*) as count
-             FROM dev_api_calls
-             WHERE developer_id = $1
-               AND DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE)`,
+             FROM dev_api_calls dac
+             JOIN dev_apps a ON dac.app_id = a.id
+             WHERE a.developer_id = $1
+               AND DATE_TRUNC('month', dac.created_at) = DATE_TRUNC('month', CURRENT_DATE)`,
             [developer_id]
           );
           apiCallsUsed = parseInt(apiRes.rows[0]?.count || 0, 10);

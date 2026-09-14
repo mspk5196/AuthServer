@@ -1,12 +1,29 @@
-import { NavLink, Outlet } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
 import { useState, useEffect } from 'react';
-import './DashboardLayout.css';
+import { NavLink, Outlet, Link } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import {
+  LayoutDashboard,
+  Layers,
+  FolderGit2,
+  BookOpen,
+  Settings as SettingsIcon,
+  LogOut,
+  Clock,
+  Calendar,
+  Menu,
+  X,
+  ExternalLink,
+  ShieldCheck,
+  Sparkles
+} from 'lucide-react';
 
 const DashboardLayout = () => {
   const { developer, logout } = useAuth();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [sessionExpiry, setSessionExpiry] = useState(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const mainPortalUrl = import.meta.env.VITE_MAIN_PORTAL_URL || 'https://authservices.mspkapps.in';
 
   const getInitials = (name, email) => {
     if (name) {
@@ -61,134 +78,206 @@ const DashboardLayout = () => {
       second: '2-digit',
       day: '2-digit',
       month: 'short',
-      year: 'numeric'
     });
   };
 
-  // Get warning class based on time remaining
-  const getTimerClass = () => {
-    if (!sessionExpiry) return '';
+  // Get warning styles based on time remaining
+  const getTimerPillClass = () => {
+    if (!sessionExpiry) return 'bg-slate-100 text-slate-700 border-slate-200';
     const diff = sessionExpiry - currentTime;
     const minutes = Math.floor(diff / 60000);
-    if (minutes < 2) return 'timer-critical';
-    if (minutes < 5) return 'timer-warning';
-    return '';
+    if (minutes < 2) return 'bg-rose-50 text-rose-700 border-rose-200 animate-pulse font-black';
+    if (minutes < 5) return 'bg-amber-50 text-amber-700 border-amber-200 font-bold';
+    return 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold';
   };
 
-  return (
-    <div className="dashboard-layout">
-      <aside className="dashboard-sidebar">
-        <div className="sidebar-header">
-          <a href="/" className="sidebar-logo">
-            <img src="/logo.png" alt="MSPK™ Apps" style={{ height: '32px', width: '32px', borderRadius: '8px' }} />
-            <span style={{ marginLeft: '0.5rem' }}>cPanel</span>
-          </a>
+  const navItems = [
+    { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
+    { to: '/apps', label: 'Applications', icon: Layers },
+    { to: '/groups', label: 'App Groups', icon: FolderGit2 },
+    { to: '/documentation', label: 'API Reference', icon: BookOpen },
+    { to: '/settings', label: 'Plan & Quotas', icon: SettingsIcon },
+  ];
+
+  const sidebarContent = (
+    <div className="flex h-full flex-col justify-between bg-white border-r border-slate-200 shadow-xs">
+      <div>
+        {/* Brand Header */}
+        <div className="flex h-16 items-center justify-between px-6 border-b border-slate-100">
+          <Link to="/" className="flex items-center gap-3 group">
+            <img
+              src="/logo.png"
+              alt="MSPK"
+              className="h-9 w-9 rounded-full object-contain shrink-0"
+              onError={(e) => { e.target.style.display = 'none'; }}
+            />
+            <div className="flex flex-col">
+              <span className="text-sm font-bold text-slate-900 tracking-tight group-hover:text-indigo-600 transition-colors">
+                Control Panel
+              </span>
+              <span className="text-[10px] text-slate-500 font-semibold">MSPK™ Apps</span>
+            </div>
+          </Link>
+          <button
+            onClick={() => setMobileMenuOpen(false)}
+            className="md:hidden rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
-        <nav className="sidebar-nav">
-          <div className="nav-section">
-            <div className="nav-section-title">Main</div>
-            <NavLink to="/" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} end>
-              <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                <polyline points="9 22 9 12 15 12 15 22" />
-              </svg>
-              Home
-            </NavLink>
-            <NavLink to="/apps" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-              <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="3" width="7" height="7" />
-                <rect x="14" y="3" width="7" height="7" />
-                <rect x="14" y="14" width="7" height="7" />
-                <rect x="3" y="14" width="7" height="7" />
-              </svg>
-              Apps
-            </NavLink>
-            <NavLink to="/groups" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-              <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="8" cy="8" r="3" />
-                <circle cx="16" cy="16" r="3" />
-                <path d="M11 9.5l3 3" />
-              </svg>
-              Groups
-            </NavLink>
-            <NavLink to="/documentation" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-              <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="16" y1="13" x2="8" y2="13" />
-                <line x1="16" y1="17" x2="8" y2="17" />
-                <polyline points="10 9 9 9 8 9" />
-              </svg>
-              Documentation
-            </NavLink>
-          </div>
+        {/* Navigation Menu */}
+        <div className="px-3 py-4">
+          <p className="px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">Manage</p>
+          <nav className="mt-2 space-y-1">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold transition-all ${
+                      isActive
+                        ? 'bg-indigo-50 text-indigo-700 border border-indigo-200/80 font-bold shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      <Icon className={`h-4 w-4 ${isActive ? 'text-indigo-600' : 'text-slate-400'}`} />
+                      <span>{item.label}</span>
+                    </>
+                  )}
+                </NavLink>
+              );
+            })}
+          </nav>
 
-          <div className="nav-section">
-            <div className="nav-section-title">Account</div>
-            <NavLink to="/settings" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-              <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M12 1v6m0 6v6m9-9h-6m-6 0H3" />
-              </svg>
-              Settings
-            </NavLink>
-          </div>
-        </nav>
-
-        <div className="sidebar-footer">
-          <div className="session-timer">
-            <div className="timer-row">
-              <svg className="timer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
-              </svg>
-              <div className="timer-info">
-                <div className="timer-label">Session Expires</div>
-                <div className={`timer-value ${getTimerClass()}`}>{getTimeRemaining()}</div>
-              </div>
-            </div>
-            <div className="timer-row">
-              <svg className="timer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                <line x1="16" y1="2" x2="16" y2="6" />
-                <line x1="8" y1="2" x2="8" y2="6" />
-                <line x1="3" y1="10" x2="21" y2="10" />
-              </svg>
-              <div className="timer-info">
-                <div className="timer-label">IST</div>
-                <div className="timer-date">{getISTTime()}</div>
-              </div>
-            </div>
-          </div>
-          <div className="user-info">
-            <div className="user-avatar">
-              {developer ? getInitials(developer.name, developer.email) : 'D'}
-            </div>
-            <div className="user-details">
-              <div className="user-name">{developer?.name || developer?.username || 'Developer'}</div>
-              <div className="user-email">{developer?.email || ''}</div>
-            </div>
-            <button
-              className="logout-btn"
-              onClick={logout}
-              title="Logout"
+          <p className="mt-6 px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">External</p>
+          <div className="mt-2 space-y-1">
+            <a
+              href={mainPortalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between rounded-xl px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
             >
-              <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                <polyline points="16 17 21 12 16 7" />
-                <line x1="21" y1="12" x2="9" y2="12" />
-              </svg>
-            </button>
+              <span className="flex items-center gap-2.5">
+                <ExternalLink className="h-4 w-4 text-slate-400" />
+                Main Developer Portal
+              </span>
+              <span className="text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded font-bold">Portal</span>
+            </a>
           </div>
         </div>
+      </div>
+
+      {/* Footer Area: Timers & Profile */}
+      <div className="border-t border-slate-100 p-3 space-y-3 bg-slate-50/50">
+        {/* Session Expiry & IST Clock */}
+        <div className="p-2.5 bg-white border border-slate-200 rounded-xl space-y-1.5 shadow-2xs">
+          <div className="flex items-center justify-between text-xs">
+            <span className="flex items-center gap-1.5 text-slate-500 font-medium">
+              <Clock className="w-3.5 h-3.5 text-slate-400" />
+              Session
+            </span>
+            <span className={`px-2 py-0.5 rounded-full border text-[11px] ${getTimerPillClass()}`}>
+              {getTimeRemaining()}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100">
+            <span className="flex items-center gap-1.5">
+              <Calendar className="w-3 h-3 text-slate-400" />
+              IST Clock
+            </span>
+            <span className="font-semibold text-slate-700">{getISTTime()}</span>
+          </div>
+        </div>
+
+        {/* Developer Profile Card */}
+        <div className="flex items-center justify-between rounded-xl bg-white p-2.5 border border-slate-200 shadow-2xs">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-50 border border-indigo-200 text-xs font-black text-indigo-700 shadow-xs">
+              {getInitials(developer?.name, developer?.email)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-bold text-slate-900">
+                {developer?.name || developer?.username || 'Developer'}
+              </p>
+              <p className="truncate text-[10px] text-slate-500 font-medium">
+                {developer?.email}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={logout}
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors cursor-pointer"
+            title="Log out"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex">
+      {/* Desktop Sidebar */}
+      <aside className="hidden md:flex md:w-64 md:flex-col shrink-0 sticky top-0 h-screen z-30 bg-white">
+        {sidebarContent}
       </aside>
 
-      <main className="dashboard-main">
-        <div className="dashboard-content">
-          <Outlet />
+      {/* Mobile Drawer */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs" onClick={() => setMobileMenuOpen(false)} />
+          <div className="fixed inset-y-0 left-0 w-72 max-w-full shadow-2xl bg-white">
+            {sidebarContent}
+          </div>
         </div>
-      </main>
+      )}
+
+      {/* Main Content View */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Sticky Top Header */}
+        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/80 px-4 sm:px-6 backdrop-blur-md shadow-xs">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900 md:hidden cursor-pointer"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <div className="flex items-center gap-2">
+              <span className="text-base font-bold text-slate-900">cPanel Administration</span>
+              <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 text-[10px] font-bold text-indigo-700">
+                <Sparkles className="h-2.5 w-2.5 text-indigo-600" />
+                Live Control
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <a
+              href={mainPortalUrl}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all shadow-2xs"
+            >
+              <ShieldCheck className="h-3.5 w-3.5 text-indigo-600" />
+              <span>Main Portal</span>
+              <ExternalLink className="h-3 w-3 text-slate-400" />
+            </a>
+          </div>
+        </header>
+
+        {/* Page Content */}
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 };

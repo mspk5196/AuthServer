@@ -1,6 +1,6 @@
 const nodemailer = require("nodemailer");
 
-const sendMail = async ({ to, subject, html }) => {
+const sendMail = async ({ to, subject, html, from }) => {
   try {
     // Create reusable transporter for Brevo SMTP
     const transporter = nodemailer.createTransport({
@@ -14,7 +14,7 @@ const sendMail = async ({ to, subject, html }) => {
     });
 
     const mailOptions = {
-      from: `"MSPK™ Apps Support" <${process.env.FROM_EMAIL}>`,
+      from: from || `"MSPK™ Apps Support" <${process.env.FROM_EMAIL}>`,
       to,
       subject,
       html,

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../utils/api';
 import PlanSelection from '../../components/PlanSelection';
-import './Plans.scss';
+import { Loader2 } from 'lucide-react';
 
 const Plans = () => {
   const navigate = useNavigate();
@@ -27,34 +27,35 @@ const Plans = () => {
   }, []);
 
   const handlePlanSelected = () => {
-    // After successful selection/upgrade/renew, go back to settings or dashboard
-    navigate('/settings');
+    navigate('/dashboard');
   };
 
   if (loading) {
     return (
-      <div className="plans-page">
-        <div className="container">
-          <div className="loading">Loading current plan...</div>
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+          <p className="text-sm font-semibold text-slate-500">Loading plan subscription…</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="plans-page">
-      <div className="container">
-        <div className="plans-header">
-          <h1>Manage Your Plan</h1>
-          <p>
-            Upgrade from the free plan, switch to a different plan, or renew your existing paid plan.
-            Free plans do not require payment; paid plans will redirect you to Razorpay checkout.
-          </p>
-        </div>
-        <PlanSelection onPlanSelected={handlePlanSelected} currentPlanId={currentPlanId} />
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
+          Subscription Plans &amp; Quotas
+        </h1>
+        <p className="mt-1 text-sm text-slate-600 font-medium">
+          Upgrade your plan, increase monthly API limits, or renew active subscriptions.
+        </p>
       </div>
+
+      <PlanSelection onPlanSelected={handlePlanSelected} currentPlanId={currentPlanId} />
     </div>
   );
 };
 
 export default Plans;
+

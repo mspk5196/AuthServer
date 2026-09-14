@@ -52,21 +52,20 @@ const getPlanInfo = async (req, res) => {
     const appsResult = await pool.query(appsQuery, [developerId]);
     const appsUsed = parseInt(appsResult.rows[0]?.apps_count || 0);
 
-    // Get API calls count for current month from user_login_history
-    // This tracks logins to apps, which we can use as a proxy for API usage
+    // Get API calls count for current month from dev_api_calls
     let apiCallsUsed = 0;
     try {
       const apiCallsQuery = `
         SELECT COUNT(*) as api_calls
-        FROM user_login_history ulh
-        INNER JOIN dev_apps da ON ulh.app_id = da.id
-        WHERE da.developer_id = $1 
-          AND DATE_TRUNC('month', ulh.login_time) = DATE_TRUNC('month', CURRENT_DATE)
+        FROM dev_api_calls dac
+        INNER JOIN dev_apps da ON dac.app_id = da.id
+        WHERE da.developer_id = $1
+          AND DATE_TRUNC('month', dac.created_at) = DATE_TRUNC('month', CURRENT_DATE)
       `;
       const apiCallsResult = await pool.query(apiCallsQuery, [developerId]);
       apiCallsUsed = parseInt(apiCallsResult.rows[0]?.api_calls || 0);
     } catch (error) {
-      // console.log      console.log('API usage tracking error:', error.message);
+      console.log('API usage tracking error:', error.message);
     }
 
     // Extract limits from features JSONB (0 means unlimited)
@@ -272,25 +271,25 @@ const getUsageStats = async (req, res) => {
     try {
       const apiMonthQuery = `
         SELECT COUNT(*) as count
-        FROM user_login_history ulh
-        INNER JOIN dev_apps da ON ulh.app_id = da.id
-        WHERE da.developer_id = $1 
-          AND DATE_TRUNC('month', ulh.login_time) = DATE_TRUNC('month', CURRENT_DATE)
+        FROM dev_api_calls dac
+        INNER JOIN dev_apps da ON dac.app_id = da.id
+        WHERE da.developer_id = $1
+          AND DATE_TRUNC('month', dac.created_at) = DATE_TRUNC('month', CURRENT_DATE)
       `;
       const apiMonthResult = await pool.query(apiMonthQuery, [developerId]);
       apiCallsThisMonth = parseInt(apiMonthResult.rows[0]?.count || 0);
 
       const apiTodayQuery = `
         SELECT COUNT(*) as count
-        FROM user_login_history ulh
-        INNER JOIN dev_apps da ON ulh.app_id = da.id
-        WHERE da.developer_id = $1 
-          AND DATE_TRUNC('day', ulh.login_time) = DATE_TRUNC('day', CURRENT_DATE)
+        FROM dev_api_calls dac
+        INNER JOIN dev_apps da ON dac.app_id = da.id
+        WHERE da.developer_id = $1
+          AND DATE(dac.created_at) = CURRENT_DATE
       `;
       const apiTodayResult = await pool.query(apiTodayQuery, [developerId]);
       apiCallsToday = parseInt(apiTodayResult.rows[0]?.count || 0);
     } catch (error) {
-      // console.log      console.log('API usage tracking error:', error.message);
+      console.log('API usage tracking error:', error.message);
     }
 
     // Get total users across all apps

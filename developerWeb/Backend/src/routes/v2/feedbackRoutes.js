@@ -1,12 +1,25 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../../middleware/auth');
-const { submitFeedback } = require('../../controllers/v2/feedbackController');
+const {
+  submitFeedback,
+  listDeveloperFeedbacks,
+  getFeedbackThread,
+  developerReplyFeedback,
+  downloadFeedbackAttachment,
+  downloadMessageAttachment
+} = require('../../controllers/v2/feedbackController');
 const pool = require('../../config/db');
 
-// Increase JSON body size limit for this router to accommodate base64 file attachments
-// (max 3 files × 10 MB × ~1.37 base64 overhead ≈ 42 MB)
+// Submit feedback (increased body limit for file attachments)
 router.post('/feedback', express.json({ limit: '45mb' }), authenticateToken, submitFeedback);
+
+// Developer tickets list & thread routes
+router.get('/feedback/list', authenticateToken, listDeveloperFeedbacks);
+router.get('/feedback/:id/thread', authenticateToken, getFeedbackThread);
+router.post('/feedback/:id/reply', express.json({ limit: '45mb' }), authenticateToken, developerReplyFeedback);
+router.get('/feedback/:id/attachment/:idx?', authenticateToken, downloadFeedbackAttachment);
+router.get('/feedback/message/:messageId/attachment', authenticateToken, downloadMessageAttachment);
 
 // Helper: list developer's apps (for feedback form selector)
 router.get('/feedback/apps', authenticateToken, async (req, res) => {
@@ -37,4 +50,3 @@ router.get('/feedback/groups', authenticateToken, async (req, res) => {
 });
 
 module.exports = router;
-

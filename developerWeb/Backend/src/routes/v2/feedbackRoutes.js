@@ -17,8 +17,8 @@ router.post('/feedback', express.json({ limit: '45mb' }), authenticateToken, sub
 // Developer tickets list & thread routes
 router.get('/feedback/list', authenticateToken, listDeveloperFeedbacks);
 router.get('/feedback/:id/thread', authenticateToken, getFeedbackThread);
-router.post('/feedback/:id/reply', express.json({ limit: '45mb' }), authenticateToken, developerReplyFeedback);
-router.get('/feedback/:id/attachment/:idx?', authenticateToken, downloadFeedbackAttachment);
+router.get('/feedback/:id/attachment', authenticateToken, downloadFeedbackAttachment);
+router.get('/feedback/:id/attachment/:idx', authenticateToken, downloadFeedbackAttachment);
 router.get('/feedback/message/:messageId/attachment', authenticateToken, downloadMessageAttachment);
 
 // Helper: list developer's apps (for feedback form selector)

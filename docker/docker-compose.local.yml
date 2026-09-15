@@ -59,6 +59,10 @@ services:
       FRONTEND_URL: http://localhost:4001
       BACKEND_URL: http://localhost:5000
       CPANEL_URL: http://localhost:4002
+      MSPK_EMAIL_SERVICE_URL: http://admin-backend:8000/api/email-service
+      MSPK_EMAIL_SERVICE_KEY_ID: esk_29de5615849b05ded54fb0b47911c620
+      MSPK_EMAIL_SERVICE_KEY_SECRET: esks_251dec90e8e9f85f4e23de515be42ade7afbb26a53a23dbd5f725a6eaf7a080e
+      PRODUCT_SUPPORT_EMAIL: authservices.mspk@mspkapps.in
     ports:
       - "5000:5000"
     depends_on:
@@ -88,6 +92,10 @@ services:
       BACKEND_URL: http://localhost:5002
       AUTH_API_BASE_URL: http://developer-backend:5000
       SECRET_ENCRYPTION_KEY: f4c0721d1d0afd225c0f54058258fb519d7a145fa20ac4531a7a5810659a2e99
+      MSPK_EMAIL_SERVICE_URL: http://admin-backend:8000/api/email-service
+      MSPK_EMAIL_SERVICE_KEY_ID: esk_29de5615849b05ded54fb0b47911c620
+      MSPK_EMAIL_SERVICE_KEY_SECRET: esks_251dec90e8e9f85f4e23de515be42ade7afbb26a53a23dbd5f725a6eaf7a080e
+      PRODUCT_SUPPORT_EMAIL: authservices.mspk@mspkapps.in
     ports:
       - "5002:5002"
     depends_on:

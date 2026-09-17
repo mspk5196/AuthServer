@@ -604,6 +604,9 @@ const registerUser = async (req, res) => {
       to: email,
       subject: 'Verify Your Email',
       html: buildWelcomeVerificationEmail({ appName: app.app_name, verificationUrl, supportEmail: app.support_email }),
+      fromName: app.app_name,
+      smtpProfileName: app.email_smtp_profile_name || 'default',
+      metadata: { appId: app.id, appName: app.app_name, event: 'welcome_verification' }
     }).catch(err => console.error('Send verification email error:', err));
 
     // Determine access token TTL (per-app override, then env fallback, then default 7 days)
@@ -1005,6 +1008,9 @@ const requestPasswordReset = async (req, res) => {
       to: email,
       subject: 'Reset Your Password',
       html: buildPasswordResetEmail({ name: user.name, resetUrl, supportEmail: app.support_email }),
+      fromName: app.app_name,
+      smtpProfileName: app.email_smtp_profile_name || 'default',
+      metadata: { appId: app.id, appName: app.app_name, userId: user.id, event: 'password_reset_link' }
     }).catch(err => console.error('Send reset email error:', err));
 
     res.json({
@@ -1081,6 +1087,9 @@ const requestChangePasswordLink = async (req, res) => {
       to: user.email,
       subject: 'Change your password',
       html: buildChangePasswordLinkEmail({ appName: app.app_name, name: user.name, verificationUrl, supportEmail: app.support_email }),
+      fromName: app.app_name,
+      smtpProfileName: app.email_smtp_profile_name || 'default',
+      metadata: { appId: app.id, appName: app.app_name, userId: user.id, event: 'change_password_link' }
     }).catch(err => console.error('Send change password link email error:', err));
 
 
@@ -1093,62 +1102,41 @@ const requestChangePasswordLink = async (req, res) => {
     console.error('Request change password link error:', error);
     res.status(500).json({
       success: false,
-      error: 'Request failed',
-      message: 'Failed to send change password link'
+      error: 'Operation failed',
+      message: 'Failed to request change password link'
     });
   }
 };
 
 /**
- * Change password (requires current password)
+ * Change password directly with access token (POST)
  */
 const changePassword = async (req, res) => {
   try {
-    const { email } = req.body;
+    const { current_password, new_password } = req.body;
+    const user = req.user;
     const app = req.devApp;
-    const authHeader = req.headers['authorization'];
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        success: false,
-        error: 'Unauthorized',
-        message: 'Access token is required'
-      });
-    }
-
-    if (!email) {
+    if (!current_password || !new_password) {
       return res.status(400).json({
         success: false,
         error: 'Validation error',
-        message: 'Email is required'
+        message: 'Current password and new password are required'
       });
     }
 
-
-
-    const token = authHeader.substring(7);
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    // Get user
-    const result = await pool.query(
-      'SELECT id, email, password_hash FROM users WHERE id = $1 AND app_id = $2',
-      [decoded.userId, app.id]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
+    if (new_password.length < 8) {
+      return res.status(400).json({
         success: false,
-        error: 'User not found',
-        message: 'User does not exist'
+        error: 'Validation error',
+        message: 'New password must be at least 8 characters long'
       });
     }
-
-    const user = result.rows[0];
 
     // Verify current password
-    const isPasswordValid = await bcrypt.compare(current_password, user.password_hash);
-    if (!isPasswordValid) {
-      return res.status(401).json({
+    const isCurrentPasswordValid = await bcrypt.compare(current_password, user.password_hash);
+    if (!isCurrentPasswordValid) {
+      return res.status(400).json({
         success: false,
         error: 'Invalid password',
         message: 'Current password is incorrect'
@@ -1178,6 +1166,9 @@ const changePassword = async (req, res) => {
       to: user.email,
       subject: 'Account password changed successfully',
       html: buildPasswordChangedEmail({ appName: app.app_name, changedAt: new Date().toLocaleString(), supportEmail: app.support_email }),
+      fromName: app.app_name,
+      smtpProfileName: app.email_smtp_profile_name || 'default',
+      metadata: { appId: app.id, appName: app.app_name, userId: user.id, event: 'password_changed_confirm' }
     }).catch(err => console.error('Send verification email error:', err));
 
     res.json({
@@ -1278,6 +1269,9 @@ const resendVerification = async (req, res) => {
       to: email,
       subject: 'Verify Your Email',
       html: buildEmailVerificationEmail({ name: user.name, verificationUrl, verifyPurpose, supportEmail: app.support_email }),
+      fromName: app.app_name,
+      smtpProfileName: app.email_smtp_profile_name || 'default',
+      metadata: { appId: app.id, appName: app.app_name, userId: user.id, event: 'resend_verification' }
     }).catch(err => console.error('Send verification email error:', err));
 
     res.json({
@@ -1677,7 +1671,9 @@ const completePasswordReset = async (req, res) => {
       to: resetRecord.email,
       subject: 'Account password changed successfully',
       html: buildPasswordChangedEmail({ appName: resetRecord.app_name, changedAt: new Date().toLocaleString(), supportEmail: resetRecord.support_email }),
-      smtpProfileName: resetRecord.email_smtp_profile_name
+      fromName: resetRecord.app_name,
+      smtpProfileName: resetRecord.email_smtp_profile_name || 'default',
+      metadata: { appId: resetRecord.app_id, appName: resetRecord.app_name, event: 'reset_password_completed' }
     }).catch(err => console.error('Send verification email error:', err));
 
     res.json({
@@ -1746,6 +1742,9 @@ const deleteAccount = async (req, res) => {
       to: email,
       subject: 'Delete Your Account',
       html: buildDeleteAccountEmail({ appName: app.app_name, verificationUrl, supportEmail: app.support_email }),
+      fromName: app.app_name,
+      smtpProfileName: app.email_smtp_profile_name || 'default',
+      metadata: { appId: app.id, appName: app.app_name, userId: user.id, event: 'delete_account_request' }
     }).catch(err => console.error('Send verification email error:', err));
 
     // Soft delete: mark as deleted (recommended for data retention/compliance)
@@ -2241,6 +2240,9 @@ const verifyDeleteEmail = async (req, res) => {
       to: user.email,
       subject: 'Account deleted successfully',
       html: buildAccountDeletedEmail({ appName: app.app_name, deletedAt: new Date().toLocaleString(), supportEmail: app.support_email }),
+      fromName: app.app_name,
+      smtpProfileName: app.email_smtp_profile_name || 'default',
+      metadata: { appId: app.id || verification.app_id, appName: app.app_name, userId: user.id, event: 'account_deleted_confirm' }
     }).catch(err => console.error('Send deletion confirmation email error:', err));
 
     res.json({
@@ -2391,6 +2393,9 @@ const googleAuth = async (req, res) => {
           to: googleUser.email?.toLowerCase(),
           subject: 'Welcome to ' + app.app_name,
           html: buildGoogleUserWelcomeEmail({ appName: app.app_name, email: googleUser.email?.toLowerCase(), verificationUrl, name: googleUser.name, supportEmail: app.support_email }),
+          fromName: app.app_name,
+          smtpProfileName: app.email_smtp_profile_name || 'default',
+          metadata: { appId: app.id, appName: app.app_name, userId: user.id, event: 'google_user_welcome' }
         }).catch(err => console.error('Send welcome email error:', err));
 
       }
@@ -2532,6 +2537,9 @@ const setPasswordGoogleUser = async (req, res) => {
       to: email,
       subject: 'Link to set your password',
       html: buildSetPasswordGoogleUserEmail({ appName: app.app_name, name: user.name, verificationUrl, supportEmail: app.support_email }),
+      fromName: app.app_name,
+      smtpProfileName: app.email_smtp_profile_name || 'default',
+      metadata: { appId: app.id, appName: app.app_name, userId: user.id, event: 'set_password_google_user' }
     }).catch(err => console.error('Send set password email error:', err));
 
     res.json({
@@ -2653,7 +2661,9 @@ const verifyEmailSetPasswordGoogleUser = async (req, res) => {
         to: user.email,
         subject: 'Password linked to your account',
         html: buildPasswordSetConfirmationEmail({ changedAt: new Date().toLocaleString(), supportEmail: user.support_email }),
-        smtpProfileName: user.email_smtp_profile_name
+        fromName: user.app_name,
+        smtpProfileName: user.email_smtp_profile_name || 'default',
+        metadata: { appId: verification.app_id, appName: user.app_name, userId: user.id, event: 'password_linked_google_user' }
       }).catch(err => console.error('Send password setup confirmation email error:', err));
 
       return res.json({
@@ -2974,6 +2984,9 @@ const verifyChangePassword = async (req, res) => {
         to: user.email,
         subject: 'Password changed successfully',
         html: buildPasswordChangedEmail({ appName: app.app_name, changedAt: new Date().toLocaleString(), supportEmail: app.support_email }),
+        fromName: app.app_name,
+        smtpProfileName: app.email_smtp_profile_name || 'default',
+        metadata: { appId: verification.app_id, appName: app.app_name, userId: user.id, event: 'password_changed_confirm' }
       }).catch(err => console.error('Send change password confirmation email error:', err));
 
       return res.json({ success: true, message: 'Password changed successfully.' });
@@ -3147,7 +3160,14 @@ const patchUserProfile = async (req, res) => {
 
       const verificationUrl = `${process.env.BACKEND_URL}/api/v1/user/confirm-update?token=${verificationToken}`;
       const changesSummary = Object.keys(allowed).join(', ');
-      sendAppUserEmail({ to: allowed.email, subject: 'Confirm profile changes', html: buildProfileUpdateVerificationEmail({ name: user.name, verificationUrl, changesSummary, supportEmail: app.support_email }) }).catch(err => console.error('Send profile update verification email error:', err));
+      sendAppUserEmail({
+        to: allowed.email,
+        subject: 'Confirm profile changes',
+        html: buildProfileUpdateVerificationEmail({ name: user.name, verificationUrl, changesSummary, supportEmail: app.support_email }),
+        fromName: app.app_name,
+        smtpProfileName: app.email_smtp_profile_name || 'default',
+        metadata: { appId: app.id, appName: app.app_name, userId: user.id, event: 'profile_update_verification' }
+      }).catch(err => console.error('Send profile update verification email error:', err));
 
       return res.status(202).json({ success: true, verification_required: true, message: 'Verification sent to new email address' });
     }

@@ -84,6 +84,7 @@ Add these to your product's `.env` or container environment:
 
 ```env
 MSPK_EMAIL_SERVICE_URL=https://admin.backend.mspkapps.in
+MSPK_EMAIL_SERVICE_URL=https://mspkadminweb-backend.mspkapps.in/api/email-service
 MSPK_EMAIL_SERVICE_KEY_ID=esk_xxxxxxxxxxxxxxxxxxxxxxxx
 MSPK_EMAIL_SERVICE_KEY_SECRET=esks_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```

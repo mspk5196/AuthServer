@@ -1,21 +1,55 @@
-const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 
-/**
- * Central Email Service Client for Auth Server (Developer Backend)
- * Dispatches all product emails via MSPK Central Email Service with HMAC-SHA256 request signing.
- */
-class EmailClient {
-  constructor(config = {}) {
-    this.baseUrl = config.baseUrl || process.env.MSPK_EMAIL_SERVICE_URL || 'http://admin-backend:8000/api/email-service';
-    this.serviceKeyId = config.serviceKeyId || process.env.MSPK_EMAIL_SERVICE_KEY_ID || process.env.MSPK_EMAIL_KEY_ID || 'esk_29de5615849b05ded54fb0b47911c620';
-    this.serviceKeySecret = config.serviceKeySecret || process.env.MSPK_EMAIL_SERVICE_KEY_SECRET || process.env.MSPK_EMAIL_KEY_SECRET || 'esks_251dec90e8e9f85f4e23de515be42ade7afbb26a53a23dbd5f725a6eaf7a080e';
-    this.supportEmail = config.supportEmail || process.env.PRODUCT_SUPPORT_EMAIL || 'authservices.mspk@mspkapps.in';
+let _clientInstance = null;
+
+async function getSdkClient(config = {}) {
+  if (_clientInstance) return _clientInstance;
+
+  try {
+    let EmailClientClass;
+    try {
+      const mod = await import('@mspkapps/email-client');
+      EmailClientClass = mod.EmailClient || mod.default?.EmailClient;
+    } catch {
+      const mod = require('@mspkapps/email-client');
+      EmailClientClass = mod.EmailClient;
+    }
+
+    if (EmailClientClass) {
+      _clientInstance = new EmailClientClass({
+        baseUrl:
+          (config.baseUrl ||
+            process.env.MSPK_EMAIL_SERVICE_URL ||
+            process.env.MSPK_EMAIL_API_URL ||
+            'http://admin-backend:8000').replace(/\/api\/email-service\/?$/, '').replace(/\/+$/, ''),
+        serviceKeyId:
+          config.serviceKeyId ||
+          process.env.MSPK_EMAIL_SERVICE_KEY_ID ||
+          process.env.MSPK_EMAIL_KEY_ID ||
+          'esk_29de5615849b05ded54fb0b47911c620',
+        serviceKeySecret:
+          config.serviceKeySecret ||
+          process.env.MSPK_EMAIL_SERVICE_KEY_SECRET ||
+          process.env.MSPK_EMAIL_KEY_SECRET ||
+          'esks_251dec90e8e9f85f4e23de515be42ade7afbb26a53a23dbd5f725a6eaf7a080e'
+      });
+    }
+  } catch (err) {
+    console.warn('[EmailClient] Warning initializing @mspkapps/email-client SDK:', err.message);
   }
 
-  /**
-   * Direct SMTP fallback if email service is unavailable
-   */
+  return _clientInstance;
+}
+
+class EmailClient {
+  constructor(config = {}) {
+    this.config = config;
+    this.supportEmail =
+      config.supportEmail ||
+      process.env.PRODUCT_SUPPORT_EMAIL ||
+      'authservices.mspk@mspkapps.in';
+  }
+
   async _fallbackDirectSmtp({ to, subject, html, fromName }) {
     try {
       const transporter = nodemailer.createTransport({
@@ -30,7 +64,7 @@ class EmailClient {
 
       const mailOptions = {
         from: `"${fromName || 'MSPK™ Auth Server'}" <${process.env.FROM_EMAIL || this.supportEmail}>`,
-        to,
+        to: Array.isArray(to) ? to.join(', ') : to,
         subject,
         html,
       };
@@ -43,9 +77,6 @@ class EmailClient {
     }
   }
 
-  /**
-   * Send email via Central Email Service with HMAC-SHA256 signature
-   */
   async send({
     to,
     subject,
@@ -56,15 +87,14 @@ class EmailClient {
     threadId = null,
     metadata = {}
   }) {
-    if (!this.serviceKeyId || !this.serviceKeySecret) {
-      console.warn('[EmailClient] MSPK Email Service credentials missing. Falling back to direct SMTP.');
+    const client = await getSdkClient(this.config);
+    if (!client) {
       return this._fallbackDirectSmtp({ to, subject, html, fromName });
     }
 
     try {
-      const timestamp = Math.floor(Date.now() / 1000).toString();
-      const payload = {
-        to,
+      const resp = await client.send({
+        to: Array.isArray(to) ? to : [to],
         subject,
         html,
         fromName,
@@ -72,43 +102,20 @@ class EmailClient {
         parentRefId,
         threadId,
         metadata
-      };
-
-      const bodyStr = JSON.stringify(payload);
-      const bodyHash = crypto.createHash('sha256').update(bodyStr).digest('hex');
-      const pathname = '/api/email-service/send';
-      const message = `POST:${pathname}:${timestamp}:${bodyHash}`;
-      const signature = crypto.createHmac('sha256', this.serviceKeySecret).update(message).digest('hex');
-
-      const endpoint = `${this.baseUrl.replace(/\/+$/, '')}/send`;
-
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Service-Key': this.serviceKeyId,
-          'X-Timestamp': timestamp,
-          'X-Signature': signature
-        },
-        body: bodyStr
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        console.warn('[EmailClient] Central Email Service returned error:', data.message || res.statusText);
-        // Fallback to direct SMTP if Central Service rejected or is unavailable
-        if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-          return this._fallbackDirectSmtp({ to, subject, html, fromName });
-        }
-      }
-
-      return { success: data.success !== false, data };
+      return {
+        success: resp?.success !== false,
+        data: resp,
+        refId: resp?.refId,
+        threadId: resp?.threadId
+      };
     } catch (err) {
-      console.error('[EmailClient] Central email service dispatch error:', err.message);
+      console.warn('[EmailClient] Central Email Service dispatch warning:', err.message);
       if (process.env.SMTP_USER && process.env.SMTP_PASS) {
         return this._fallbackDirectSmtp({ to, subject, html, fromName });
       }
-      return { success: false, error: err.message };
+      return { success: false, error: err.message || err };
     }
   }
 }
@@ -119,4 +126,3 @@ module.exports = {
   EmailClient,
   emailClient
 };
-

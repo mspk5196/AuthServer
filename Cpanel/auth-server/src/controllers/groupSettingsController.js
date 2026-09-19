@@ -421,6 +421,7 @@ const getGroupUsersWithStatus = async (req, res) => {
         gbu.blocked_at,
         gbu.blocked_by,
         u.google_id,
+        u.extra,
         CASE WHEN u.google_id IS NOT NULL THEN 'google' ELSE 'email' END as login_method
       FROM users u
       JOIN dev_apps da ON u.app_id = da.id

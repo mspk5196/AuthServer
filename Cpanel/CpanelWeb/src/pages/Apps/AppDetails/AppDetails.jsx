@@ -18,7 +18,10 @@ import {
   Activity,
   Send,
   User,
-  ExternalLink
+  ExternalLink,
+  Eye,
+  Info,
+  Tag
 } from 'lucide-react';
 
 export default function AppDetails() {
@@ -31,6 +34,7 @@ export default function AppDetails() {
   const [users, setUsers] = useState([]);
   const [selectedUserLogins, setSelectedUserLogins] = useState([]);
   const [selectedUserEmail, setSelectedUserEmail] = useState('');
+  const [selectedUserForDetails, setSelectedUserForDetails] = useState(null);
   
   // UI State
   const [loading, setLoading] = useState(true);
@@ -92,15 +96,42 @@ export default function AppDetails() {
 
   const getExtraFieldKeys = () => {
     const keysSet = new Set();
+    const configuredFields = app?.app?.extra_fields || [];
+    if (Array.isArray(configuredFields)) {
+      configuredFields.forEach(f => {
+        if (f && f.name) keysSet.add(f.name);
+      });
+    }
     users.forEach((user) => {
       if (user.extra && typeof user.extra === 'object') {
         Object.keys(user.extra).forEach((key) => keysSet.add(key));
       }
     });
-    return Array.from(keysSet).sort();
+    return Array.from(keysSet);
   };
 
   const extraFieldKeys = getExtraFieldKeys();
+
+  const renderFieldValue = (value) => {
+    if (value === undefined || value === null || value === '') {
+      return <span className="text-slate-300 font-mono">—</span>;
+    }
+    if (typeof value === 'boolean') {
+      return (
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${value ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
+          {value ? 'true' : 'false'}
+        </span>
+      );
+    }
+    if (typeof value === 'object') {
+      return (
+        <span className="font-mono text-[11px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200 max-w-[180px] truncate inline-block" title={JSON.stringify(value, null, 2)}>
+          {JSON.stringify(value)}
+        </span>
+      );
+    }
+    return <span className="text-slate-700">{String(value)}</span>;
+  };
 
   async function viewLogins(userId, email) {
     try {
@@ -407,11 +438,19 @@ export default function AppDetails() {
                   <th className="px-4 py-3.5">Email</th>
                   <th className="px-4 py-3.5">Name</th>
                   <th className="px-4 py-3.5">Username</th>
-                  {extraFieldKeys.map((key) => (
-                    <th key={key} className="px-4 py-3.5">
-                      {key}
-                    </th>
-                  ))}
+                  {extraFieldKeys.map((key) => {
+                    const fieldDef = (app?.app?.extra_fields || []).find((f) => f.name === key);
+                    return (
+                      <th key={key} className="px-4 py-3.5 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <span>{fieldDef?.label || key}</span>
+                          <span className="text-[9px] font-semibold px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded border border-indigo-100/80 lowercase">
+                            {fieldDef?.type || 'extra'}
+                          </span>
+                        </div>
+                      </th>
+                    );
+                  })}
                   <th className="px-4 py-3.5">Verified</th>
                   <th className="px-4 py-3.5">Status</th>
                   <th className="px-4 py-3.5 text-right">Actions</th>
@@ -426,12 +465,8 @@ export default function AppDetails() {
                     {extraFieldKeys.map((key) => {
                       const value = u.extra?.[key];
                       return (
-                        <td key={key} className="px-4 py-3 text-slate-600">
-                          {value !== undefined && value !== null
-                            ? typeof value === 'object'
-                              ? JSON.stringify(value)
-                              : String(value)
-                            : '—'}
+                        <td key={key} className="px-4 py-3 text-slate-600 whitespace-nowrap">
+                          {renderFieldValue(value)}
                         </td>
                       );
                     })}
@@ -459,6 +494,14 @@ export default function AppDetails() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => setSelectedUserForDetails(u)}
+                          className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[11px] transition-all cursor-pointer flex items-center gap-1"
+                          title="View user details and extra fields"
+                        >
+                          <Eye className="w-3 h-3" />
+                          <span>Details</span>
+                        </button>
                         <button
                           onClick={() => viewLogins(u.id, u.email)}
                           className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] transition-all cursor-pointer"
@@ -659,6 +702,193 @@ export default function AppDetails() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* User Details & Extra Fields Modal */}
+      {selectedUserForDetails && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200"
+          onClick={() => setSelectedUserForDetails(null)}
+        >
+          <div
+            className="relative w-full max-w-2xl rounded-3xl border border-slate-200 bg-white shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-slate-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center font-bold text-base">
+                  {selectedUserForDetails.name?.[0]?.toUpperCase() || selectedUserForDetails.email?.[0]?.toUpperCase() || 'U'}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base font-bold text-slate-900">
+                      {selectedUserForDetails.name || selectedUserForDetails.username || 'User Profile'}
+                    </h2>
+                    <span
+                      className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                        selectedUserForDetails.is_blocked
+                          ? 'bg-rose-50 text-rose-700 border-rose-200'
+                          : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      }`}
+                    >
+                      {selectedUserForDetails.is_blocked ? 'Blocked' : 'Active'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium">{selectedUserForDetails.email}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedUserForDetails(null)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-6 text-xs">
+              {/* Account Overview Grid */}
+              <div className="space-y-2.5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Account Details</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">User ID</span>
+                    <span className="font-mono text-slate-800 font-medium select-all text-[11px] block truncate">
+                      {selectedUserForDetails.id}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Username</span>
+                    <span className="font-mono text-slate-800 font-medium">
+                      {selectedUserForDetails.username || '—'}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Email Verification</span>
+                    <span className="font-semibold text-slate-800">
+                      {selectedUserForDetails.email_verified ? (
+                        <span className="text-emerald-700">✓ Verified</span>
+                      ) : (
+                        <span className="text-amber-600">Pending Verification</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Last Login</span>
+                    <span className="text-slate-800 font-medium">
+                      {selectedUserForDetails.last_login
+                        ? new Date(selectedUserForDetails.last_login).toLocaleString()
+                        : 'Never'}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Registered At</span>
+                    <span className="text-slate-800 font-medium">
+                      {selectedUserForDetails.created_at
+                        ? new Date(selectedUserForDetails.created_at).toLocaleString()
+                        : '—'}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">OAuth / Google Linked</span>
+                    <span className="font-medium text-slate-800">
+                      {selectedUserForDetails.google_linked ? 'Yes (Google Account)' : 'No (Standard)'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Extra Fields Section */}
+              <div className="space-y-3 pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Tag className="w-4 h-4 text-indigo-600" />
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">Custom Extra Fields</h3>
+                  </div>
+                  <span className="text-[11px] text-slate-400 font-medium">
+                    {extraFieldKeys.length} field(s) defined
+                  </span>
+                </div>
+
+                {extraFieldKeys.length === 0 ? (
+                  <div className="p-4 bg-slate-50 border border-dashed border-slate-200 rounded-2xl text-center text-slate-400">
+                    No custom extra fields configured for this application or user.
+                  </div>
+                ) : (
+                  <div className="border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100 bg-white">
+                    {extraFieldKeys.map((key) => {
+                      const fieldDef = (app?.app?.extra_fields || []).find((f) => f.name === key);
+                      const rawValue = selectedUserForDetails.extra?.[key];
+                      const isDefined = rawValue !== undefined && rawValue !== null && rawValue !== '';
+
+                      return (
+                        <div key={key} className="p-3.5 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 hover:bg-slate-50/50 transition-colors">
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-900">{fieldDef?.label || key}</span>
+                              <span className="text-[10px] font-mono px-1.5 py-0.2 bg-slate-100 text-slate-500 rounded border border-slate-200">
+                                {key}
+                              </span>
+                              <span className="text-[9px] font-semibold px-1.5 py-0.2 bg-indigo-50 text-indigo-600 rounded border border-indigo-100 lowercase">
+                                {fieldDef?.type || (typeof rawValue === 'object' ? 'object' : typeof rawValue)}
+                              </span>
+                            </div>
+                            {fieldDef?.description && (
+                              <p className="text-[11px] text-slate-400">{fieldDef.description}</p>
+                            )}
+                          </div>
+
+                          <div className="sm:text-right max-w-sm">
+                            {isDefined ? (
+                              typeof rawValue === 'object' ? (
+                                <pre className="p-2 bg-slate-900 text-slate-100 font-mono rounded-xl text-[11px] overflow-x-auto text-left whitespace-pre-wrap">
+                                  {JSON.stringify(rawValue, null, 2)}
+                                </pre>
+                              ) : typeof rawValue === 'boolean' ? (
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${rawValue ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
+                                  {rawValue ? 'true' : 'false'}
+                                </span>
+                              ) : (
+                                <span className="font-semibold text-slate-900 text-xs break-words">
+                                  {String(rawValue)}
+                                </span>
+                              )
+                            ) : (
+                              <span className="text-slate-400 italic text-[11px]">Not provided / Empty</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between border-t border-slate-100 px-6 py-4 bg-slate-50/50">
+              <button
+                type="button"
+                onClick={() => {
+                  viewLogins(selectedUserForDetails.id, selectedUserForDetails.email);
+                  setSelectedUserForDetails(null);
+                }}
+                className="px-3.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
+              >
+                <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                <span>View Login History</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedUserForDetails(null)}
+                className="px-4 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition-all cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

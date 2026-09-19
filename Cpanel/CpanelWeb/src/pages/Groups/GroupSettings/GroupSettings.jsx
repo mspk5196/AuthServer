@@ -28,7 +28,9 @@ import {
   Smartphone,
   Check,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Eye,
+  Tag
 } from 'lucide-react';
 
 export default function GroupSettings() {
@@ -61,6 +63,7 @@ export default function GroupSettings() {
   // User management
   const [users, setUsers] = useState([]);
   const [selectedUsers, setSelectedUsers] = useState([]);
+  const [selectedUserForDetails, setSelectedUserForDetails] = useState(null);
   const [userSearch, setUserSearch] = useState('');
   const [userPage, setUserPage] = useState(1);
   const [userTotal, setUserTotal] = useState(0);
@@ -152,14 +155,58 @@ export default function GroupSettings() {
       
       const resp = await api.get(`/group-settings/${groupId}/users?${params}`, token);
       if (resp.success) {
-        setUsers(resp.data.users || []);
-        setUserTotal(resp.data.pagination.total || 0);
+        const parsedUsers = (resp.data.users || []).map((u) => {
+          if (u.extra && typeof u.extra === 'string') {
+            try {
+              u.extra = JSON.parse(u.extra);
+            } catch (_) {
+              u.extra = {};
+            }
+          }
+          return u;
+        });
+        setUsers(parsedUsers);
+        setUserTotal(resp.data.pagination?.total || 0);
       }
     } catch (err) {
       console.error(err);
       setError('Failed to load users');
     }
   }
+
+  const getGroupExtraFieldKeys = () => {
+    const keysSet = new Set();
+    (commonExtraFields || []).forEach(f => {
+      if (f && f.name) keysSet.add(f.name);
+    });
+    users.forEach(u => {
+      if (u.extra && typeof u.extra === 'object') {
+        Object.keys(u.extra).forEach(k => keysSet.add(k));
+      }
+    });
+    return Array.from(keysSet);
+  };
+
+  const renderFieldValue = (value) => {
+    if (value === undefined || value === null || value === '') {
+      return <span className="text-slate-300 font-mono">—</span>;
+    }
+    if (typeof value === 'boolean') {
+      return (
+        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold border ${value ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
+          {value ? 'true' : 'false'}
+        </span>
+      );
+    }
+    if (typeof value === 'object') {
+      return (
+        <span className="font-mono text-[11px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200 max-w-[150px] truncate inline-block" title={JSON.stringify(value, null, 2)}>
+          {JSON.stringify(value)}
+        </span>
+      );
+    }
+    return <span className="text-slate-700">{String(value)}</span>;
+  };
 
   async function fetchBulkOperations() {
     try {
@@ -481,10 +528,31 @@ export default function GroupSettings() {
       }
 
       const allUsers = resp.data.users || [];
-      const headers = ['ID', 'Email', 'Name', 'Username', 'App', 'Login Method', 'Email Verified', 'Status', 'Last Login', 'Created At'];
+      const extraKeysSet = new Set();
+      (commonExtraFields || []).forEach(f => {
+        if (f && f.name) extraKeysSet.add(f.name);
+      });
+
+      const parsedUsers = allUsers.map(u => {
+        let userExtra = u.extra;
+        if (typeof userExtra === 'string') {
+          try {
+            userExtra = JSON.parse(userExtra);
+          } catch (_) {
+            userExtra = {};
+          }
+        }
+        if (userExtra && typeof userExtra === 'object') {
+          Object.keys(userExtra).forEach(k => extraKeysSet.add(k));
+        }
+        return { ...u, extra: userExtra };
+      });
+
+      const extraKeys = Array.from(extraKeysSet);
+      const headers = ['ID', 'Email', 'Name', 'Username', 'App', 'Login Method', 'Email Verified', 'Status', 'Last Login', 'Created At', ...extraKeys];
       const csvRows = [headers.join(',')];
 
-      allUsers.forEach(user => {
+      parsedUsers.forEach(user => {
         const status = user.group_blocked || user.app_blocked ? 'Blocked' : 'Active';
         const row = [
           user.id,
@@ -498,6 +566,11 @@ export default function GroupSettings() {
           user.last_login ? new Date(user.last_login).toLocaleString() : 'Never',
           new Date(user.created_at).toLocaleString()
         ];
+        extraKeys.forEach(k => {
+          const val = user.extra ? user.extra[k] : undefined;
+          const formatted = val !== undefined && val !== null ? (typeof val === 'object' ? JSON.stringify(val) : String(val)) : '';
+          row.push(`"${formatted.replace(/"/g, '""')}"`);
+        });
         csvRows.push(row.join(','));
       });
 
@@ -1439,6 +1512,19 @@ export default function GroupSettings() {
                     <th className="px-3 py-3">Email Address</th>
                     <th className="px-3 py-3">Name</th>
                     <th className="px-3 py-3">Application</th>
+                    {getGroupExtraFieldKeys().map((key) => {
+                      const fieldDef = (commonExtraFields || []).find((f) => f.name === key);
+                      return (
+                        <th key={key} className="px-3 py-3 whitespace-nowrap">
+                          <div className="flex items-center gap-1">
+                            <span>{fieldDef?.label || key}</span>
+                            <span className="text-[9px] font-normal px-1 py-0.2 bg-indigo-50 text-indigo-600 rounded border border-indigo-100 lowercase">
+                              {fieldDef?.type || 'extra'}
+                            </span>
+                          </div>
+                        </th>
+                      );
+                    })}
                     <th className="px-3 py-3">Status</th>
                     <th className="px-3 py-3">Last Login</th>
                     <th className="px-3 py-3 text-right">Actions</th>
@@ -1447,7 +1533,7 @@ export default function GroupSettings() {
                 <tbody className="divide-y divide-slate-100">
                   {users.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="px-4 py-8 text-center text-slate-400">
+                      <td colSpan={7 + getGroupExtraFieldKeys().length} className="px-4 py-8 text-center text-slate-400">
                         No users found matching current filters.
                       </td>
                     </tr>
@@ -1467,6 +1553,14 @@ export default function GroupSettings() {
                           <td className="px-3 py-3 font-medium text-slate-900">{user.email}</td>
                           <td className="px-3 py-3 text-slate-700">{user.name || '—'}</td>
                           <td className="px-3 py-3 font-medium text-indigo-600">{user.app_name}</td>
+                          {getGroupExtraFieldKeys().map((key) => {
+                            const val = user.extra?.[key];
+                            return (
+                              <td key={key} className="px-3 py-3 text-slate-600 font-sans whitespace-nowrap">
+                                {renderFieldValue(val)}
+                              </td>
+                            );
+                          })}
                           <td className="px-3 py-3">
                             {user.group_blocked ? (
                               <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-100 text-rose-800">
@@ -1486,24 +1580,34 @@ export default function GroupSettings() {
                             {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
                           </td>
                           <td className="px-3 py-3 text-right">
-                            {user.group_blocked ? (
+                            <div className="flex items-center justify-end gap-1.5">
                               <button
-                                onClick={() => unblockUser(user.id)}
-                                className="px-2.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors"
+                                onClick={() => setSelectedUserForDetails(user)}
+                                className="px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors inline-flex items-center gap-1 cursor-pointer"
+                                title="View full user details and extra fields"
                               >
-                                Unblock
+                                <Eye className="w-3 h-3" />
+                                <span>Details</span>
                               </button>
-                            ) : (
-                              <button
-                                onClick={() => {
-                                  const reason = window.prompt('Reason for blocking (optional):');
-                                  if (reason !== null) blockUser(user.id, reason);
-                                }}
-                                className="px-2.5 py-1 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors"
-                              >
-                                Block
-                              </button>
-                            )}
+                              {user.group_blocked ? (
+                                <button
+                                  onClick={() => unblockUser(user.id)}
+                                  className="px-2.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors cursor-pointer"
+                                >
+                                  Unblock
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    const reason = window.prompt('Reason for blocking (optional):');
+                                    if (reason !== null) blockUser(user.id, reason);
+                                  }}
+                                  className="px-2.5 py-1 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors cursor-pointer"
+                                >
+                                  Block
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -1765,6 +1869,193 @@ export default function GroupSettings() {
                 className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-xs disabled:opacity-50 transition-colors"
               >
                 Apply Values
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* User Details & Extra Fields Modal (Group Settings View) */}
+      {selectedUserForDetails && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200"
+          onClick={() => setSelectedUserForDetails(null)}
+        >
+          <div
+            className="relative w-full max-w-2xl rounded-3xl border border-slate-200 bg-white shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-slate-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center font-bold text-base">
+                  {selectedUserForDetails.name?.[0]?.toUpperCase() || selectedUserForDetails.email?.[0]?.toUpperCase() || 'U'}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base font-bold text-slate-900">
+                      {selectedUserForDetails.name || selectedUserForDetails.username || 'User Profile'}
+                    </h2>
+                    <span
+                      className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                        selectedUserForDetails.group_blocked || selectedUserForDetails.app_blocked
+                          ? 'bg-rose-50 text-rose-700 border-rose-200'
+                          : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      }`}
+                    >
+                      {selectedUserForDetails.group_blocked ? 'Group Blocked' : selectedUserForDetails.app_blocked ? 'App Blocked' : 'Active'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium">{selectedUserForDetails.email}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedUserForDetails(null)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-6 text-xs">
+              {/* Account Details */}
+              <div className="space-y-2.5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Account Details</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">User ID</span>
+                    <span className="font-mono text-slate-800 font-medium select-all text-[11px] block truncate">
+                      {selectedUserForDetails.id}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Application</span>
+                    <span className="font-semibold text-indigo-700">
+                      {selectedUserForDetails.app_name || selectedUserForDetails.app_id}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Username</span>
+                    <span className="font-mono text-slate-800 font-medium">
+                      {selectedUserForDetails.username || '—'}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Email Verification</span>
+                    <span className="font-semibold text-slate-800">
+                      {selectedUserForDetails.email_verified ? (
+                        <span className="text-emerald-700">✓ Verified</span>
+                      ) : (
+                        <span className="text-amber-600">Pending Verification</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Login Method</span>
+                    <span className="font-medium text-slate-800 uppercase text-[11px]">
+                      {selectedUserForDetails.login_method || 'Email/Password'}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Last Login</span>
+                    <span className="text-slate-800 font-medium">
+                      {selectedUserForDetails.last_login
+                        ? new Date(selectedUserForDetails.last_login).toLocaleString()
+                        : 'Never'}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Registration Date</span>
+                    <span className="text-slate-800 font-medium">
+                      {selectedUserForDetails.created_at
+                        ? new Date(selectedUserForDetails.created_at).toLocaleString()
+                        : '—'}
+                    </span>
+                  </div>
+                  {selectedUserForDetails.group_blocked && (
+                    <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl">
+                      <span className="text-[10px] font-bold text-rose-500 uppercase tracking-wider block">Block Reason</span>
+                      <span className="font-medium text-rose-800">
+                        {selectedUserForDetails.block_reason || 'No reason provided'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Extra Fields Section */}
+              <div className="space-y-3 pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Tag className="w-4 h-4 text-indigo-600" />
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">Custom Extra Fields</h3>
+                  </div>
+                  <span className="text-[11px] text-slate-400 font-medium">
+                    {getGroupExtraFieldKeys().length} field(s) defined
+                  </span>
+                </div>
+
+                {getGroupExtraFieldKeys().length === 0 ? (
+                  <div className="p-4 bg-slate-50 border border-dashed border-slate-200 rounded-2xl text-center text-slate-400">
+                    No custom extra fields configured for this group or user.
+                  </div>
+                ) : (
+                  <div className="border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100 bg-white">
+                    {getGroupExtraFieldKeys().map((key) => {
+                      const fieldDef = (commonExtraFields || []).find((f) => f.name === key);
+                      const rawValue = selectedUserForDetails.extra?.[key];
+                      const isDefined = rawValue !== undefined && rawValue !== null && rawValue !== '';
+
+                      return (
+                        <div key={key} className="p-3.5 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 hover:bg-slate-50/50 transition-colors">
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-900">{fieldDef?.label || key}</span>
+                              <span className="text-[10px] font-mono px-1.5 py-0.2 bg-slate-100 text-slate-500 rounded border border-slate-200">
+                                {key}
+                              </span>
+                              <span className="text-[9px] font-semibold px-1.5 py-0.2 bg-indigo-50 text-indigo-600 rounded border border-indigo-100 lowercase">
+                                {fieldDef?.type || (typeof rawValue === 'object' ? 'object' : typeof rawValue)}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="sm:text-right max-w-sm">
+                            {isDefined ? (
+                              typeof rawValue === 'object' ? (
+                                <pre className="p-2 bg-slate-900 text-slate-100 font-mono rounded-xl text-[11px] overflow-x-auto text-left whitespace-pre-wrap">
+                                  {JSON.stringify(rawValue, null, 2)}
+                                </pre>
+                              ) : typeof rawValue === 'boolean' ? (
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${rawValue ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
+                                  {rawValue ? 'true' : 'false'}
+                                </span>
+                              ) : (
+                                <span className="font-semibold text-slate-900 text-xs break-words">
+                                  {String(rawValue)}
+                                </span>
+                              )
+                            ) : (
+                              <span className="text-slate-400 italic text-[11px]">Not provided / Empty</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end border-t border-slate-100 px-6 py-4 bg-slate-50/50">
+              <button
+                type="button"
+                onClick={() => setSelectedUserForDetails(null)}
+                className="px-4 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition-all cursor-pointer"
+              >
+                Close
               </button>
             </div>
           </div>

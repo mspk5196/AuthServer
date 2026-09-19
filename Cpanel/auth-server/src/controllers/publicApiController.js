@@ -454,7 +454,8 @@ const verifyAccessToken = async (req, res) => {
         id: user.id,
         email: user.email,
         name: user.name,
-        username: user.username
+        username: user.username,
+        extra: user.extra
       },
       token: {
         app_id: decoded.appId,
@@ -550,24 +551,32 @@ const registerUser = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Prepare allowed extra fields (filter against app.extra_fields metadata)
-    const extraMeta = app.extra_fields || [];
+    // Prepare extra fields (supports `extra` or `extra_fields` as object or string, and top-level fields)
+    const extraMeta = Array.isArray(app.extra_fields) ? app.extra_fields : [];
     let allowedExtra = {};
-    const coreKeys = new Set(['email', 'password', 'name', 'username', 'extra']);
-    // Accept both `extra: { ... }` and top-level keys matching defined extra fields
-    if (extra && typeof extra === 'object') {
-      for (const k of Object.keys(extra)) {
-        if (coreKeys.has(k)) continue; // never store core fields in extra
-        if (extraMeta.find(f => f.name === k)) {
-          allowedExtra[k] = extra[k];
-        }
+    const coreKeys = new Set(['email', 'password', 'name', 'username', 'extra', 'extra_fields']);
+
+    let incomingExtra = req.body.extra !== undefined ? req.body.extra : req.body.extra_fields;
+    if (typeof incomingExtra === 'string') {
+      try {
+        incomingExtra = JSON.parse(incomingExtra);
+      } catch (_) {
+        incomingExtra = {};
       }
     }
+
+    if (incomingExtra && typeof incomingExtra === 'object' && !Array.isArray(incomingExtra)) {
+      for (const k of Object.keys(incomingExtra)) {
+        if (coreKeys.has(k)) continue;
+        allowedExtra[k] = incomingExtra[k];
+      }
+    }
+
     for (const k of Object.keys(req.body || {})) {
       if (coreKeys.has(k)) continue;
       // skip if already captured from `extra` object
       if (Object.prototype.hasOwnProperty.call(allowedExtra, k)) continue;
-      if (extraMeta.find(f => f.name === k)) {
+      if (extraMeta.length === 0 || extraMeta.find(f => f.name === k)) {
         allowedExtra[k] = req.body[k];
       }
     }
@@ -2351,19 +2360,28 @@ const googleAuth = async (req, res) => {
 
       } else {
         // Create new user
+        let googleExtra = req.body.extra !== undefined ? req.body.extra : req.body.extra_fields;
+        if (typeof googleExtra === 'string') {
+          try { googleExtra = JSON.parse(googleExtra); } catch (_) { googleExtra = {}; }
+        }
+        if (!googleExtra || typeof googleExtra !== 'object' || Array.isArray(googleExtra)) {
+          googleExtra = {};
+        }
+
         const insertResult = await pool.query(`
           INSERT INTO users (
             app_id, email, name, google_id, google_linked,
-            email_verified, is_blocked, created_at, updated_at
+            email_verified, is_blocked, extra, created_at, updated_at
           ) VALUES (
-            $1, $2, $3, $4, true, true, false, NOW(), NOW()
+            $1, $2, $3, $4, true, true, false, $5::jsonb, NOW(), NOW()
           )
-          RETURNING id, email, name, username, google_id, google_linked, email_verified, created_at
+          RETURNING id, email, name, username, google_id, google_linked, email_verified, extra, created_at
         `, [
           app.id,
           googleUser.email?.toLowerCase(),
           googleUser.name,
-          googleUser.sub
+          googleUser.sub,
+          JSON.stringify(googleExtra)
         ]);
 
         user = insertResult.rows[0];
@@ -3124,25 +3142,54 @@ const patchUserProfile = async (req, res) => {
 
     const body = req.body || {};
     const app = req.devApp;
-    // console.log    console.log("body", body, "\n", "app", app);
 
     // Build editable map
-    const extraFields = app.extra_fields || [];
+    const extraFields = Array.isArray(app.extra_fields) ? app.extra_fields : [];
     const editableExtra = {};
-    for (const f of extraFields) editableExtra[f.name] = !!f.editable_by_user;
+    for (const f of extraFields) {
+      if (f && f.name) {
+        editableExtra[f.name] = (f.editable_by_user !== false);
+      }
+    }
     const userEditPerm = app.user_edit_permissions || {};
-    // console.log    console.log("editableExtra", editableExtra, "\n", "userEditPerm", userEditPerm);
+
     // Determine allowed updates
     const allowed = {};
-    if (body.name !== undefined && userEditPerm.name === true) allowed.name = body.name;
-    if (body.username !== undefined && userEditPerm.username === true) allowed.username = body.username;
-    if (body.email !== undefined && userEditPerm.email === true) allowed.email = body.email;
-    if (body.extra !== undefined && typeof body.extra === 'object') {
-      const filtered = {};
-      for (const k of Object.keys(body.extra)) {
-        if (editableExtra[k]) filtered[k] = body.extra[k];
+    if (body.name !== undefined && userEditPerm.name !== false) allowed.name = body.name;
+    if (body.username !== undefined && userEditPerm.username !== false) allowed.username = body.username;
+    if (body.email !== undefined && userEditPerm.email !== false) allowed.email = body.email;
+
+    // Handle incoming extra or extra_fields
+    let incomingExtra = body.extra !== undefined ? body.extra : body.extra_fields;
+    if (typeof incomingExtra === 'string') {
+      try {
+        incomingExtra = JSON.parse(incomingExtra);
+      } catch (_) {
+        incomingExtra = {};
       }
-      if (Object.keys(filtered).length > 0) allowed.extra = filtered;
+    }
+
+    if (incomingExtra && typeof incomingExtra === 'object' && !Array.isArray(incomingExtra)) {
+      const filtered = {};
+      for (const k of Object.keys(incomingExtra)) {
+        if (extraFields.length === 0 || editableExtra[k] !== false) {
+          filtered[k] = incomingExtra[k];
+        }
+      }
+      if (Object.keys(filtered).length > 0) {
+        allowed.extra = filtered;
+      }
+    }
+
+    // Also pick up top-level keys matching configured extra fields
+    const topLevelExtra = {};
+    for (const f of extraFields) {
+      if (f && f.name && body[f.name] !== undefined && editableExtra[f.name] !== false) {
+        topLevelExtra[f.name] = body[f.name];
+      }
+    }
+    if (Object.keys(topLevelExtra).length > 0) {
+      allowed.extra = { ...(allowed.extra || {}), ...topLevelExtra };
     }
 
     if (Object.keys(allowed).length === 0) {
@@ -3183,12 +3230,26 @@ const patchUserProfile = async (req, res) => {
       updates.push(`extra = COALESCE(extra, '{}'::jsonb) || $${idx++}::jsonb`);
       params.push(JSON.stringify(allowed.extra));
     }
+
+    let updatedUser = user;
     if (updates.length > 0) {
       params.push(userId);
-      await pool.query(`UPDATE users SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${idx}`, params);
+      params.push(req.devApp.id);
+      const updateResult = await pool.query(
+        `UPDATE users SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${idx++} AND app_id = $${idx++} RETURNING id, email, name, username, email_verified, google_linked, is_blocked, last_login, created_at, extra`,
+        params
+      );
+      if (updateResult.rows.length > 0) {
+        updatedUser = updateResult.rows[0];
+      }
     }
 
-    res.json({ success: true, message: 'Profile updated' });
+    res.json({
+      success: true,
+      message: 'Profile updated',
+      data: updatedUser,
+      user: updatedUser
+    });
 
   } catch (error) {
     if (error.code === '23505' && error.detail && error.detail.includes('username')) {
@@ -3437,6 +3498,7 @@ const getAppUsers = async (req, res) => {
 const getUserData = async (req, res) => {
   try {
     const developerId = req.developer.id;
+    const { user_id } = req.params;
 
     if (!user_id) {
       return res.status(400).json({
@@ -3455,7 +3517,7 @@ const getUserData = async (req, res) => {
         u.email,
         u.name,
         u.extra,
-        u.is_email_verified,
+        u.email_verified,
         u.google_id,
         u.created_at,
         u.updated_at,

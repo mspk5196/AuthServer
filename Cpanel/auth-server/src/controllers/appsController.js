@@ -1077,9 +1077,9 @@ const createAppUser = async (req, res) => {
   try {
     const developerId = req.user.developerId;
     const { appId } = req.params;
-    const { email, password, name, username, email_verified = false } = req.body;
+    const { email, password, name, username, email_verified = false, extra, extra_fields } = req.body;
 
-    const owner = await pool.query('SELECT id, allow_email_signin FROM dev_apps WHERE id = $1 AND developer_id = $2', [appId, developerId]);
+    const owner = await pool.query('SELECT id, allow_email_signin, extra_fields FROM dev_apps WHERE id = $1 AND developer_id = $2', [appId, developerId]);
     if (!owner.rows.length) return res.status(404).json({ success: false, message: 'App not found' });
     if (!owner.rows[0].allow_email_signin) return res.status(403).json({ success: false, message: 'Email signup disabled for this app' });
 
@@ -1089,11 +1089,31 @@ const createAppUser = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hash = await bcrypt.hash(password, salt);
 
+    let userExtra = extra !== undefined ? extra : extra_fields;
+    if (typeof userExtra === 'string') {
+      try {
+        userExtra = JSON.parse(userExtra);
+      } catch (_) {
+        userExtra = {};
+      }
+    }
+    if (!userExtra || typeof userExtra !== 'object' || Array.isArray(userExtra)) {
+      userExtra = {};
+    }
+
+    // Also pick up any top-level keys matching app's extra_fields
+    const appExtraFields = Array.isArray(owner.rows[0].extra_fields) ? owner.rows[0].extra_fields : [];
+    for (const f of appExtraFields) {
+      if (req.body[f.name] !== undefined && userExtra[f.name] === undefined) {
+        userExtra[f.name] = req.body[f.name];
+      }
+    }
+
     const insert = await pool.query(`
-      INSERT INTO users (app_id, email, password_hash, name, username, email_verified, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
-      RETURNING id, email, name, username, email_verified, created_at
-    `, [appId, email.toLowerCase(), hash, name, username, email_verified]);
+      INSERT INTO users (app_id, email, password_hash, name, username, email_verified, extra, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, NOW(), NOW())
+      RETURNING id, email, name, username, email_verified, extra, created_at
+    `, [appId, email.toLowerCase(), hash, name, username, email_verified, JSON.stringify(userExtra)]);
 
     res.status(201).json({ success: true, data: insert.rows[0] });
   } catch (err) {
@@ -1441,7 +1461,7 @@ const exportUsersCSV = async (req, res) => {
 
     // Verify app belongs to developer
     const appCheck = await pool.query(
-      'SELECT app_name FROM dev_apps WHERE id = $1 AND developer_id = $2',
+      'SELECT app_name, extra_fields FROM dev_apps WHERE id = $1 AND developer_id = $2',
       [appId, developerId]
     );
 
@@ -1453,6 +1473,11 @@ const exportUsersCSV = async (req, res) => {
     }
 
     const appName = appCheck.rows[0].app_name;
+    const appExtraFields = Array.isArray(appCheck.rows[0].extra_fields) ? appCheck.rows[0].extra_fields : [];
+    const extraFieldKeysSet = new Set();
+    appExtraFields.forEach(f => {
+      if (f && f.name) extraFieldKeysSet.add(f.name);
+    });
 
     // Get all users for this app (exclude password_hash)
     const usersResult = await pool.query(`
@@ -1464,11 +1489,41 @@ const exportUsersCSV = async (req, res) => {
         email_verified,
         is_blocked,
         last_login,
-        created_at
+        created_at,
+        extra
       FROM users
       WHERE app_id = $1
       ORDER BY created_at DESC
     `, [appId]);
+
+    const formattedUsers = usersResult.rows.map(row => {
+      let userExtra = row.extra;
+      if (typeof userExtra === 'string') {
+        try {
+          userExtra = JSON.parse(userExtra);
+        } catch (_) {
+          userExtra = {};
+        }
+      }
+      if (userExtra && typeof userExtra === 'object') {
+        Object.keys(userExtra).forEach(k => extraFieldKeysSet.add(k));
+      }
+      const flatRow = {
+        id: row.id,
+        email: row.email,
+        name: row.name,
+        username: row.username,
+        email_verified: row.email_verified,
+        is_blocked: row.is_blocked,
+        last_login: row.last_login,
+        created_at: row.created_at,
+      };
+      extraFieldKeysSet.forEach(k => {
+        const val = userExtra ? userExtra[k] : undefined;
+        flatRow[k] = val !== undefined && val !== null ? (typeof val === 'object' ? JSON.stringify(val) : val) : '';
+      });
+      return flatRow;
+    });
 
     const fields = [
       'id',
@@ -1479,15 +1534,16 @@ const exportUsersCSV = async (req, res) => {
       'is_blocked',
       'last_login',
       'created_at',
+      ...Array.from(extraFieldKeysSet)
     ];
 
     let csv;
-    if (usersResult.rows.length === 0) {
+    if (formattedUsers.length === 0) {
       // No users: send header-only CSV so Excel still opens a valid sheet
       csv = fields.join(',') + '\n';
     } else {
       const parser = new Parser({ fields });
-      csv = parser.parse(usersResult.rows);
+      csv = parser.parse(formattedUsers);
     }
 
     // Set response headers for CSV download
@@ -1727,7 +1783,7 @@ const getGroupUsers = async (req, res) => {
     if (groupCheck.rows.length === 0) return res.status(404).json({ success: false, message: 'Group not found' });
 
     const usersRes = await pool.query(`
-      SELECT u.id, u.email, u.name, u.username, u.email_verified, u.is_blocked, u.last_login, u.app_id, a.app_name
+      SELECT u.id, u.email, u.name, u.username, u.email_verified, u.is_blocked, u.last_login, u.app_id, a.app_name, u.extra
       FROM users u
       JOIN dev_apps a ON u.app_id = a.id
       WHERE a.group_id = $1

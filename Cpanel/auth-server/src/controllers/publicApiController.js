@@ -811,6 +811,20 @@ const loginUser = async (req, res) => {
       { expiresIn: ttl }
     );
 
+    // Generate refresh token (30 days)
+    const refreshTtlSec = 30 * 24 * 60 * 60;
+    const refreshToken = jwt.sign(
+      { userId: user.id, appId: app.id, email: user.email, tokenType: 'refresh', jti: crypto.randomUUID() },
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+      { expiresIn: refreshTtlSec }
+    );
+
+    // Save refresh token to user_refresh_tokens
+    await pool.query(`
+      INSERT INTO user_refresh_tokens (user_id, app_id, token, expires_at, created_at)
+      VALUES ($1, $2, $3, NOW() + INTERVAL '30 days', NOW())
+    `, [user.id, app.id, refreshToken]).catch(e => console.warn('Failed to insert user_refresh_token:', e.message));
+
     res.json({
       success: true,
       message: 'Login successful',
@@ -827,6 +841,7 @@ const loginUser = async (req, res) => {
           extra: user.extra || {}
         },
         access_token: accessToken,
+        refresh_token: refreshToken,
         token_type: 'Bearer',
         expires_in: ttl
       }
@@ -2455,6 +2470,20 @@ const googleAuth = async (req, res) => {
       { expiresIn: ttl }
     );
 
+    // Generate refresh token (30 days)
+    const refreshTtlSec = 30 * 24 * 60 * 60;
+    const refreshToken = jwt.sign(
+      { userId: user.id, appId: app.id, email: user.email, tokenType: 'refresh', jti: crypto.randomUUID() },
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+      { expiresIn: refreshTtlSec }
+    );
+
+    // Save refresh token to user_refresh_tokens
+    await pool.query(`
+      INSERT INTO user_refresh_tokens (user_id, app_id, token, expires_at, created_at)
+      VALUES ($1, $2, $3, NOW() + INTERVAL '30 days', NOW())
+    `, [user.id, app.id, refreshToken]).catch(e => console.warn('Failed to insert user_refresh_token:', e.message));
+
     res.json({
       success: true,
       message: isNewUser ? 'Account created successfully' : 'Login successful',
@@ -2471,6 +2500,7 @@ const googleAuth = async (req, res) => {
           extra: user.extra || {}
         },
         access_token: accessToken,
+        refresh_token: refreshToken,
         token_type: 'Bearer',
         expires_in: ttl,
         is_new_user: isNewUser
@@ -3689,11 +3719,144 @@ const sendAppMail = async (req, res) => {
   }
 };
 
+/**
+ * Refresh access token using a refresh token
+ * POST /:apiKey/auth/refresh-token
+ */
+const refreshUserToken = async (req, res) => {
+  try {
+    const app = req.devApp;
+    const body = req.body || {};
+    const refreshToken = body.refresh_token || body.refreshToken;
+
+    if (!refreshToken) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing refresh token',
+        message: 'Refresh token is required'
+      });
+    }
+
+    // Verify refresh token JWT
+    let decoded;
+    try {
+      decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET);
+    } catch (err) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid token',
+        message: 'Refresh token is invalid or expired'
+      });
+    }
+
+    // Ensure token belongs to this app
+    if (!decoded.appId || decoded.appId !== app.id) {
+      return res.status(403).json({
+        success: false,
+        error: 'App mismatch',
+        message: 'Refresh token does not belong to this app'
+      });
+    }
+
+    // Check DB record for refresh token
+    const tokenDbCheck = await pool.query(
+      'SELECT id, user_id FROM user_refresh_tokens WHERE token = $1 AND app_id = $2 AND expires_at > NOW()',
+      [refreshToken, app.id]
+    );
+
+    if (tokenDbCheck.rows.length === 0) {
+      return res.status(401).json({
+        success: false,
+        error: 'Revoked or expired',
+        message: 'Refresh token has been revoked or expired'
+      });
+    }
+
+    // Fetch user and check blocked
+    const userRes = await pool.query(
+      'SELECT id, email, name, username, email_verified, google_linked, is_blocked, last_login, extra FROM users WHERE id = $1 AND app_id = $2',
+      [decoded.userId, app.id]
+    );
+
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+        message: 'User does not exist'
+      });
+    }
+
+    const user = userRes.rows[0];
+    if (user.is_blocked) {
+      return res.status(403).json({
+        success: false,
+        error: 'Account blocked',
+        message: 'User account is blocked'
+      });
+    }
+
+    // Determine access token TTL
+    const ttl = app.access_token_expires_seconds ? parseInt(app.access_token_expires_seconds, 10) : (process.env.ACCESS_TOKEN_EXPIRES_SECONDS ? parseInt(process.env.ACCESS_TOKEN_EXPIRES_SECONDS, 10) : 604800);
+
+    // Generate new access token
+    const newAccessToken = jwt.sign(
+      { userId: user.id, appId: app.id, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: ttl }
+    );
+
+    // Generate new rotated refresh token
+    const refreshTtlSec = 30 * 24 * 60 * 60; // 30 days
+    const newRefreshToken = jwt.sign(
+      { userId: user.id, appId: app.id, email: user.email, tokenType: 'refresh', jti: crypto.randomUUID() },
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+      { expiresIn: refreshTtlSec }
+    );
+
+    // Rotate token in DB: delete old, insert new
+    await pool.query('DELETE FROM user_refresh_tokens WHERE id = $1', [tokenDbCheck.rows[0].id]);
+    await pool.query(`
+      INSERT INTO user_refresh_tokens (user_id, app_id, token, expires_at, created_at)
+      VALUES ($1, $2, $3, NOW() + INTERVAL '30 days', NOW())
+    `, [user.id, app.id, newRefreshToken]);
+
+    res.json({
+      success: true,
+      message: 'Token refreshed successfully',
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          username: user.username,
+          email_verified: user.email_verified,
+          google_linked: user.google_linked,
+          last_login: user.last_login,
+          extra: user.extra || {}
+        },
+        access_token: newAccessToken,
+        refresh_token: newRefreshToken,
+        token_type: 'Bearer',
+        expires_in: ttl
+      }
+    });
+
+  } catch (error) {
+    console.error('Refresh user token error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Refresh failed',
+      message: 'Failed to refresh token'
+    });
+  }
+};
+
 module.exports = {
   verifyAppCredentials,
   registerUser,
   verifyDeveloperCredentials,
   loginUser,
+  refreshUserToken,
   verifyEmail,
   getUserProfile,
   patchUserProfile,

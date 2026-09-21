@@ -96,7 +96,23 @@ export class AuthClient {
     });
     const json = await safeJson(resp);
     if (!resp.ok || json?.success === false) throw toError(resp, json, 'Login failed');
-    const token = json?.data?.user_token;
+    const token = json?.data?.access_token || json?.data?.user_token;
+    if (token) this.setToken(token);
+    return json;
+  }
+
+  async refreshToken({ refreshToken }) {
+    if (!refreshToken) {
+      throw new AuthError('refreshToken is required', 400, 'MISSING_TOKEN', null);
+    }
+    const resp = await this.fetch(this._buildUrl('auth/refresh-token'), {
+      method: 'POST',
+      headers: this._headers(),
+      body: JSON.stringify({ refresh_token: refreshToken })
+    });
+    const json = await safeJson(resp);
+    if (!resp.ok || json?.success === false) throw toError(resp, json, 'Token refresh failed');
+    const token = json?.data?.access_token;
     if (token) this.setToken(token);
     return json;
   }
@@ -387,6 +403,9 @@ const authclient = {
   },
   googleAuth(tokens) {
     return ensureClient().googleAuth(tokens);
+  },
+  refreshToken(opts) {
+    return ensureClient().refreshToken(opts);
   },
 
   // profile helpers

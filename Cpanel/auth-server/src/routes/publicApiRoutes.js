@@ -32,6 +32,7 @@ router.post('/:apiKey/auth/set-password-google-user', publicApis.setPasswordGoog
 router.post('/:apiKey/auth/request-password-reset', publicApis.requestPasswordReset);
 router.post('/:apiKey/auth/request-change-password-link', publicApis.requestChangePasswordLink);
 router.post('/:apiKey/auth/verify-token', publicApis.verifyAccessToken);
+router.post('/:apiKey/auth/refresh-token', publicApis.refreshUserToken);
 // router.post('/:apiKey/auth/change-password', publicApis.changePassword);
 router.post('/:apiKey/auth/resend-verification', publicApis.resendVerification);
 router.post('/:apiKey/auth/delete-account', publicApis.deleteAccount);

@@ -26,6 +26,9 @@ const pool = new Pool({
         ALTER TABLE dev_apps ADD COLUMN IF NOT EXISTS mail_sent_count integer DEFAULT 0;
         ALTER TABLE dev_apps ADD COLUMN IF NOT EXISTS mail_quota_month varchar(7) DEFAULT NULL;
         ALTER TABLE dev_apps ADD COLUMN IF NOT EXISTS email_smtp_profile_name varchar(100) DEFAULT NULL;
+        ALTER TABLE dev_apps ADD COLUMN IF NOT EXISTS google_android_client_id varchar(512) DEFAULT NULL;
+        ALTER TABLE dev_apps ADD COLUMN IF NOT EXISTS google_ios_client_id varchar(512) DEFAULT NULL;
+        ALTER TABLE dev_apps ADD COLUMN IF NOT EXISTS google_client_ids jsonb DEFAULT '[]'::jsonb;
 
         CREATE TABLE IF NOT EXISTS user_refresh_tokens (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

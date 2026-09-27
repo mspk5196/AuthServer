@@ -2322,13 +2322,33 @@ const googleAuth = async (req, res) => {
 
       googleUser = await response.json();
 
-      // Verify the token is for this app's client ID (if configured)
-      if (app.google_client_id && googleUser.aud !== app.google_client_id) {
-        return res.status(401).json({
-          success: false,
-          error: 'Invalid token',
-          message: 'Token is not for this application'
+      // Collect all authorized Google Client IDs for this app (Web, Android, iOS, etc.)
+      const allowedClientIds = new Set();
+      if (app.google_client_id) allowedClientIds.add(String(app.google_client_id).trim());
+      if (app.google_android_client_id) allowedClientIds.add(String(app.google_android_client_id).trim());
+      if (app.google_ios_client_id) allowedClientIds.add(String(app.google_ios_client_id).trim());
+
+      let extraCids = app.google_client_ids;
+      if (typeof extraCids === 'string') {
+        try { extraCids = JSON.parse(extraCids); } catch (_) { extraCids = []; }
+      }
+      if (Array.isArray(extraCids)) {
+        extraCids.forEach(cid => {
+          if (typeof cid === 'string' && cid.trim()) allowedClientIds.add(cid.trim());
         });
+      }
+
+      // Verify the token is for one of this app's authorized client IDs (if any configured)
+      if (allowedClientIds.size > 0) {
+        const audMatch = googleUser.aud && allowedClientIds.has(googleUser.aud);
+        const azpMatch = googleUser.azp && allowedClientIds.has(googleUser.azp);
+        if (!audMatch && !azpMatch) {
+          return res.status(401).json({
+            success: false,
+            error: 'Invalid token',
+            message: 'Google token is not authorized for this application'
+          });
+        }
       }
 
     } catch (error) {
@@ -3521,6 +3541,78 @@ const getAppUsers = async (req, res) => {
 };
 
 /**
+ * Get users of an application by API key authentication
+ * GET /:apiKey/users?page=1&limit=50&search=john
+ */
+const getAppUsersByApiKey = async (req, res) => {
+  try {
+    const app = req.devApp;
+    const { page = 1, limit = 50, search = '' } = req.query;
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 50));
+    const offset = (pageNum - 1) * limitNum;
+
+    let queryText = `
+      SELECT 
+        u.id,
+        u.app_id,
+        u.username,
+        u.email,
+        u.name,
+        u.extra,
+        u.email_verified,
+        u.email_verified AS is_email_verified,
+        u.google_id,
+        u.created_at,
+        u.updated_at
+      FROM users u
+      WHERE u.app_id = $1
+    `;
+    const queryParams = [app.id];
+
+    if (search && search.trim()) {
+      queryParams.push(`%${search.trim()}%`);
+      queryText += ` AND (u.email ILIKE $${queryParams.length} OR u.name ILIKE $${queryParams.length} OR u.username ILIKE $${queryParams.length})`;
+    }
+
+    queryText += ` ORDER BY u.created_at DESC LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}`;
+    queryParams.push(limitNum, offset);
+
+    const result = await pool.query(queryText, queryParams);
+
+    // Count query
+    let countText = 'SELECT COUNT(*) FROM users WHERE app_id = $1';
+    const countParams = [app.id];
+    if (search && search.trim()) {
+      countParams.push(`%${search.trim()}%`);
+      countText += ` AND (email ILIKE $2 OR name ILIKE $2 OR username ILIKE $2)`;
+    }
+    const countResult = await pool.query(countText, countParams);
+    const totalUsers = parseInt(countResult.rows[0].count, 10);
+    const totalPages = Math.ceil(totalUsers / limitNum);
+
+    res.json({
+      success: true,
+      data: result.rows,
+      pagination: {
+        currentPage: pageNum,
+        totalPages,
+        totalUsers,
+        limit: limitNum
+      }
+    });
+  } catch (err) {
+    console.error('Get app users by API key error:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to fetch app users'
+    });
+  }
+};
+
+/**
  * Get specific user data by user_id
  * GET /:apiKey/developer/user/:user_id
  developer/user/:user_id
@@ -3878,6 +3970,7 @@ module.exports = {
   getDeveloperGroups,
   getDeveloperApps,
   getAppUsers,
+  getAppUsersByApiKey,
   getUserData,
   sendAppMail,
 };

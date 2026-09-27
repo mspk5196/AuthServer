@@ -559,6 +559,9 @@ const updateApp = async (req, res) => {
       allow_email_signin,
       google_client_id,
       google_client_secret,
+      google_android_client_id,
+      google_ios_client_id,
+      google_client_ids,
       extra_fields
     } = req.body;
     const { user_edit_permissions } = req.body;
@@ -600,6 +603,18 @@ const updateApp = async (req, res) => {
     if (google_client_secret !== undefined) {
       updates.push(`google_client_secret = $${paramCount++}`);
       values.push(google_client_secret);
+    }
+    if (google_android_client_id !== undefined) {
+      updates.push(`google_android_client_id = $${paramCount++}`);
+      values.push(google_android_client_id);
+    }
+    if (google_ios_client_id !== undefined) {
+      updates.push(`google_ios_client_id = $${paramCount++}`);
+      values.push(google_ios_client_id);
+    }
+    if (google_client_ids !== undefined) {
+      updates.push(`google_client_ids = $${paramCount++}::jsonb`);
+      values.push(JSON.stringify(Array.isArray(google_client_ids) ? google_client_ids : []));
     }
 
     // Handle extra custom fields configuration (array of { name, label, type })

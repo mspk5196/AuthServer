@@ -39,6 +39,9 @@ export default function AppSettings() {
   const [showGoogleConfig, setShowGoogleConfig] = useState(false);
   const [googleClientId, setGoogleClientId] = useState('');
   const [googleClientSecret, setGoogleClientSecret] = useState('');
+  const [googleAndroidClientId, setGoogleAndroidClientId] = useState('');
+  const [googleIosClientId, setGoogleIosClientId] = useState('');
+  const [googleClientIds, setGoogleClientIds] = useState('');
   const [accessTokenTTL, setAccessTokenTTL] = useState('');
   const [extraFields, setExtraFields] = useState([]);
   const [showExtraFieldsPanel, setShowExtraFieldsPanel] = useState(true);
@@ -68,6 +71,9 @@ export default function AppSettings() {
         setApp(appData);
         setGoogleClientId(appData.google_client_id || '');
         setGoogleClientSecret(appData.google_client_secret || '');
+        setGoogleAndroidClientId(appData.google_android_client_id || '');
+        setGoogleIosClientId(appData.google_ios_client_id || '');
+        setGoogleClientIds(Array.isArray(appData.google_client_ids) ? appData.google_client_ids.join(', ') : '');
         setExtraFields(appData.extra_fields || []);
         setUserEditPermissions(appData.user_edit_permissions || { name: true, username: true, email: true });
         setAccessTokenTTL(appData.access_token_expires_seconds || '');
@@ -111,9 +117,17 @@ export default function AppSettings() {
     setSaving(true);
     setError('');
     try {
+      const extraList = googleClientIds
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+
       const body = {
         google_client_id: googleClientId.trim(),
-        google_client_secret: googleClientSecret.trim()
+        google_client_secret: googleClientSecret.trim(),
+        google_android_client_id: googleAndroidClientId.trim(),
+        google_ios_client_id: googleIosClientId.trim(),
+        google_client_ids: extraList
       };
       const resp = await api.put(`/apps/updateApp/${appId}`, body, token);
       if (resp.success) {
@@ -377,30 +391,77 @@ export default function AppSettings() {
                   </div>
 
                   <div className="space-y-3">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-700 mb-1">
-                        OAuth 2.0 Client ID
-                      </label>
-                      <input
-                        type="text"
-                        className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-hidden bg-white text-slate-900 font-mono"
-                        placeholder="e.g. 123456789-abc123xyz.apps.googleusercontent.com"
-                        value={googleClientId}
-                        onChange={(e) => setGoogleClientId(e.target.value)}
-                      />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-700 mb-1">
+                          Web OAuth 2.0 Client ID
+                        </label>
+                        <input
+                          type="text"
+                          className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-hidden bg-white text-slate-900 font-mono"
+                          placeholder="e.g. 123456789-web.apps.googleusercontent.com"
+                          value={googleClientId}
+                          onChange={(e) => setGoogleClientId(e.target.value)}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-slate-700 mb-1">
+                          Web Client Secret
+                        </label>
+                        <input
+                          type="password"
+                          className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-hidden bg-white text-slate-900 font-mono"
+                          placeholder="Enter Client Secret"
+                          value={googleClientSecret}
+                          onChange={(e) => setGoogleClientSecret(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-200">
+                      <h5 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">Mobile Clients (Android / iOS)</h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700 mb-1">
+                            Android Client ID (Optional)
+                          </label>
+                          <input
+                            type="text"
+                            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-hidden bg-white text-slate-900 font-mono"
+                            placeholder="e.g. 123456789-android.apps.googleusercontent.com"
+                            value={googleAndroidClientId}
+                            onChange={(e) => setGoogleAndroidClientId(e.target.value)}
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700 mb-1">
+                            iOS Client ID (Optional)
+                          </label>
+                          <input
+                            type="text"
+                            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-hidden bg-white text-slate-900 font-mono"
+                            placeholder="e.g. 123456789-ios.apps.googleusercontent.com"
+                            value={googleIosClientId}
+                            onChange={(e) => setGoogleIosClientId(e.target.value)}
+                          />
+                        </div>
+                      </div>
                     </div>
 
                     <div>
                       <label className="block text-xs font-medium text-slate-700 mb-1">
-                        OAuth 2.0 Client Secret
+                        Additional Authorized Client IDs (Comma-separated)
                       </label>
                       <input
-                        type="password"
-                        className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-hidden bg-white text-slate-900 font-mono"
-                        placeholder="Enter Client Secret"
-                        value={googleClientSecret}
-                        onChange={(e) => setGoogleClientSecret(e.target.value)}
+                        type="text"
+                        className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-hidden bg-white text-slate-900 font-mono text-xs"
+                        placeholder="e.g. id1.apps.googleusercontent.com, id2.apps.googleusercontent.com"
+                        value={googleClientIds}
+                        onChange={(e) => setGoogleClientIds(e.target.value)}
                       />
+                      <p className="text-[11px] text-slate-500 mt-1">Useful if you have multiple mobile build flavors, staging client IDs, or desktop apps.</p>
                     </div>
                   </div>
 
@@ -408,7 +469,7 @@ export default function AppSettings() {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={saveGoogleConfig}
-                        disabled={saving || !googleClientId.trim()}
+                        disabled={saving || (!googleClientId.trim() && !googleAndroidClientId.trim() && !googleIosClientId.trim() && !googleClientIds.trim())}
                         className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs disabled:opacity-50 transition-colors"
                       >
                         <Save className="w-3.5 h-3.5" />
@@ -419,6 +480,9 @@ export default function AppSettings() {
                           setShowGoogleConfig(false);
                           setGoogleClientId(app.google_client_id || '');
                           setGoogleClientSecret(app.google_client_secret || '');
+                          setGoogleAndroidClientId(app.google_android_client_id || '');
+                          setGoogleIosClientId(app.google_ios_client_id || '');
+                          setGoogleClientIds(Array.isArray(app.google_client_ids) ? app.google_client_ids.join(', ') : '');
                         }}
                         className="px-3 py-2 text-xs font-medium text-slate-600 hover:text-slate-900 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
                       >
@@ -428,11 +492,11 @@ export default function AppSettings() {
                   </div>
 
                   <div className="p-3 bg-indigo-50/60 border border-indigo-100 rounded-lg text-xs text-indigo-900 space-y-1">
-                    <p className="font-semibold text-indigo-950">Setup Instructions:</p>
+                    <p className="font-semibold text-indigo-950">Setup Instructions for Web & Mobile:</p>
                     <ol className="list-decimal list-inside space-y-0.5 text-indigo-800">
-                      <li>Create OAuth 2.0 Web Client credentials in Google Cloud Console</li>
-                      <li>Add your authorized JavaScript origins and redirect URIs</li>
-                      <li>Paste Client ID and Client Secret above</li>
+                      <li>Create OAuth 2.0 Web Client credentials in Google Cloud Console for web access.</li>
+                      <li>For Android/iOS, create Android and iOS client credentials in Google Cloud Console using your package name / bundle ID.</li>
+                      <li>Paste the respective Client IDs above. Tokens issued to any configured client ID will be accepted seamlessly.</li>
                       <li>Use the backend endpoint: <code className="font-mono bg-indigo-100 px-1 py-0.5 rounded text-[11px]">POST /api/v1/:apiKey/auth/google</code></li>
                     </ol>
                   </div>

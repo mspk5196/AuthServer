@@ -16,6 +16,8 @@ const AppCard = ({ app, onUpdate, onDelete }) => {
     name: app.name,
     googleClientId: app.google_client_id || '',
     googleClientSecret: app.google_client_secret || '',
+    googleAndroidClientId: app.google_android_client_id || '',
+    googleIosClientId: app.google_ios_client_id || '',
   });
 
   const baseUrl = `https://auth.mspkapps.in/${app.developer_username}/${app.name}`;
@@ -58,6 +60,8 @@ const AppCard = ({ app, onUpdate, onDelete }) => {
       const data = await api.put(`/developer/apps/${app.id}/google-config`, {
         googleClientId: formData.googleClientId || null,
         googleClientSecret: formData.googleClientSecret || null,
+        googleAndroidClientId: formData.googleAndroidClientId || null,
+        googleIosClientId: formData.googleIosClientId || null,
       });
       onUpdate(data.app);
       setShowConfigModal(false);
@@ -231,7 +235,7 @@ const AppCard = ({ app, onUpdate, onDelete }) => {
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
-              Google Client ID
+              Web Client ID
             </label>
             <input
               type="text"

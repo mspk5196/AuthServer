@@ -3708,19 +3708,19 @@ const updateAppUserByApiKey = async (req, res) => {
     let idx = 1;
 
     if (body.name !== undefined) {
-      updates.push(`name = ${idx++}`);
+      updates.push(`name = $${idx++}`);
       params.push(body.name);
     }
     if (body.username !== undefined) {
-      updates.push(`username = ${idx++}`);
+      updates.push(`username = $${idx++}`);
       params.push(body.username);
     }
     if (body.email !== undefined) {
-      updates.push(`email = ${idx++}`);
+      updates.push(`email = $${idx++}`);
       params.push(body.email.toLowerCase().trim());
     }
     if (body.email_verified !== undefined) {
-      updates.push(`email_verified = ${idx++}`);
+      updates.push(`email_verified = $${idx++}`);
       params.push(Boolean(body.email_verified));
     }
 
@@ -3731,7 +3731,7 @@ const updateAppUserByApiKey = async (req, res) => {
     }
 
     if (incomingExtra && typeof incomingExtra === 'object' && !Array.isArray(incomingExtra)) {
-      updates.push(`extra = COALESCE(extra, '{}'::jsonb) || ${idx++}::jsonb`);
+      updates.push(`extra = COALESCE(extra, '{}'::jsonb) || $${idx++}::jsonb`);
       params.push(JSON.stringify(incomingExtra));
     }
 
@@ -3743,7 +3743,7 @@ const updateAppUserByApiKey = async (req, res) => {
     params.push(app.id);
 
     const updateResult = await pool.query(
-      `UPDATE users SET ${updates.join(', ')}, updated_at = NOW() WHERE id = ${idx++} AND app_id = ${idx++} RETURNING id, app_id, email, name, username, email_verified, google_linked, is_blocked, last_login, created_at, updated_at, extra`,
+      `UPDATE users SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${idx++} AND app_id = $${idx++} RETURNING id, app_id, email, name, username, email_verified, google_linked, is_blocked, last_login, created_at, updated_at, extra`,
       params
     );
 

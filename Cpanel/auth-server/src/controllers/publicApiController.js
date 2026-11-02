@@ -958,9 +958,16 @@ const getUserProfile = async (req, res) => {
       editable.extra[f.name] = !!f.editable_by_user;
     }
 
+    const userData = { ...result.rows[0] };
+    if (typeof userData.extra === 'string') {
+      try { userData.extra = JSON.parse(userData.extra); } catch (_) { userData.extra = {}; }
+    } else if (!userData.extra || typeof userData.extra !== 'object') {
+      userData.extra = {};
+    }
+
     res.json({
       success: true,
-      data: result.rows[0],
+      data: userData,
       editable
     });
 
@@ -3290,8 +3297,14 @@ const patchUserProfile = async (req, res) => {
         params
       );
       if (updateResult.rows.length > 0) {
-        updatedUser = updateResult.rows[0];
+        updatedUser = { ...updateResult.rows[0] };
       }
+    }
+
+    if (typeof updatedUser.extra === 'string') {
+      try { updatedUser.extra = JSON.parse(updatedUser.extra); } catch (_) { updatedUser.extra = {}; }
+    } else if (!updatedUser.extra || typeof updatedUser.extra !== 'object') {
+      updatedUser.extra = {};
     }
 
     res.json({
@@ -3609,6 +3622,153 @@ const getAppUsersByApiKey = async (req, res) => {
       error: 'Server error',
       message: 'Failed to fetch app users'
     });
+  }
+};
+
+/**
+ * Get single app user by ID using API Key credentials
+ * GET /:apiKey/users/:userId
+ */
+const getAppUserByIdByApiKey = async (req, res) => {
+  try {
+    const app = req.devApp;
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ success: false, error: 'Missing userId', message: 'userId parameter is required' });
+    }
+
+    const result = await pool.query(`
+      SELECT 
+        u.id,
+        u.app_id,
+        u.username,
+        u.email,
+        u.name,
+        u.extra,
+        u.email_verified,
+        u.email_verified AS is_email_verified,
+        u.google_linked,
+        u.google_id,
+        u.is_blocked,
+        u.last_login,
+        u.created_at,
+        u.updated_at
+      FROM users u
+      WHERE u.id = $1 AND u.app_id = $2
+    `, [userId, app.id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'User not found', message: 'User does not exist in this app' });
+    }
+
+    const user = { ...result.rows[0] };
+    if (typeof user.extra === 'string') {
+      try { user.extra = JSON.parse(user.extra); } catch (_) { user.extra = {}; }
+    } else if (!user.extra || typeof user.extra !== 'object') {
+      user.extra = {};
+    }
+
+    return res.json({
+      success: true,
+      data: user,
+      user
+    });
+  } catch (err) {
+    console.error('getAppUserByIdByApiKey error:', err);
+    return res.status(500).json({ success: false, error: 'Server error', message: 'Failed to fetch user' });
+  }
+};
+
+/**
+ * Update app user by ID using API Key credentials
+ * PATCH /:apiKey/users/:userId
+ */
+const updateAppUserByApiKey = async (req, res) => {
+  try {
+    const app = req.devApp;
+    const { userId } = req.params;
+    const body = req.body || {};
+
+    if (!userId) {
+      return res.status(400).json({ success: false, error: 'Missing userId', message: 'userId parameter is required' });
+    }
+
+    const checkRes = await pool.query(
+      'SELECT id, email, name, username, extra FROM users WHERE id = $1 AND app_id = $2',
+      [userId, app.id]
+    );
+
+    if (checkRes.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'User not found', message: 'User does not exist in this app' });
+    }
+
+    const updates = [];
+    const params = [];
+    let idx = 1;
+
+    if (body.name !== undefined) {
+      updates.push(`name = ${idx++}`);
+      params.push(body.name);
+    }
+    if (body.username !== undefined) {
+      updates.push(`username = ${idx++}`);
+      params.push(body.username);
+    }
+    if (body.email !== undefined) {
+      updates.push(`email = ${idx++}`);
+      params.push(body.email.toLowerCase().trim());
+    }
+    if (body.email_verified !== undefined) {
+      updates.push(`email_verified = ${idx++}`);
+      params.push(Boolean(body.email_verified));
+    }
+
+    // Handle extra / extra_fields
+    let incomingExtra = body.extra !== undefined ? body.extra : body.extra_fields;
+    if (typeof incomingExtra === 'string') {
+      try { incomingExtra = JSON.parse(incomingExtra); } catch (_) { incomingExtra = {}; }
+    }
+
+    if (incomingExtra && typeof incomingExtra === 'object' && !Array.isArray(incomingExtra)) {
+      updates.push(`extra = COALESCE(extra, '{}'::jsonb) || ${idx++}::jsonb`);
+      params.push(JSON.stringify(incomingExtra));
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ success: false, message: 'No valid fields provided to update' });
+    }
+
+    params.push(userId);
+    params.push(app.id);
+
+    const updateResult = await pool.query(
+      `UPDATE users SET ${updates.join(', ')}, updated_at = NOW() WHERE id = ${idx++} AND app_id = ${idx++} RETURNING id, app_id, email, name, username, email_verified, google_linked, is_blocked, last_login, created_at, updated_at, extra`,
+      params
+    );
+
+    const updatedUser = { ...updateResult.rows[0] };
+    if (typeof updatedUser.extra === 'string') {
+      try { updatedUser.extra = JSON.parse(updatedUser.extra); } catch (_) { updatedUser.extra = {}; }
+    } else if (!updatedUser.extra || typeof updatedUser.extra !== 'object') {
+      updatedUser.extra = {};
+    }
+
+    return res.json({
+      success: true,
+      message: 'User updated successfully',
+      data: updatedUser,
+      user: updatedUser
+    });
+  } catch (err) {
+    if (err.code === '23505' && err.detail && err.detail.includes('username')) {
+      return res.status(409).json({ success: false, message: 'Username already exists' });
+    }
+    if (err.code === '23505' && err.detail && err.detail.includes('email')) {
+      return res.status(409).json({ success: false, message: 'Email already exists' });
+    }
+    console.error('updateAppUserByApiKey error:', err);
+    return res.status(500).json({ success: false, error: 'Server error', message: 'Failed to update user' });
   }
 };
 
@@ -3971,6 +4131,8 @@ module.exports = {
   getDeveloperApps,
   getAppUsers,
   getAppUsersByApiKey,
+  getAppUserByIdByApiKey,
+  updateAppUserByApiKey,
   getUserData,
   sendAppMail,
 };

@@ -43,6 +43,9 @@ router.patch('/:apiKey/user/profile', publicApis.patchUserProfile);
 
 // User management
 router.get('/:apiKey/users', publicApis.getAppUsersByApiKey);
+router.get('/:apiKey/users/:userId', publicApis.getAppUserByIdByApiKey);
+router.patch('/:apiKey/users/:userId', publicApis.updateAppUserByApiKey);
+
 
 // Developer-initiated mail sending
 router.post('/:apiKey/mail/send', publicApis.sendAppMail);

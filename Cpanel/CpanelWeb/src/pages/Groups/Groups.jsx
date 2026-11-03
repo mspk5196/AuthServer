@@ -143,20 +143,74 @@ const Groups = () => {
     }
   };
 
-  const getGroupExtraFieldKeys = () => {
-    const keysSet = new Set();
-    const commonFields = viewingUsersFor?.common_extra_fields || [];
-    if (Array.isArray(commonFields)) {
-      commonFields.forEach(f => {
-        if (f && f.name) keysSet.add(f.name);
+  const normalizeFieldKey = (key) => {
+    if (!key) return '';
+    return String(key)
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '')
+      .replace(/email/g, 'mail');
+  };
+
+  const getExtraFieldValue = (userExtra, fieldKey) => {
+    if (!userExtra || typeof userExtra !== 'object') return undefined;
+    if (userExtra[fieldKey] !== undefined) return userExtra[fieldKey];
+    const lowerKey = fieldKey.toLowerCase();
+    for (const [k, v] of Object.entries(userExtra)) {
+      if (k.toLowerCase() === lowerKey) return v;
+    }
+    const normKey = normalizeFieldKey(fieldKey);
+    for (const [k, v] of Object.entries(userExtra)) {
+      if (normalizeFieldKey(k) === normKey) return v;
+    }
+    return undefined;
+  };
+
+  const getUserExtraDisplayFields = (user, configuredFields = []) => {
+    const fields = [];
+    const seenNormKeys = new Set();
+    const seenExactKeys = new Set();
+
+    if (Array.isArray(configuredFields)) {
+      configuredFields.forEach((f) => {
+        if (!f || !f.name) return;
+        const norm = normalizeFieldKey(f.name);
+        if (seenNormKeys.has(norm)) return;
+        seenNormKeys.add(norm);
+        seenExactKeys.add(f.name);
+
+        const val = getExtraFieldValue(user?.extra, f.name);
+        fields.push({
+          key: f.name,
+          label: f.label || f.name,
+          type: f.type || (typeof val === 'object' && val !== null ? 'object' : typeof val !== 'undefined' ? typeof val : 'string'),
+          description: f.description || '',
+          value: val,
+          isConfigured: true
+        });
       });
     }
-    groupUsers.forEach(u => {
-      if (u.extra && typeof u.extra === 'object') {
-        Object.keys(u.extra).forEach(k => keysSet.add(k));
-      }
-    });
-    return Array.from(keysSet);
+
+    if (user?.extra && typeof user.extra === 'object') {
+      Object.entries(user.extra).forEach(([k, v]) => {
+        if (!k) return;
+        const norm = normalizeFieldKey(k);
+        if (seenNormKeys.has(norm) || seenExactKeys.has(k)) return;
+        seenNormKeys.add(norm);
+        seenExactKeys.add(k);
+
+        fields.push({
+          key: k,
+          label: k,
+          type: typeof v === 'object' && v !== null ? 'object' : typeof v !== 'undefined' ? typeof v : 'string',
+          description: '',
+          value: v,
+          isConfigured: false
+        });
+      });
+    }
+
+    return fields;
   };
 
   const renderFieldValue = (value) => {
@@ -388,19 +442,6 @@ const Groups = () => {
                         <th className="px-3 py-2.5">Name</th>
                         <th className="px-3 py-2.5">Username</th>
                         <th className="px-3 py-2.5">Origin App</th>
-                        {getGroupExtraFieldKeys().map((key) => {
-                          const fieldDef = (viewingUsersFor?.common_extra_fields || []).find((f) => f.name === key);
-                          return (
-                            <th key={key} className="px-3 py-2.5 whitespace-nowrap">
-                              <div className="flex items-center gap-1">
-                                <span>{fieldDef?.label || key}</span>
-                                <span className="text-[9px] font-normal px-1 py-0.2 bg-indigo-50 text-indigo-600 rounded border border-indigo-100 lowercase">
-                                  {fieldDef?.type || 'extra'}
-                                </span>
-                              </div>
-                            </th>
-                          );
-                        })}
                         <th className="px-3 py-2.5">Last Login</th>
                         <th className="px-3 py-2.5 text-right">Actions</th>
                       </tr>
@@ -414,14 +455,6 @@ const Groups = () => {
                           <td className="px-3 py-2.5 font-sans text-indigo-600 font-medium">
                             {u.app_name || u.app_id}
                           </td>
-                          {getGroupExtraFieldKeys().map((key) => {
-                            const val = u.extra?.[key];
-                            return (
-                              <td key={key} className="px-3 py-2.5 font-sans text-slate-600 whitespace-nowrap">
-                                {renderFieldValue(val)}
-                              </td>
-                            );
-                          })}
                           <td className="px-3 py-2.5 text-slate-500 font-sans">
                             {u.last_login ? new Date(u.last_login).toLocaleDateString() : 'Never'}
                           </td>
@@ -533,67 +566,78 @@ const Groups = () => {
               </div>
 
               {/* Extra Fields Section */}
-              <div className="space-y-3 pt-2 border-t border-slate-100">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Tag className="w-4 h-4 text-indigo-600" />
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">Custom Extra Fields</h3>
-                  </div>
-                  <span className="text-[11px] text-slate-400 font-medium">
-                    {getGroupExtraFieldKeys().length} field(s) defined
-                  </span>
-                </div>
+              {(() => {
+                const userDisplayFields = getUserExtraDisplayFields(
+                  selectedUserForDetails,
+                  viewingUsersFor?.common_extra_fields || []
+                );
 
-                {getGroupExtraFieldKeys().length === 0 ? (
-                  <div className="p-4 bg-slate-50 border border-dashed border-slate-200 rounded-2xl text-center text-slate-400">
-                    No custom extra fields configured for this group or user.
-                  </div>
-                ) : (
-                  <div className="border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100 bg-white">
-                    {getGroupExtraFieldKeys().map((key) => {
-                      const fieldDef = (viewingUsersFor?.common_extra_fields || []).find((f) => f.name === key);
-                      const rawValue = selectedUserForDetails.extra?.[key];
-                      const isDefined = rawValue !== undefined && rawValue !== null && rawValue !== '';
+                return (
+                  <div className="space-y-3 pt-2 border-t border-slate-100">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Tag className="w-4 h-4 text-indigo-600" />
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">Custom Extra Fields</h3>
+                      </div>
+                      <span className="text-[11px] text-slate-400 font-medium">
+                        {userDisplayFields.length} field(s) defined
+                      </span>
+                    </div>
 
-                      return (
-                        <div key={key} className="p-3.5 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 hover:bg-slate-50/50 transition-colors">
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-slate-900">{fieldDef?.label || key}</span>
-                              <span className="text-[10px] font-mono px-1.5 py-0.2 bg-slate-100 text-slate-500 rounded border border-slate-200">
-                                {key}
-                              </span>
-                              <span className="text-[9px] font-semibold px-1.5 py-0.2 bg-indigo-50 text-indigo-600 rounded border border-indigo-100 lowercase">
-                                {fieldDef?.type || (typeof rawValue === 'object' ? 'object' : typeof rawValue)}
-                              </span>
+                    {userDisplayFields.length === 0 ? (
+                      <div className="p-4 bg-slate-50 border border-dashed border-slate-200 rounded-2xl text-center text-slate-400">
+                        No custom extra fields configured for this group or user.
+                      </div>
+                    ) : (
+                      <div className="border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100 bg-white">
+                        {userDisplayFields.map((field) => {
+                          const rawValue = field.value;
+                          const isDefined = rawValue !== undefined && rawValue !== null && rawValue !== '';
+
+                          return (
+                            <div key={field.key} className="p-3.5 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 hover:bg-slate-50/50 transition-colors">
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-slate-900">{field.label}</span>
+                                  <span className="text-[10px] font-mono px-1.5 py-0.2 bg-slate-100 text-slate-500 rounded border border-slate-200">
+                                    {field.key}
+                                  </span>
+                                  <span className="text-[9px] font-semibold px-1.5 py-0.2 bg-indigo-50 text-indigo-600 rounded border border-indigo-100 lowercase">
+                                    {field.type}
+                                  </span>
+                                </div>
+                                {field.description && (
+                                  <p className="text-[11px] text-slate-400">{field.description}</p>
+                                )}
+                              </div>
+
+                              <div className="sm:text-right max-w-sm">
+                                {isDefined ? (
+                                  typeof rawValue === 'object' ? (
+                                    <pre className="p-2 bg-slate-900 text-slate-100 font-mono rounded-xl text-[11px] overflow-x-auto text-left whitespace-pre-wrap">
+                                      {JSON.stringify(rawValue, null, 2)}
+                                    </pre>
+                                  ) : typeof rawValue === 'boolean' ? (
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${rawValue ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
+                                      {rawValue ? 'true' : 'false'}
+                                    </span>
+                                  ) : (
+                                    <span className="font-semibold text-slate-900 text-xs break-words">
+                                      {String(rawValue)}
+                                    </span>
+                                  )
+                                ) : (
+                                  <span className="text-slate-400 italic text-[11px]">Not provided / Empty</span>
+                                )}
+                              </div>
                             </div>
-                          </div>
-
-                          <div className="sm:text-right max-w-sm">
-                            {isDefined ? (
-                              typeof rawValue === 'object' ? (
-                                <pre className="p-2 bg-slate-900 text-slate-100 font-mono rounded-xl text-[11px] overflow-x-auto text-left whitespace-pre-wrap">
-                                  {JSON.stringify(rawValue, null, 2)}
-                                </pre>
-                              ) : typeof rawValue === 'boolean' ? (
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${rawValue ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
-                                  {rawValue ? 'true' : 'false'}
-                                </span>
-                              ) : (
-                                <span className="font-semibold text-slate-900 text-xs break-words">
-                                  {String(rawValue)}
-                                </span>
-                              )
-                            ) : (
-                              <span className="text-slate-400 italic text-[11px]">Not provided / Empty</span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                );
+              })()}
             </div>
 
             {/* Modal Footer */}

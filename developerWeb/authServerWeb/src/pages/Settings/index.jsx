@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../utils/api';
 import paymentService from '../../services/paymentService';
+import PlanSelection from '../../components/PlanSelection';
 import Card from '../../components/UI/Card';
 import Badge from '../../components/UI/Badge';
 import {
@@ -17,7 +18,9 @@ import {
   Loader2,
   Sparkles,
   ArrowRight,
+  ArrowLeft,
   ShieldCheck,
+  Receipt,
   Check
 } from 'lucide-react';
 
@@ -44,6 +47,7 @@ const Settings = () => {
   const { developer, updateDeveloper } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('profile');
+  const [planViewMode, setPlanViewMode] = useState('overview'); // 'overview' | 'upgrade'
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [currentPlan, setCurrentPlan] = useState(null);
@@ -67,10 +71,24 @@ const Settings = () => {
     fetchCurrentPlan();
 
     const searchParams = new URLSearchParams(window.location.search);
+    const tabParam = searchParams.get('tab');
+    const actionParam = searchParams.get('action');
     const paymentParam = searchParams.get('payment');
+
+    if (tabParam === 'plan' || tabParam === 'billing' || tabParam === 'plans') {
+      setActiveTab('plan');
+      if (actionParam === 'upgrade' || actionParam === 'choose') {
+        setPlanViewMode('upgrade');
+      }
+    } else if (tabParam === 'password') {
+      setActiveTab('password');
+    } else if (tabParam === 'profile') {
+      setActiveTab('profile');
+    }
 
     if (paymentParam === 'success') {
       setActiveTab('plan');
+      setPlanViewMode('overview');
       setRenewMsg({
         type: 'success',
         text: 'Payment successful and plan updated! Your new validity is now active.',
@@ -80,6 +98,7 @@ const Settings = () => {
       window.history.replaceState({}, document.title, window.location.pathname);
     } else if (paymentParam === 'failed') {
       setActiveTab('plan');
+      setPlanViewMode('overview');
       setRenewMsg({
         type: 'error',
         text: 'Payment was not completed or failed. Please try again.',
@@ -189,6 +208,15 @@ const Settings = () => {
       setRenewMsg({ type: 'error', text: err.message || 'Failed to initiate renewal.' });
       setRenewLoading(false);
     }
+  };
+
+  const handlePlanSelected = () => {
+    fetchCurrentPlan();
+    setPlanViewMode('overview');
+    setRenewMsg({
+      type: 'success',
+      text: 'Plan subscription updated successfully! Your new validity and limits are active.',
+    });
   };
 
   const formatDate = (date) => {
@@ -402,123 +430,175 @@ const Settings = () => {
 
       {/* Tab 3: Plan & Billing */}
       {activeTab === 'plan' && (
-        <div className="space-y-6 max-w-3xl">
-          {renewMsg.text && (
-            <div
-              className={`flex items-start gap-2.5 rounded-2xl border p-4 text-xs font-semibold ${
-                renewMsg.type === 'error'
-                  ? 'border-rose-200 bg-rose-50 text-rose-700'
-                  : 'border-emerald-200 bg-emerald-50 text-emerald-700'
-              }`}
-            >
-              {renewMsg.type === 'error' ? (
-                <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
-              ) : (
-                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+        planViewMode === 'upgrade' ? (
+          <div className="space-y-6 max-w-5xl">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-4">
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setPlanViewMode('overview')}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors mb-2 cursor-pointer"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to My Subscription
+                </button>
+                <h2 className="text-xl font-black text-slate-900 tracking-tight">
+                  {currentPlan ? 'Upgrade or Change Subscription Plan' : 'Choose a Subscription Plan'}
+                </h2>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">
+                  Select the tier that best matches your application scale and quota requirements.
+                </p>
+              </div>
+              {currentPlan && (
+                <div className="shrink-0">
+                  <Badge variant="indigo" size="md">
+                    Current: {currentPlan.plan_name}
+                  </Badge>
+                </div>
               )}
-              <span>{renewMsg.text}</span>
             </div>
-          )}
 
-          {currentPlan && !isUnlimitedPlan(currentPlan) && (() => {
-            const days = getDaysRemaining(currentPlan);
-            if (days === null) return null;
-            if (days < 0) {
-              return (
-                <div className="flex items-center gap-2.5 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700 font-semibold">
+            <PlanSelection
+              currentPlanId={currentPlan?.plan_id}
+              onPlanSelected={handlePlanSelected}
+            />
+          </div>
+        ) : (
+          <div className="space-y-6 max-w-3xl">
+            {renewMsg.text && (
+              <div
+                className={`flex items-start gap-2.5 rounded-2xl border p-4 text-xs font-semibold ${
+                  renewMsg.type === 'error'
+                    ? 'border-rose-200 bg-rose-50 text-rose-700'
+                    : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                }`}
+              >
+                {renewMsg.type === 'error' ? (
                   <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
-                  <span>Your plan has expired. Renew now to restore full API quota and features.</span>
-                </div>
-              );
-            }
-            if (days <= 7) {
-              return (
-                <div className="flex items-center gap-2.5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800 font-semibold">
-                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
-                  <span>Your plan expires in <strong>{days} day{days !== 1 ? 's' : ''}</strong>. Renew early to avoid interruption.</span>
-                </div>
-              );
-            }
-            return null;
-          })()}
-
-          {currentPlan ? (
-            <Card>
-              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-                <div>
-                  <h3 className="text-xl font-bold text-slate-900">{currentPlan.plan_name}</h3>
-                  <p className="text-xs text-slate-500 mt-0.5 font-medium">
-                    {currentPlan.price ? `₹${Number(currentPlan.price).toFixed(2)}` : 'Free Tier'}
-                  </p>
-                </div>
-                <Badge variant={currentPlan.is_active ? 'success' : 'warning'} size="md">
-                  {currentPlan.is_active ? 'Active' : 'Inactive'}
-                </Badge>
+                ) : (
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                )}
+                <span>{renewMsg.text}</span>
               </div>
+            )}
 
-              <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <span className="text-slate-500 font-medium">Start Date</span>
-                  <p className="mt-1 font-bold text-slate-900">{formatDate(currentPlan.start_date)}</p>
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <span className="text-slate-500 font-medium">Expiry Date</span>
-                  <p className="mt-1 font-bold text-slate-900">
-                    {isUnlimitedPlan(currentPlan) ? 'Unlimited (No Expiry)' : formatDate(currentPlan.end_date)}
-                  </p>
-                </div>
-              </div>
-
-              {(() => {
-                const lines = getPlanFeatureLines(currentPlan);
-                if (!lines.length) return null;
+            {currentPlan && !isUnlimitedPlan(currentPlan) && (() => {
+              const days = getDaysRemaining(currentPlan);
+              if (days === null) return null;
+              if (days < 0) {
                 return (
-                  <div className="mt-6 border-t border-slate-100 pt-6">
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-3">Plan Limits</p>
-                    <ul className="space-y-2">
-                      {lines.map((line, i) => (
-                        <li key={i} className="flex items-center gap-2 text-xs text-slate-700 font-medium">
-                          <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                          <span>{line}</span>
-                        </li>
-                      ))}
-                    </ul>
+                  <div className="flex items-center gap-2.5 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700 font-semibold">
+                    <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+                    <span>Your plan has expired. Renew or upgrade now to restore full API quota and features.</span>
                   </div>
                 );
-              })()}
+              }
+              if (days <= 7) {
+                return (
+                  <div className="flex items-center gap-2.5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800 font-semibold">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+                    <span>Your plan expires in <strong>{days} day{days !== 1 ? 's' : ''}</strong>. Renew early to avoid interruption.</span>
+                  </div>
+                );
+              }
+              return null;
+            })()}
 
-              <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-6">
-                {!isUnlimitedPlan(currentPlan) && currentPlan.price && Number(currentPlan.price) > 0 && (
+            {currentPlan ? (
+              <Card>
+                <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900">{currentPlan.plan_name}</h3>
+                    <p className="text-xs text-slate-500 mt-0.5 font-medium">
+                      {currentPlan.price ? `₹${Number(currentPlan.price).toFixed(2)}` : 'Free Tier'}
+                    </p>
+                  </div>
+                  <Badge variant={currentPlan.is_active ? 'success' : 'warning'} size="md">
+                    {currentPlan.is_active ? 'Active' : 'Inactive'}
+                  </Badge>
+                </div>
+
+                <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <span className="text-slate-500 font-medium">Start Date</span>
+                    <p className="mt-1 font-bold text-slate-900">{formatDate(currentPlan.start_date)}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <span className="text-slate-500 font-medium">Expiry Date</span>
+                    <p className="mt-1 font-bold text-slate-900">
+                      {isUnlimitedPlan(currentPlan) ? 'Unlimited (No Expiry)' : formatDate(currentPlan.end_date)}
+                    </p>
+                  </div>
+                </div>
+
+                {(() => {
+                  const lines = getPlanFeatureLines(currentPlan);
+                  if (!lines.length) return null;
+                  return (
+                    <div className="mt-6 border-t border-slate-100 pt-6">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-3">Plan Limits &amp; Entitlements</p>
+                      <ul className="space-y-2">
+                        {lines.map((line, i) => (
+                          <li key={i} className="flex items-center gap-2 text-xs text-slate-700 font-medium">
+                            <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                            <span>{line}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })()}
+
+                <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-6">
+                  {!isUnlimitedPlan(currentPlan) && currentPlan.price && Number(currentPlan.price) > 0 && (
+                    <button
+                      onClick={handleRenewPlan}
+                      disabled={renewLoading}
+                      className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-emerald-500 transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
+                    >
+                      {renewLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                      Renew Plan (+{currentPlan.duration_label || `${currentPlan.duration_days} days`})
+                    </button>
+                  )}
                   <button
-                    onClick={handleRenewPlan}
-                    disabled={renewLoading}
-                    className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-emerald-500 transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
+                    onClick={() => setPlanViewMode('upgrade')}
+                    className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-indigo-500 transition-colors cursor-pointer shadow-xs"
                   >
-                    {renewLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                    Renew Plan (+{currentPlan.duration_label || `${currentPlan.duration_days} days`})
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Upgrade or Change Plan
                   </button>
-                )}
-                <button
-                  onClick={() => navigate('/plans')}
-                  className="rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-indigo-500 transition-colors cursor-pointer shadow-xs"
-                >
-                  Upgrade or Change Plan
-                </button>
-              </div>
-            </Card>
-          ) : (
-            <Card className="text-center py-12">
-              <p className="text-sm text-slate-600 font-medium">You do not have an active plan assigned.</p>
-              <button
-                onClick={() => navigate('/plans')}
-                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-indigo-500 shadow-xs"
-              >
-                Choose a Plan
-                <ArrowRight className="h-4 w-4" />
-              </button>
-            </Card>
-          )}
-        </div>
+                  <button
+                    onClick={() => navigate('/transactions')}
+                    className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer shadow-xs"
+                  >
+                    <Receipt className="h-3.5 w-3.5 text-slate-500" />
+                    Invoices &amp; Billing History
+                  </button>
+                </div>
+              </Card>
+            ) : (
+              <Card className="text-center py-12">
+                <p className="text-sm text-slate-600 font-medium">You do not have an active plan assigned.</p>
+                <div className="mt-4 flex items-center justify-center gap-3">
+                  <button
+                    onClick={() => setPlanViewMode('upgrade')}
+                    className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-indigo-500 shadow-xs cursor-pointer"
+                  >
+                    Choose a Plan
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => navigate('/transactions')}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-xs cursor-pointer"
+                  >
+                    <Receipt className="h-3.5 w-3.5 text-slate-500" />
+                    Invoices &amp; Billing History
+                  </button>
+                </div>
+              </Card>
+            )}
+          </div>
+        )
       )}
     </div>
   );

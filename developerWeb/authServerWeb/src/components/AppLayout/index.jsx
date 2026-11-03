@@ -49,13 +49,7 @@ const AppLayout = () => {
       />
       <Route
         path="/plans"
-        element={
-          <PrivateRoute>
-            <PortalLayout title="Plans & Quotas">
-              <Plans />
-            </PortalLayout>
-          </PrivateRoute>
-        }
+        element={<Navigate to="/settings?tab=plan&action=upgrade" replace />}
       />
       <Route
         path="/settings"

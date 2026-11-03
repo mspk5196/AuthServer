@@ -295,7 +295,7 @@ const Dashboard = () => {
 
             <div className="mt-6 pt-4 border-t border-slate-100">
               <Link
-                to="/plans"
+                to="/settings?tab=plan&action=upgrade"
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-50 border border-indigo-200 px-4 py-2.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition-colors"
               >
                 <CreditCard className="h-4 w-4" />

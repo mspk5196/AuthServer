@@ -27,7 +27,6 @@ export default function PortalSidebar({ isOpen, onClose }) {
   const navItems = [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { label: 'Usage & Stats', path: '/usage', icon: Activity },
-    { label: 'Plans & Billing', path: '/plans', icon: CreditCard },
     { label: 'Transactions', path: '/transactions', icon: Receipt },
     { label: 'Account Settings', path: '/settings', icon: Settings },
     { label: 'Send Feedback', path: '/feedback', icon: MessageSquare },

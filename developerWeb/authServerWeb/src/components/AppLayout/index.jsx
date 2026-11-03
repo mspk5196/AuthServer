@@ -1,7 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import PrivateRoute from '../PrivateRoute';
 import PublicLayout from '../Layout/PublicLayout';
-import PortalLayout from '../Layout/PortalLayout';
+import PortalLayout from '../Layout/PortalLayout'; 
 import Home from '../../pages/Home';
 import Login from '../../pages/Login';
 import Register from '../../pages/Register';

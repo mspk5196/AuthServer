@@ -332,9 +332,12 @@ const Settings = () => {
   };
 
   const handleRequestPasswordChange = async (overrideCode) => {
-    // If MFA is enabled and no code provided yet, open 2FA modal
+    // Ensure overrideCode is a string (and not a React SyntheticEvent when triggered from onClick)
+    const codeString = typeof overrideCode === 'string' ? overrideCode.trim() : null;
     const isMfaActive = mfaStatus?.enabled || developer?.mfa_enabled;
-    if (isMfaActive && !overrideCode) {
+
+    // If MFA is enabled and no code provided yet, open 2FA modal
+    if (isMfaActive && !codeString) {
       setShowPasswordMfaModal(true);
       setPasswordMfaCode('');
       setPasswordMfaError('');
@@ -345,16 +348,18 @@ const Settings = () => {
     setMessage({ type: '', text: '' });
 
     try {
-      const payload = overrideCode ? { mfa_code: overrideCode } : {};
+      const payload = codeString ? { mfa_code: codeString } : {};
       const response = await api.post('/developer/request-password-change', payload);
       setMessage({
         type: 'success',
         text: response.message || 'Password change link sent to your registered email address.'
       });
       setShowPasswordMfaModal(false);
+      setPasswordMfaCode('');
+      setPasswordMfaError('');
     } catch (error) {
       console.error('Request password change error:', error);
-      if (overrideCode) {
+      if (codeString) {
         setPasswordMfaError(error.message || 'Invalid two-factor authentication code');
       } else {
         setMessage({ type: 'error', text: error.message || 'Failed to send password change link' });
@@ -653,7 +658,7 @@ const Settings = () => {
 
             <button
               type="button"
-              onClick={handleRequestPasswordChange}
+              onClick={() => handleRequestPasswordChange()}
               disabled={loading}
               className="mt-2 flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-indigo-500 transition-colors disabled:opacity-50 cursor-pointer"
             >

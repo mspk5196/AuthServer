@@ -93,12 +93,14 @@ const developerPrefixes = Array.from(new Set([
   `/api/${API_VERSION}/developer`,
   '/api/v1/developer',
   '/api/v2/developer',
+  '/api/developer',
 ]));
 
 const cpanelPrefixes = Array.from(new Set([
   `/api/${API_VERSION}/cpanel`,
   '/api/v1/cpanel',
   '/api/v2/cpanel',
+  '/api/cpanel',
 ]));
 
 developerPrefixes.forEach((prefix) => {

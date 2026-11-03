@@ -149,8 +149,9 @@ const Settings = () => {
     try {
       setMfaLoading(true);
       const res = await authService.getMFAStatus();
-      if (res?.data) {
-        setMfaStatus(res.data);
+      const statusData = res?.data || res;
+      if (statusData && typeof statusData.mfa_enabled !== 'undefined') {
+        setMfaStatus(statusData);
       }
     } catch (err) {
       console.error('Failed to fetch MFA status:', err);
@@ -164,9 +165,13 @@ const Settings = () => {
       setMfaActionLoading(true);
       setMfaMsg({ type: '', text: '' });
       const res = await authService.setupMFA();
-      if (res?.data) {
-        setMfaSetupData(res.data);
+      const setupData = res?.data || res;
+      if (setupData?.secret || setupData?.qrCodeUrl) {
+        setMfaSetupData(setupData);
         setMfaConfirmCode('');
+      } else {
+        console.error('Unexpected setup response:', res);
+        setMfaMsg({ type: 'error', text: 'Could not load QR code. Please try again.' });
       }
     } catch (err) {
       setMfaMsg({ type: 'error', text: err?.message || 'Failed to initiate MFA setup' });
@@ -223,8 +228,9 @@ const Settings = () => {
       setMfaActionLoading(true);
       setMfaMsg({ type: '', text: '' });
       const res = await authService.regenerateBackupCodes(regenPassword);
-      if (res?.data?.backupCodes) {
-        setNewBackupCodes(res.data.backupCodes);
+      const regenData = res?.data || res;
+      if (regenData?.backupCodes) {
+        setNewBackupCodes(regenData.backupCodes);
         setRegenPassword('');
         fetchMFAStatus();
       }

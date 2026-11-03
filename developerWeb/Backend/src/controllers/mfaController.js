@@ -12,6 +12,33 @@ const {
   verifyBackupCode
 } = require('../utils/totp');
 
+
+const ensureMfaTable = async () => {
+  try {
+    await pool.query(`
+      CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+      CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+      ALTER TABLE "public"."developers" ADD COLUMN IF NOT EXISTS "mfa_enabled" BOOLEAN NOT NULL DEFAULT FALSE;
+      CREATE TABLE IF NOT EXISTS "public"."dev_mfa_settings" (
+        "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        "developer_id" UUID NOT NULL REFERENCES "public"."developers"("id") ON DELETE CASCADE,
+        "mfa_enabled" BOOLEAN NOT NULL DEFAULT FALSE,
+        "secret_encrypted" TEXT,
+        "backup_codes" JSONB DEFAULT '[]'::jsonb,
+        "pending_secret" TEXT,
+        "confirmed_at" TIMESTAMP(6),
+        "created_at" TIMESTAMP(6) DEFAULT NOW(),
+        "updated_at" TIMESTAMP(6) DEFAULT NOW(),
+        CONSTRAINT "uq_dev_mfa_developer" UNIQUE ("developer_id")
+      );
+      CREATE INDEX IF NOT EXISTS "idx_dev_mfa_developer_id" ON "public"."dev_mfa_settings"("developer_id");
+    `);
+  } catch (err) {
+    console.error('ensureMfaTable check:', err.message);
+  }
+};
+ensureMfaTable();
+
 const parseExpiryToMs = (str) => {
   if (!str) return undefined;
   if (/^\d+$/.test(str)) return parseInt(str, 10) * 1000;
@@ -33,7 +60,7 @@ const parseExpiryToMs = (str) => {
  */
 exports.setupMFA = async (req, res) => {
   try {
-    const developerId = req.user?.userId || req.user?.id;
+    const developerId = req.user?.userId || req.user?.developerId || req.user?.id || req.user?.user_id;
     if (!developerId) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
@@ -96,7 +123,7 @@ exports.setupMFA = async (req, res) => {
  */
 exports.confirmMFA = async (req, res) => {
   try {
-    const developerId = req.user?.userId || req.user?.id;
+    const developerId = req.user?.userId || req.user?.developerId || req.user?.id || req.user?.user_id;
     const { code } = req.body;
 
     if (!code) {
@@ -320,7 +347,7 @@ exports.verifyMFALogin = async (req, res) => {
  */
 exports.getMFAStatus = async (req, res) => {
   try {
-    const developerId = req.user?.userId || req.user?.id;
+    const developerId = req.user?.userId || req.user?.developerId || req.user?.id || req.user?.user_id;
     const result = await pool.query(
       'SELECT mfa_enabled, confirmed_at, backup_codes FROM dev_mfa_settings WHERE developer_id = $1',
       [developerId]
@@ -361,7 +388,7 @@ exports.getMFAStatus = async (req, res) => {
  */
 exports.disableMFA = async (req, res) => {
   try {
-    const developerId = req.user?.userId || req.user?.id;
+    const developerId = req.user?.userId || req.user?.developerId || req.user?.id || req.user?.user_id;
     const { password } = req.body;
 
     if (!password) {
@@ -414,7 +441,7 @@ exports.disableMFA = async (req, res) => {
  */
 exports.regenerateBackupCodes = async (req, res) => {
   try {
-    const developerId = req.user?.userId || req.user?.id;
+    const developerId = req.user?.userId || req.user?.developerId || req.user?.id || req.user?.user_id;
     const { password } = req.body;
 
     if (!password) {

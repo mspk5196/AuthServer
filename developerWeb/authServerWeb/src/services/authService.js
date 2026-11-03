@@ -60,13 +60,13 @@ export const authService = {
   // Get MFA Status
   getMFAStatus: async () => {
     const response = await api.get('/developer/mfa/status');
-    return response.data || response;
+    return response;
   },
 
   // Setup MFA (get QR code & secret & backup codes)
   setupMFA: async () => {
     const response = await api.post('/developer/mfa/setup', {});
-    return response.data || response;
+    return response;
   },
 
   // Confirm MFA with first TOTP code
@@ -84,7 +84,7 @@ export const authService = {
   // Regenerate Backup Codes (requires password)
   regenerateBackupCodes: async (password) => {
     const response = await api.post('/developer/mfa/backup-codes/regenerate', { password });
-    return response.data || response;
+    return response;
   },
 
   // Logout developer

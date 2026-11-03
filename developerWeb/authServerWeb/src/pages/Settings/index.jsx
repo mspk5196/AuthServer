@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../utils/api';
+import { authService } from '../../services/authService';
 import paymentService from '../../services/paymentService';
 import PlanSelection from '../../components/PlanSelection';
 import Card from '../../components/UI/Card';
 import Badge from '../../components/UI/Badge';
+import Modal from '../../components/Modal';
 import {
   User,
   AtSign,
@@ -21,7 +23,12 @@ import {
   ArrowLeft,
   ShieldCheck,
   Receipt,
-  Check
+  Check,
+  QrCode,
+  Key,
+  Copy,
+  Download,
+  RefreshCw
 } from 'lucide-react';
 
 const getPlanFeatureLines = (plan) => {
@@ -60,6 +67,21 @@ const Settings = () => {
     email: ''
   });
 
+  // MFA States
+  const [mfaStatus, setMfaStatus] = useState({ mfa_enabled: false, confirmed_at: null, remainingBackupCodes: 0 });
+  const [mfaLoading, setMfaLoading] = useState(false);
+  const [mfaSetupData, setMfaSetupData] = useState(null);
+  const [mfaConfirmCode, setMfaConfirmCode] = useState('');
+  const [mfaActionLoading, setMfaActionLoading] = useState(false);
+  const [mfaMsg, setMfaMsg] = useState({ type: '', text: '' });
+  const [showDisableModal, setShowDisableModal] = useState(false);
+  const [disablePassword, setDisablePassword] = useState('');
+  const [showRegenModal, setShowRegenModal] = useState(false);
+  const [regenPassword, setRegenPassword] = useState('');
+  const [newBackupCodes, setNewBackupCodes] = useState(null);
+  const [copiedCodes, setCopiedCodes] = useState(false);
+  const [copiedKey, setCopiedKey] = useState(false);
+
   useEffect(() => {
     if (developer) {
       setProfileForm({
@@ -67,6 +89,7 @@ const Settings = () => {
         username: developer.username || '',
         email: developer.email || ''
       });
+      fetchMFAStatus();
     }
     fetchCurrentPlan();
 
@@ -84,6 +107,8 @@ const Settings = () => {
       setActiveTab('password');
     } else if (tabParam === 'profile') {
       setActiveTab('profile');
+    } else if (tabParam === 'mfa' || tabParam === '2fa' || tabParam === 'security') {
+      setActiveTab('mfa');
     }
 
     if (paymentParam === 'success') {
@@ -118,6 +143,115 @@ const Settings = () => {
     } catch (error) {
       console.error('Failed to fetch plan:', error);
     }
+  };
+
+  const fetchMFAStatus = async () => {
+    try {
+      setMfaLoading(true);
+      const res = await authService.getMFAStatus();
+      if (res?.data) {
+        setMfaStatus(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch MFA status:', err);
+    } finally {
+      setMfaLoading(false);
+    }
+  };
+
+  const handleStartMFASetup = async () => {
+    try {
+      setMfaActionLoading(true);
+      setMfaMsg({ type: '', text: '' });
+      const res = await authService.setupMFA();
+      if (res?.data) {
+        setMfaSetupData(res.data);
+        setMfaConfirmCode('');
+      }
+    } catch (err) {
+      setMfaMsg({ type: 'error', text: err?.message || 'Failed to initiate MFA setup' });
+    } finally {
+      setMfaActionLoading(false);
+    }
+  };
+
+  const handleConfirmMFASetup = async (e) => {
+    e.preventDefault();
+    if (!mfaConfirmCode.trim()) return;
+    try {
+      setMfaActionLoading(true);
+      setMfaMsg({ type: '', text: '' });
+      const res = await authService.confirmMFA(mfaConfirmCode.trim());
+      if (res?.success) {
+        setMfaMsg({ type: 'success', text: 'Two-factor authentication successfully activated!' });
+        setMfaSetupData(null);
+        fetchMFAStatus();
+        updateDeveloper({ mfa_enabled: true });
+      }
+    } catch (err) {
+      setMfaMsg({ type: 'error', text: err?.message || 'Invalid verification code' });
+    } finally {
+      setMfaActionLoading(false);
+    }
+  };
+
+  const handleDisableMFA = async (e) => {
+    e.preventDefault();
+    if (!disablePassword) return;
+    try {
+      setMfaActionLoading(true);
+      setMfaMsg({ type: '', text: '' });
+      const res = await authService.disableMFA(disablePassword);
+      if (res?.success) {
+        setShowDisableModal(false);
+        setDisablePassword('');
+        setMfaMsg({ type: 'success', text: 'Two-factor authentication has been disabled.' });
+        fetchMFAStatus();
+        updateDeveloper({ mfa_enabled: false });
+      }
+    } catch (err) {
+      setMfaMsg({ type: 'error', text: err?.message || 'Failed to disable MFA. Please check your password.' });
+    } finally {
+      setMfaActionLoading(false);
+    }
+  };
+
+  const handleRegenerateBackupCodes = async (e) => {
+    e.preventDefault();
+    if (!regenPassword) return;
+    try {
+      setMfaActionLoading(true);
+      setMfaMsg({ type: '', text: '' });
+      const res = await authService.regenerateBackupCodes(regenPassword);
+      if (res?.data?.backupCodes) {
+        setNewBackupCodes(res.data.backupCodes);
+        setRegenPassword('');
+        fetchMFAStatus();
+      }
+    } catch (err) {
+      setMfaMsg({ type: 'error', text: err?.message || 'Failed to regenerate backup codes' });
+    } finally {
+      setMfaActionLoading(false);
+    }
+  };
+
+  const handleCopyBackupCodes = (codes) => {
+    if (!codes || !codes.length) return;
+    navigator.clipboard.writeText(codes.join('\n'));
+    setCopiedCodes(true);
+    setTimeout(() => setCopiedCodes(false), 2000);
+  };
+
+  const handleDownloadBackupCodes = (codes) => {
+    if (!codes || !codes.length) return;
+    const text = `MSPK DEVELOPER PORTAL - 2FA RECOVERY BACKUP CODES\nGenerated: ${new Date().toLocaleString()}\nAccount: ${developer?.email}\n\nEach code can be used once if you lose access to your authenticator app:\n\n${codes.map((c, i) => `${i + 1}. ${c}`).join('\n')}\n\nKeep these codes in a secure, confidential location.\n`;
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mspk-2fa-recovery-codes-${developer?.username || 'developer'}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleProfileUpdate = async (e) => {
@@ -276,6 +410,17 @@ const Settings = () => {
         >
           <CreditCard className="h-4 w-4" />
           Plan &amp; Billing
+        </button>
+        <button
+          onClick={() => setActiveTab('mfa')}
+          className={`flex items-center gap-2 px-4 py-3 text-sm font-bold border-b-2 transition-colors cursor-pointer ${
+            activeTab === 'mfa'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <ShieldCheck className="h-4 w-4" />
+          Two-Factor Auth
         </button>
       </div>
 
@@ -599,6 +744,401 @@ const Settings = () => {
             )}
           </div>
         )
+      )}
+
+      {/* Tab 4: Two-Factor Authentication */}
+      {activeTab === 'mfa' && (
+        <div className="space-y-6 max-w-3xl">
+          {mfaMsg.text && (
+            <div
+              className={`flex items-start gap-2.5 rounded-2xl border p-4 text-xs font-semibold ${
+                mfaMsg.type === 'error'
+                  ? 'border-rose-200 bg-rose-50 text-rose-700'
+                  : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+              }`}
+            >
+              {mfaMsg.type === 'error' ? (
+                <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+              )}
+              <span>{mfaMsg.text}</span>
+            </div>
+          )}
+
+          {mfaStatus.mfa_enabled ? (
+            /* Active 2FA State */
+            <Card>
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600">
+                    <ShieldCheck className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">Two-Factor Authentication is Active</h3>
+                    <p className="text-xs text-slate-500 font-medium">
+                      Your account is protected with standard TOTP authenticator verification.
+                    </p>
+                  </div>
+                </div>
+                <Badge variant="success" size="md">
+                  Enabled
+                </Badge>
+              </div>
+
+              <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <span className="text-slate-500 font-medium">Activated On</span>
+                  <p className="mt-1 font-bold text-slate-900">{formatDate(mfaStatus.confirmed_at)}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <span className="text-slate-500 font-medium">Backup Recovery Codes</span>
+                  <p className="mt-1 font-bold text-slate-900">
+                    {mfaStatus.remainingBackupCodes} of 8 codes remaining
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowRegenModal(true);
+                    setRegenPassword('');
+                    setNewBackupCodes(null);
+                  }}
+                  className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer shadow-xs"
+                >
+                  <RefreshCw className="h-3.5 w-3.5 text-slate-500" />
+                  Regenerate Backup Codes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDisableModal(true);
+                    setDisablePassword('');
+                  }}
+                  className="flex items-center gap-2 rounded-xl bg-rose-50 border border-rose-200 px-4 py-2.5 text-xs font-bold text-rose-700 hover:bg-rose-100 transition-colors cursor-pointer shadow-xs"
+                >
+                  <Lock className="h-3.5 w-3.5 text-rose-600" />
+                  Disable Two-Factor Auth
+                </button>
+              </div>
+            </Card>
+          ) : mfaSetupData ? (
+            /* Setup Wizard Mode */
+            <Card>
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Set Up Two-Factor Authentication</h3>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                    Follow the 3 steps below to connect your authenticator app.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMfaSetupData(null)}
+                  className="text-xs font-bold text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  Cancel Setup
+                </button>
+              </div>
+
+              <div className="mt-6 space-y-6 text-xs">
+                {/* Step 1: Scan QR */}
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 space-y-4">
+                  <div className="flex items-center gap-2 font-bold text-slate-900 text-sm">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-white text-xs">1</span>
+                    Scan QR code with your Authenticator app
+                  </div>
+                  <p className="text-slate-600 leading-relaxed font-medium">
+                    Open Google Authenticator, Microsoft Authenticator, Authy, or Apple Passwords on your mobile device and scan the QR code below:
+                  </p>
+                  <div className="flex flex-col sm:flex-row items-center gap-6 pt-2">
+                    <div className="p-3 bg-white border border-slate-200 rounded-2xl shadow-sm">
+                      <img
+                        src={mfaSetupData.qrCodeUrl}
+                        alt="2FA QR Code"
+                        className="w-44 h-44 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-2 max-w-sm text-center sm:text-left">
+                      <p className="text-slate-500 font-medium">Can't scan the QR code? Enter this secret key manually into your app:</p>
+                      <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl p-2 font-mono text-xs font-bold text-slate-800 break-all select-all">
+                        <Key className="h-4 w-4 text-indigo-600 shrink-0" />
+                        <span>{mfaSetupData.secret}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(mfaSetupData.secret);
+                          setCopiedKey(true);
+                          setTimeout(() => setCopiedKey(false), 2000);
+                        }}
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 cursor-pointer"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        {copiedKey ? 'Copied to Clipboard!' : 'Copy Key'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Step 2: Backup Codes */}
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-5 space-y-4">
+                  <div className="flex items-center gap-2 font-bold text-amber-900 text-sm">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-600 text-white text-xs">2</span>
+                    Save your emergency recovery backup codes
+                  </div>
+                  <p className="text-amber-800 leading-relaxed font-medium">
+                    If you lose access to your phone or authenticator app, these one-time recovery codes are the <strong>only way</strong> to regain access to your developer account. Keep them secure!
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-xs font-bold text-slate-900 bg-white border border-amber-200 rounded-xl p-3 text-center">
+                    {mfaSetupData.backupCodes?.map((code, idx) => (
+                      <div key={idx} className="p-1.5 bg-slate-50 rounded border border-slate-100">
+                        {code}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => handleCopyBackupCodes(mfaSetupData.backupCodes)}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-900 hover:bg-amber-100 transition-colors cursor-pointer shadow-xs"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      {copiedCodes ? 'Copied All Codes!' : 'Copy All Codes'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadBackupCodes(mfaSetupData.backupCodes)}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-900 hover:bg-amber-100 transition-colors cursor-pointer shadow-xs"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      Download as .TXT
+                    </button>
+                  </div>
+                </div>
+
+                {/* Step 3: Confirm Code */}
+                <form onSubmit={handleConfirmMFASetup} className="rounded-2xl border border-slate-200 bg-slate-50 p-5 space-y-4">
+                  <div className="flex items-center gap-2 font-bold text-slate-900 text-sm">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-white text-xs">3</span>
+                    Verify code from your Authenticator app
+                  </div>
+                  <p className="text-slate-600 leading-relaxed font-medium">
+                    Enter the 6-digit code currently showing in your authenticator app to verify the setup:
+                  </p>
+                  <div className="flex flex-col sm:flex-row items-center gap-3">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={6}
+                      autoFocus
+                      value={mfaConfirmCode}
+                      onChange={(e) => setMfaConfirmCode(e.target.value)}
+                      placeholder="123456"
+                      className="w-full sm:w-48 text-center tracking-widest font-mono text-xl font-bold py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      required
+                    />
+                    <button
+                      type="submit"
+                      disabled={mfaActionLoading || mfaConfirmCode.length !== 6}
+                      className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-indigo-500 transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      {mfaActionLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                      Activate Two-Factor Authentication
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </Card>
+          ) : (
+            /* Unenrolled State */
+            <Card>
+              <div className="flex items-start gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-600">
+                  <ShieldCheck className="h-6 w-6" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900 tracking-tight">Two-Factor Authentication (2FA)</h2>
+                  <p className="mt-1 text-xs text-slate-500 leading-relaxed font-medium">
+                    Two-Factor Authentication adds an extra layer of protection to your developer account. In addition to your password, you will be required to provide a 6-digit code from an Authenticator app (like Google Authenticator or Authy) when logging in.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 border-t border-slate-100 pt-6 space-y-3">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Security Benefits</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div className="flex items-start gap-2.5 p-3 rounded-xl border border-slate-100 bg-slate-50">
+                    <Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span className="text-slate-700 font-medium">Protects API credentials, apps, and billing from unauthorized access.</span>
+                  </div>
+                  <div className="flex items-start gap-2.5 p-3 rounded-xl border border-slate-100 bg-slate-50">
+                    <Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span className="text-slate-700 font-medium">Compatible with Google Authenticator, Microsoft Authenticator, and Authy.</span>
+                  </div>
+                  <div className="flex items-start gap-2.5 p-3 rounded-xl border border-slate-100 bg-slate-50">
+                    <Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span className="text-slate-700 font-medium">8 emergency recovery backup codes in case you misplace your device.</span>
+                  </div>
+                  <div className="flex items-start gap-2.5 p-3 rounded-xl border border-slate-100 bg-slate-50">
+                    <Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span className="text-slate-700 font-medium">Industry-standard RFC 6238 TOTP cryptographic security.</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-8 border-t border-slate-100 pt-6">
+                <button
+                  type="button"
+                  onClick={handleStartMFASetup}
+                  disabled={mfaActionLoading}
+                  className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-indigo-500 transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  {mfaActionLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Enable Two-Factor Authentication
+                </button>
+              </div>
+            </Card>
+          )}
+
+          {/* Modal: Disable 2FA */}
+          <Modal
+            isOpen={showDisableModal}
+            onClose={() => setShowDisableModal(false)}
+            title="Disable Two-Factor Authentication"
+          >
+            <form onSubmit={handleDisableMFA} className="space-y-4">
+              <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                Disabling 2FA makes your developer account less secure. Please enter your account password to confirm:
+              </p>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                  Account Password
+                </label>
+                <input
+                  type="password"
+                  value={disablePassword}
+                  onChange={(e) => setDisablePassword(e.target.value)}
+                  placeholder="Enter your account password"
+                  required
+                  className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 px-3.5 text-xs text-slate-900 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 font-medium"
+                />
+              </div>
+              <div className="pt-2 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowDisableModal(false)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={mfaActionLoading || !disablePassword}
+                  className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 rounded-xl transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
+                >
+                  {mfaActionLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Confirm &amp; Disable 2FA
+                </button>
+              </div>
+            </form>
+          </Modal>
+
+          {/* Modal: Regenerate Backup Codes */}
+          <Modal
+            isOpen={showRegenModal}
+            onClose={() => {
+              setShowRegenModal(false);
+              setNewBackupCodes(null);
+            }}
+            title="Regenerate Backup Recovery Codes"
+          >
+            {newBackupCodes ? (
+              <div className="space-y-4">
+                <p className="text-xs text-emerald-700 font-semibold">
+                  New backup codes generated! Your old recovery codes are now invalid.
+                </p>
+                <div className="grid grid-cols-2 gap-2 font-mono text-xs font-bold text-slate-900 bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
+                  {newBackupCodes.map((code, idx) => (
+                    <div key={idx} className="p-1.5 bg-white rounded border border-slate-200">
+                      {code}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between pt-2">
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleCopyBackupCodes(newBackupCodes)}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-xs cursor-pointer"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      {copiedCodes ? 'Copied!' : 'Copy All'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadBackupCodes(newBackupCodes)}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-xs cursor-pointer"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      Download TXT
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowRegenModal(false);
+                      setNewBackupCodes(null);
+                    }}
+                    className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl cursor-pointer"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleRegenerateBackupCodes} className="space-y-4">
+                <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                  Generating new backup codes will invalidate any existing recovery codes. Enter your password to continue:
+                </p>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                    Account Password
+                  </label>
+                  <input
+                    type="password"
+                    value={regenPassword}
+                    onChange={(e) => setRegenPassword(e.target.value)}
+                    placeholder="Enter your account password"
+                    required
+                    className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 px-3.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium"
+                  />
+                </div>
+                <div className="pt-2 flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowRegenModal(false)}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={mfaActionLoading || !regenPassword}
+                    className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
+                  >
+                    {mfaActionLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    Generate New Codes
+                  </button>
+                </div>
+              </form>
+            )}
+          </Modal>
+        </div>
       )}
     </div>
   );

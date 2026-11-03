@@ -483,6 +483,39 @@ const developerLogin = async (req, res) => {
       // If policy tables are missing or another error occurs, do not block login.
     }
 
+    // Check if MFA is enabled for this developer
+    let isMfaEnabled = false;
+    try {
+      const mfaCheck = await pool.query(
+        'SELECT mfa_enabled FROM dev_mfa_settings WHERE developer_id = $1',
+        [developer.id]
+      );
+      isMfaEnabled = developer.mfa_enabled === true || (mfaCheck.rows.length > 0 && mfaCheck.rows[0].mfa_enabled === true);
+    } catch (mfaErr) {
+      isMfaEnabled = developer.mfa_enabled === true;
+    }
+
+    if (isMfaEnabled) {
+      // Issue short-lived MFA challenge token (valid for 5 minutes)
+      const mfaToken = jwt.sign(
+        {
+          developerId: developer.id,
+          email: developer.email,
+          purpose: 'dev_mfa_challenge'
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: '5m' }
+      );
+
+      return res.status(200).json({
+        success: true,
+        mfa_required: true,
+        mfa_token: mfaToken,
+        methods: ['totp', 'backup_code'],
+        message: 'Two-factor authentication code required'
+      });
+    }
+
     // Reset failed login attempts on successful login
     await pool.query(
       'UPDATE developers SET failed_login_attempts = 0, locked_until = NULL, updated_at = NOW() WHERE id = $1',
@@ -1775,6 +1808,25 @@ const googleCallback = async (req, res) => {
     const policyCheck = await checkDeveloperPoliciesForOAuth(developer);
     if (policyCheck.blocked && policyCheck.redirectTo) {
       return res.redirect(policyCheck.redirectTo);
+    }
+
+    // Check if MFA is enabled for this developer
+    try {
+      const mfaCheck = await pool.query(
+        'SELECT mfa_enabled FROM dev_mfa_settings WHERE developer_id = $1',
+        [developer.id]
+      );
+      const isMfaEnabled = developer.mfa_enabled === true || (mfaCheck.rows.length > 0 && mfaCheck.rows[0].mfa_enabled === true);
+      if (isMfaEnabled) {
+        const mfaToken = jwt.sign(
+          { developerId: developer.id, email: developer.email, purpose: 'dev_mfa_challenge' },
+          process.env.JWT_SECRET,
+          { expiresIn: '5m' }
+        );
+        return res.redirect(`${process.env.FRONTEND_URL}/login?mfa_required=true&mfa_token=${encodeURIComponent(mfaToken)}`);
+      }
+    } catch (e) {
+      console.warn('MFA check in Google OAuth failed:', e.message);
     }
 
     // Track login history

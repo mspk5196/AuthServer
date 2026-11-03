@@ -4,6 +4,7 @@ const { authenticateToken } = require('../middleware/auth');
 
 const { verifyDeveloper } = require('../controllers/verifyDeveloper.js');
 const authController = require('../controllers/authController');
+const mfaController = require('../controllers/mfaController');
 const planController = require('../controllers/planController');
 const dashboardController = require('../controllers/dashboardController');
 const profileController = require('../controllers/profileController');
@@ -20,6 +21,9 @@ router.post('/exchange-tokens', authController.exchangeOAuthTokens);
 router.post('/resend-verification', authController.resendVerificationEmail);
 router.get('/verify', verifyDeveloper);
 router.get('/verify-email-update', profileController.verifyEmailUpdate);
+
+// MFA login verification - public (validates mfa_token)
+router.post('/mfa/verify-login', mfaController.verifyMFALogin);
 
 // Public policies route (DB-backed policies for terms/privacy/refund)
 router.get('/policies', policyController.getActivePolicies);
@@ -72,5 +76,12 @@ router.post('/payment/create-order', paymentController.createOrder);
 router.post('/payment/verify', paymentController.verifyPayment);
 router.post('/payment/check-status/:orderId', paymentController.checkOrderStatus);
 router.get('/payment/history', paymentController.getPaymentHistory);
+
+// MFA settings & configuration (authenticated)
+router.get('/mfa/status', mfaController.getMFAStatus);
+router.post('/mfa/setup', mfaController.setupMFA);
+router.post('/mfa/confirm', mfaController.confirmMFA);
+router.post('/mfa/disable', mfaController.disableMFA);
+router.post('/mfa/backup-codes/regenerate', mfaController.regenerateBackupCodes);
 
 module.exports = router;

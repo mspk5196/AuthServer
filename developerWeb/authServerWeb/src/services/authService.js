@@ -26,8 +26,13 @@ export const authService = {
   login: async (credentials) => {
     const response = await api.post('/developer/login', credentials);
     
-    // Expect backend to set httpOnly cookies for access/refresh tokens.
-    // Do not store tokens in frontend. Normalize developer/user payload below.
+    if (response?.mfa_required) {
+      return {
+        mfa_required: true,
+        mfa_token: response.mfa_token,
+        methods: response.methods || ['totp', 'backup_code']
+      };
+    }
 
     // Normalize developer/user payload
     const developer =
@@ -38,6 +43,48 @@ export const authService = {
       null;
 
     return { developer };
+  },
+
+  // Verify MFA during login
+  verifyMFALogin: async ({ mfa_token, code, type = 'totp' }) => {
+    const response = await api.post('/developer/mfa/verify-login', { mfa_token, code, type });
+    const developer =
+      response?.data?.user ||
+      response?.data?.developer ||
+      response?.developer ||
+      response?.user ||
+      null;
+    return { success: true, developer };
+  },
+
+  // Get MFA Status
+  getMFAStatus: async () => {
+    const response = await api.get('/developer/mfa/status');
+    return response.data || response;
+  },
+
+  // Setup MFA (get QR code & secret & backup codes)
+  setupMFA: async () => {
+    const response = await api.post('/developer/mfa/setup', {});
+    return response.data || response;
+  },
+
+  // Confirm MFA with first TOTP code
+  confirmMFA: async (code) => {
+    const response = await api.post('/developer/mfa/confirm', { code });
+    return response;
+  },
+
+  // Disable MFA (requires password)
+  disableMFA: async (password) => {
+    const response = await api.post('/developer/mfa/disable', { password });
+    return response;
+  },
+
+  // Regenerate Backup Codes (requires password)
+  regenerateBackupCodes: async (password) => {
+    const response = await api.post('/developer/mfa/backup-codes/regenerate', { password });
+    return response.data || response;
   },
 
   // Logout developer

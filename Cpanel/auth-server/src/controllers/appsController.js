@@ -953,7 +953,7 @@ const getAppSummary = async (req, res) => {
     try {
       q = await pool.query(`
         SELECT a.id, a.app_name, a.allow_google_signin, a.allow_email_signin, a.support_email, a.support_email_verified,
-          a.mail_sent_count, a.mail_quota_month,
+          a.mail_sent_count, a.mail_quota_month, a.extra_fields,
           COUNT(u.id) FILTER (WHERE u.id IS NOT NULL) AS total_users,
           COUNT(u.id) FILTER (WHERE u.created_at >= NOW() - INTERVAL '30 days') AS new_users_30d
         FROM dev_apps a
@@ -965,7 +965,7 @@ const getAppSummary = async (req, res) => {
       if (queryErr.code === '42703') {
         q = await pool.query(`
           SELECT a.id, a.app_name, a.allow_google_signin, a.allow_email_signin, a.support_email, a.support_email_verified,
-            0 AS mail_sent_count, NULL AS mail_quota_month,
+            0 AS mail_sent_count, NULL AS mail_quota_month, a.extra_fields,
             COUNT(u.id) FILTER (WHERE u.id IS NOT NULL) AS total_users,
             COUNT(u.id) FILTER (WHERE u.created_at >= NOW() - INTERVAL '30 days') AS new_users_30d
           FROM dev_apps a
@@ -976,6 +976,14 @@ const getAppSummary = async (req, res) => {
       } else {
         throw queryErr;
       }
+    }
+
+    if (q.rows[0]) {
+      let extraFields = q.rows[0].extra_fields;
+      if (typeof extraFields === 'string') {
+        try { extraFields = JSON.parse(extraFields); } catch (e) { extraFields = []; }
+      }
+      q.rows[0].extra_fields = Array.isArray(extraFields) ? extraFields : [];
     }
 
     // usage this month

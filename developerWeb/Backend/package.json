@@ -13,6 +13,7 @@
   "description": "",
   "type": "commonjs",
   "dependencies": {
+    "@mspkapps/email-client": "^0.2.2",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
@@ -22,12 +23,12 @@
     "google-auth-library": "^9.0.0",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
+    "node-cron": "^3.0.3",
     "nodemailer": "^7.0.10",
     "pg": "^8.16.3",
+    "qrcode": "^1.5.4",
     "razorpay": "^2.9.6",
     "redis": "^5.9.0",
-    "node-cron": "^3.0.3",
-    "@mspkapps/email-client": "^0.2.2",
     "uuid": "^13.0.0"
   },
   "devDependencies": {

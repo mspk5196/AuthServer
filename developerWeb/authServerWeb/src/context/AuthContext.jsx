@@ -40,8 +40,19 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (credentials) => {
     const data = await authService.login(credentials);
-    // Login response may not include full developer profile; refresh from backend
-    // (session cookie based) so UI has complete data without requiring a reload.
+    if (data?.mfa_required) {
+      return data;
+    }
+    try {
+      await checkAuth();
+    } catch (e) {
+      setDeveloper(data.developer);
+    }
+    return data;
+  };
+
+  const completeMFALogin = async (mfaPayload) => {
+    const data = await authService.verifyMFALogin(mfaPayload);
     try {
       await checkAuth();
     } catch (e) {
@@ -75,6 +86,7 @@ export const AuthProvider = ({ children }) => {
     loading,
     initialized,
     login,
+    completeMFALogin,
     register,
     logout,
     checkAuth,

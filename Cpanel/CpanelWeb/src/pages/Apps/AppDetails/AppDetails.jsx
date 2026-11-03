@@ -134,7 +134,7 @@ export default function AppDetails() {
         fields.push({
           key: f.name,
           label: f.label || f.name,
-          type: f.type || (typeof val === 'object' && val !== null ? 'object' : typeof val !== 'undefined' ? typeof val : 'string'),
+          type: f.type || (val !== null && typeof val === 'object' ? 'object' : (val !== null && typeof val !== 'undefined') ? typeof val : 'string'),
           description: f.description || '',
           value: val,
           isConfigured: true
@@ -153,7 +153,7 @@ export default function AppDetails() {
         fields.push({
           key: k,
           label: k,
-          type: typeof v === 'object' && v !== null ? 'object' : typeof v !== 'undefined' ? typeof v : 'string',
+          type: v !== null && typeof v === 'object' ? 'object' : (v !== null && typeof v !== 'undefined') ? typeof v : 'string',
           description: '',
           value: v,
           isConfigured: false

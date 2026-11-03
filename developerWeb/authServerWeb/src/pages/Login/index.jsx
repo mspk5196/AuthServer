@@ -15,7 +15,8 @@ import {
   Mail,
   Lock,
   ArrowRight,
-  ExternalLink
+  ExternalLink,
+  ShieldCheck
 } from 'lucide-react';
 
 const Login = () => {
@@ -36,9 +37,16 @@ const Login = () => {
   const [oauthPolicyAccepted, setOauthPolicyAccepted] = useState(false);
   const [acceptingOAuthPolicies, setAcceptingOAuthPolicies] = useState(false);
 
+  // MFA Challenge State
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaToken, setMfaToken] = useState(null);
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaType, setMfaType] = useState('totp'); // 'totp' | 'backup_code'
+  const [mfaVerifying, setMfaVerifying] = useState(false);
+
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, checkAuth } = useAuth();
+  const { login, completeMFALogin, checkAuth } = useAuth();
 
   // Handle Google OAuth callback
   useEffect(() => {
@@ -47,6 +55,16 @@ const Login = () => {
     const refreshToken = params.get('refreshToken');
     const error = params.get('error');
     const policyToken = params.get('token');
+
+    const mfaRequiredParam = params.get('mfa_required');
+    const mfaTokenParam = params.get('mfa_token');
+
+    if (mfaRequiredParam === 'true' && mfaTokenParam) {
+      setMfaRequired(true);
+      setMfaToken(mfaTokenParam);
+      window.history.replaceState({}, '', '/login');
+      return;
+    }
 
     if (error === 'policy_not_accepted' && policyToken) {
       setOauthPolicyToken(policyToken);
@@ -121,7 +139,14 @@ const Login = () => {
 
     setLoading(true);
     try {
-      await login(formData);
+      const res = await login(formData);
+      if (res?.mfa_required) {
+        setMfaRequired(true);
+        setMfaToken(res.mfa_token);
+        setMfaCode('');
+        setMessage({ type: '', text: '' });
+        return;
+      }
       navigate('/dashboard');
     } catch (error) {
       if (error.error === 'EMAIL_NOT_VERIFIED') {
@@ -155,6 +180,30 @@ const Login = () => {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleVerifyMFA = async (e) => {
+    e.preventDefault();
+    if (!mfaCode.trim() || !mfaToken) return;
+
+    setMfaVerifying(true);
+    setMessage({ type: '', text: '' });
+
+    try {
+      await completeMFALogin({
+        mfa_token: mfaToken,
+        code: mfaCode.trim(),
+        type: mfaType
+      });
+      navigate('/dashboard');
+    } catch (err) {
+      setMessage({
+        type: 'error',
+        text: err?.message || (mfaType === 'backup_code' ? 'Invalid or already used backup code.' : 'Invalid authenticator code.')
+      });
+    } finally {
+      setMfaVerifying(false);
     }
   };
 
@@ -286,17 +335,107 @@ const Login = () => {
 
       {/* Main Login Card */}
       <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xl">
-        <div className="text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-600">
-            <LogIn className="h-6 w-6" />
+        {mfaRequired ? (
+          <div>
+            <div className="text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-600 shadow-xs">
+                <ShieldCheck className="h-7 w-7" />
+              </div>
+              <h1 className="mt-4 text-2xl font-black tracking-tight text-slate-900">
+                Two-Factor Verification
+              </h1>
+              <p className="mt-1 text-xs text-slate-500 font-medium">
+                {mfaType === 'backup_code'
+                  ? 'Enter one of your 8-character single-use emergency backup recovery codes.'
+                  : 'Enter the 6-digit verification code from your authenticator app.'}
+              </p>
+            </div>
+
+            {/* Alert Messages */}
+            {message.text && (
+              <div
+                className={`mt-6 flex items-start gap-2.5 rounded-xl border p-3.5 text-xs font-semibold ${
+                  message.type === 'error'
+                    ? 'border-rose-200 bg-rose-50 text-rose-700'
+                    : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                }`}
+              >
+                <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+                <span className="leading-relaxed">{message.text}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleVerifyMFA} className="mt-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 text-center">
+                  {mfaType === 'backup_code' ? 'Backup Recovery Code' : 'Authenticator Code'}
+                </label>
+                <div className="mt-2 relative">
+                  <input
+                    type="text"
+                    inputMode={mfaType === 'backup_code' ? 'text' : 'numeric'}
+                    pattern={mfaType === 'backup_code' ? undefined : '[0-9]*'}
+                    autoComplete="one-time-code"
+                    autoFocus
+                    maxLength={mfaType === 'backup_code' ? 9 : 6}
+                    value={mfaCode}
+                    onChange={(e) => setMfaCode(e.target.value.toUpperCase())}
+                    placeholder={mfaType === 'backup_code' ? 'XXXX-XXXX' : '123456'}
+                    className="block w-full text-center tracking-widest font-mono text-2xl font-bold py-3 rounded-2xl border border-slate-300 bg-slate-50 text-slate-900 placeholder-slate-300 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-indigo-500/10"
+                    required
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={mfaVerifying || !mfaCode.trim()}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 py-3 text-sm font-bold text-white shadow-md shadow-indigo-600/20 hover:from-indigo-500 hover:to-indigo-400 transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 cursor-pointer"
+              >
+                {mfaVerifying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
+                {mfaVerifying ? 'Verifying…' : 'Verify & Continue'}
+              </button>
+
+              <div className="pt-2 flex flex-col items-center gap-2.5 text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMfaType(mfaType === 'totp' ? 'backup_code' : 'totp');
+                    setMfaCode('');
+                    setMessage({ type: '', text: '' });
+                  }}
+                  className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                >
+                  {mfaType === 'totp' ? 'Lost your device? Use Backup Recovery Code' : 'Use Authenticator Code (TOTP)'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMfaRequired(false);
+                    setMfaToken(null);
+                    setMfaCode('');
+                    setMessage({ type: '', text: '' });
+                  }}
+                  className="text-xs font-medium text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                >
+                  ← Back to Email / Password
+                </button>
+              </div>
+            </form>
           </div>
-          <h1 className="mt-4 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
-            Welcome back
-          </h1>
-          <p className="mt-1 text-sm text-slate-500 font-medium">
-            Sign in to access your developer portal
-          </p>
-        </div>
+        ) : (
+          <div>
+            <div className="text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-600">
+                <LogIn className="h-6 w-6" />
+              </div>
+              <h1 className="mt-4 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
+                Welcome back
+              </h1>
+              <p className="mt-1 text-sm text-slate-500 font-medium">
+                Sign in to access your developer portal
+              </p>
+            </div>
 
         {/* Alert Messages */}
         {message.text && (
@@ -463,6 +602,8 @@ const Login = () => {
             Sign in with Google
           </button>
         </form>
+          </div>
+        )}
 
         <div className="mt-6 text-center text-xs text-slate-500 font-medium">
           Don't have an account?{' '}

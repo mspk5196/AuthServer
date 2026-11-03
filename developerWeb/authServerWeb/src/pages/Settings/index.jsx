@@ -82,6 +82,12 @@ const Settings = () => {
   const [copiedCodes, setCopiedCodes] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
 
+  // Email Change 2FA Verification States
+  const [showEmailMfaModal, setShowEmailMfaModal] = useState(false);
+  const [emailMfaCode, setEmailMfaCode] = useState('');
+  const [emailMfaLoading, setEmailMfaLoading] = useState(false);
+  const [emailMfaError, setEmailMfaError] = useState('');
+
   useEffect(() => {
     if (developer) {
       setProfileForm({
@@ -260,40 +266,105 @@ const Settings = () => {
     URL.revokeObjectURL(url);
   };
 
-  const handleProfileUpdate = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+  const handleProfileUpdate = async (e, mfaCodeOverride = null) => {
+    if (e && e.preventDefault) e.preventDefault();
+
+    const isEmailChanging = profileForm.email && profileForm.email !== developer?.email;
+    const isMfaActive = developer?.mfa_enabled || mfaStatus?.mfa_enabled;
+
+    // If email is changing and MFA is active on account, prompt for 2FA code
+    if (isEmailChanging && isMfaActive && !mfaCodeOverride) {
+      setEmailMfaCode('');
+      setEmailMfaError('');
+      setShowEmailMfaModal(true);
+      return;
+    }
+
+    if (mfaCodeOverride) {
+      setEmailMfaLoading(true);
+    } else {
+      setLoading(true);
+    }
     setMessage({ type: '', text: '' });
 
     try {
-      const response = await api.put('/developer/profile', profileForm);
+      const payload = {
+        ...profileForm,
+        ...(mfaCodeOverride ? { mfa_code: mfaCodeOverride } : {})
+      };
+      const response = await api.put('/developer/profile', payload);
       if (response.success) {
         updateDeveloper(response.data.developer);
         setMessage({ type: 'success', text: response.message || 'Profile updated successfully.' });
+        setShowEmailMfaModal(false);
+        setEmailMfaCode('');
       }
     } catch (error) {
-      setMessage({ type: 'error', text: error.response?.data?.message || 'Failed to update profile' });
+      if (error?.data?.mfa_required) {
+        setEmailMfaCode('');
+        setEmailMfaError('');
+        setShowEmailMfaModal(true);
+      } else {
+        const errorMsg = error?.data?.message || error?.message || 'Failed to update profile';
+        if (showEmailMfaModal) {
+          setEmailMfaError(errorMsg);
+        } else {
+          setMessage({ type: 'error', text: errorMsg });
+        }
+      }
     } finally {
       setLoading(false);
+      setEmailMfaLoading(false);
     }
   };
 
-  const handleRequestPasswordChange = async () => {
+  const handleEmailMfaConfirm = async (e) => {
+    e.preventDefault();
+    if (!emailMfaCode.trim()) return;
+    setEmailMfaError('');
+    await handleProfileUpdate(null, emailMfaCode.trim());
+  };
+
+  const handleRequestPasswordChange = async (overrideCode) => {
+    // If MFA is enabled and no code provided yet, open 2FA modal
+    const isMfaActive = mfaStatus?.enabled || developer?.mfa_enabled;
+    if (isMfaActive && !overrideCode) {
+      setShowPasswordMfaModal(true);
+      setPasswordMfaCode('');
+      setPasswordMfaError('');
+      return;
+    }
+
     setLoading(true);
     setMessage({ type: '', text: '' });
 
     try {
-      const response = await api.post('/developer/request-password-change', {});
+      const payload = overrideCode ? { mfa_code: overrideCode } : {};
+      const response = await api.post('/developer/request-password-change', payload);
       setMessage({
         type: 'success',
         text: response.message || 'Password change link sent to your registered email address.'
       });
+      setShowPasswordMfaModal(false);
     } catch (error) {
       console.error('Request password change error:', error);
-      setMessage({ type: 'error', text: error.message || 'Failed to send password change link' });
+      if (overrideCode) {
+        setPasswordMfaError(error.message || 'Invalid two-factor authentication code');
+      } else {
+        setMessage({ type: 'error', text: error.message || 'Failed to send password change link' });
+      }
     } finally {
       setLoading(false);
+      setPasswordMfaSubmitting(false);
     }
+  };
+
+  const handleConfirmPasswordMfaRequest = async (e) => {
+    e.preventDefault();
+    if (!passwordMfaCode.trim()) return;
+    setPasswordMfaSubmitting(true);
+    setPasswordMfaError('');
+    await handleRequestPasswordChange(passwordMfaCode.trim());
   };
 
   const getDaysRemaining = (plan) => {
@@ -510,6 +581,14 @@ const Settings = () => {
               <p className="mt-1.5 text-[11px] text-slate-500 font-medium">
                 Changing your email address requires confirmation link verification before updating.
               </p>
+              {(developer?.mfa_enabled || mfaStatus?.mfa_enabled) && (
+                <div className="mt-2.5 flex items-start gap-2 p-2.5 rounded-xl bg-indigo-50/70 border border-indigo-100 text-[11px] text-indigo-900 font-medium">
+                  <ShieldCheck className="h-4 w-4 text-indigo-600 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>2FA Protected:</strong> An authenticator verification code is required to authorize an email change. Your existing 2FA will remain active, but you can re-link in the <strong>Two-Factor Auth</strong> tab if you want the entry in your authenticator app to display your new email.
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="pt-2">
@@ -818,16 +897,18 @@ const Settings = () => {
                   <RefreshCw className="h-3.5 w-3.5 text-slate-500" />
                   Regenerate Backup Codes
                 </button>
+                <div className="flex items-center gap-1.5 rounded-xl bg-emerald-50 border border-emerald-200 px-3.5 py-2 text-xs font-bold text-emerald-800">
+                  <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                  Mandatory Security Active
+                </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowDisableModal(true);
-                    setDisablePassword('');
-                  }}
-                  className="flex items-center gap-2 rounded-xl bg-rose-50 border border-rose-200 px-4 py-2.5 text-xs font-bold text-rose-700 hover:bg-rose-100 transition-colors cursor-pointer shadow-xs"
+                  onClick={handleStartMFASetup}
+                  disabled={mfaActionLoading}
+                  className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer shadow-xs"
                 >
-                  <Lock className="h-3.5 w-3.5 text-rose-600" />
-                  Disable Two-Factor Auth
+                  <Key className="h-3.5 w-3.5 text-indigo-600" />
+                  Re-configure Authenticator
                 </button>
               </div>
             </Card>
@@ -1011,6 +1092,57 @@ const Settings = () => {
             </Card>
           )}
 
+          {/* Modal: Password Change 2FA Verification */}
+          <Modal
+            isOpen={showPasswordMfaModal}
+            onClose={() => setShowPasswordMfaModal(false)}
+            title="Two-Factor Authentication Required"
+          >
+            <form onSubmit={handleConfirmPasswordMfaRequest} className="space-y-4">
+              <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                To protect your developer account, please enter the 6-digit verification code from your authenticator app (or emergency recovery backup code) to request a password change link:
+              </p>
+              {passwordMfaError && (
+                <div className="flex items-center gap-2 p-3 rounded-xl border border-rose-200 bg-rose-50 text-xs font-bold text-rose-700">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+                  <span>{passwordMfaError}</span>
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                  Authenticator or Backup Code
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  maxLength={12}
+                  value={passwordMfaCode}
+                  onChange={(e) => setPasswordMfaCode(e.target.value.toUpperCase())}
+                  placeholder="123456 or XXXX-XXXX"
+                  className="mt-1.5 block w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-center font-mono text-lg font-bold tracking-widest text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  required
+                />
+              </div>
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordMfaModal(false)}
+                  className="rounded-xl px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={passwordMfaSubmitting || !passwordMfaCode.trim()}
+                  className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-indigo-500 transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  {passwordMfaSubmitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Verify & Send Link
+                </button>
+              </div>
+            </form>
+          </Modal>
+
           {/* Modal: Disable 2FA */}
           <Modal
             isOpen={showDisableModal}
@@ -1049,6 +1181,74 @@ const Settings = () => {
                 >
                   {mfaActionLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   Confirm &amp; Disable 2FA
+                </button>
+              </div>
+            </form>
+          </Modal>
+
+          {/* Modal: Confirm Email Change with 2FA */}
+          <Modal
+            isOpen={showEmailMfaModal}
+            onClose={() => {
+              setShowEmailMfaModal(false);
+              setEmailMfaCode('');
+              setEmailMfaError('');
+            }}
+            title="Two-Factor Authentication Required"
+          >
+            <form onSubmit={handleEmailMfaConfirm} className="space-y-4">
+              <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-900">
+                <ShieldCheck className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-bold">Authorizing Email Address Change</p>
+                  <p className="text-[11px] text-amber-800 leading-relaxed font-medium">
+                    You are changing your primary developer email to <span className="font-mono font-bold text-amber-950">{profileForm.email}</span>. Please enter the 6-digit code from your authenticator app (or a recovery backup code) to confirm.
+                  </p>
+                </div>
+              </div>
+
+              {emailMfaError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2 font-semibold">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  <span>{emailMfaError}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                  Authentication Code
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  maxLength={16}
+                  value={emailMfaCode}
+                  onChange={(e) => setEmailMfaCode(e.target.value.replace(/\s+/g, ''))}
+                  placeholder="6-digit code or backup code"
+                  required
+                  className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 px-3.5 text-center font-mono text-base tracking-widest text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-bold"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEmailMfaModal(false);
+                    setEmailMfaCode('');
+                    setEmailMfaError('');
+                  }}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={emailMfaLoading || !emailMfaCode.trim()}
+                  className="flex items-center gap-2 px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
+                >
+                  {emailMfaLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Confirm &amp; Update Email
                 </button>
               </div>
             </form>

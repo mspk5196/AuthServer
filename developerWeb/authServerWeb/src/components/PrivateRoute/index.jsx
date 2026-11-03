@@ -33,6 +33,12 @@ const PrivateRoute = ({ children, requireVerification = false }) => {
     );
   }
 
+  // Enforce mandatory MFA for all authenticated sessions
+  const isMfaActive = developer?.mfa_enabled === true;
+  if (!isMfaActive && location.pathname !== '/settings') {
+    return <Navigate to="/settings?tab=mfa&required=true" replace />;
+  }
+
   return children;
 };
 

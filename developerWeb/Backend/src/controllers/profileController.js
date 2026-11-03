@@ -1,7 +1,8 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
-const { passwordEncryptAES } = require('../utils/decryptAES');
+const { passwordEncryptAES, passwordDecryptAES } = require('../utils/decryptAES');
+const { verifyTOTP, verifyBackupCode } = require('../utils/totp');
 const { sendMail } = require('../utils/mailer');
 const { buildEmailUpdateVerificationEmail, buildPasswordChangedEmail } = require('../templates/emailTemplates');
 require('dotenv').config();
@@ -11,10 +12,10 @@ require('dotenv').config();
  */
 const getProfile = async (req, res) => {
   try {
-    const developerId = req.user.userId;
+    const developerId = req.user?.userId || req.user?.developerId || req.user?.id || req.user?.user_id;
 
     const result = await pool.query(
-      `SELECT id, name, username, email, email_verified, is_active, created_at, updated_at 
+      `SELECT id, name, username, email, email_verified, mfa_enabled, is_active, created_at, updated_at 
        FROM developers 
        WHERE id = $1`,
       [developerId]
@@ -48,8 +49,8 @@ const updateProfile = async (req, res) => {
   const client = await pool.connect();
   
   try {
-    const developerId = req.user.userId;
-    const { name, username, email } = req.body;
+    const developerId = req.user?.userId || req.user?.developerId || req.user?.id || req.user?.user_id;
+    const { name, username, email, mfa_code, mfaCode, code } = req.body;
     const updateIp = req.ip || req.connection.remoteAddress;
 
     if (!name && !username && !email) {
@@ -63,7 +64,7 @@ const updateProfile = async (req, res) => {
 
     // Get current profile details
     const currentProfile = await client.query(
-      'SELECT id, name, username, email, email_verified FROM developers WHERE id = $1',
+      'SELECT id, name, username, email, email_verified, mfa_enabled FROM developers WHERE id = $1',
       [developerId]
     );
 
@@ -94,8 +95,71 @@ const updateProfile = async (req, res) => {
       }
     }
 
-    // Check if new email is already taken
+    // Check if new email is already taken & enforce 2FA verification
     if (emailChanged) {
+      // 1. Verify 2FA if developer has MFA enabled
+      let mfaSettings = null;
+      try {
+        const mfaRes = await client.query(
+          'SELECT mfa_enabled, secret_encrypted, backup_codes FROM dev_mfa_settings WHERE developer_id = $1',
+          [developerId]
+        );
+        mfaSettings = mfaRes.rows[0];
+      } catch (mfaQueryErr) {
+        // Table might not exist yet if migration pending
+      }
+
+      const isMfaActive = oldDetails.mfa_enabled || mfaSettings?.mfa_enabled;
+      if (isMfaActive) {
+        const providedCode = (mfa_code || mfaCode || code || '').trim();
+        if (!providedCode) {
+          await client.query('ROLLBACK');
+          return res.status(403).json({
+            success: false,
+            mfa_required: true,
+            message: 'Two-factor authentication code is required to change your email address.'
+          });
+        }
+
+        let isCodeValid = false;
+        let updatedBackupCodes = null;
+
+        // Try TOTP
+        if (mfaSettings?.secret_encrypted) {
+          try {
+            const secretBase32 = passwordDecryptAES(mfaSettings.secret_encrypted);
+            isCodeValid = verifyTOTP(secretBase32, providedCode);
+          } catch (decryptErr) {
+            console.error('Failed to decrypt MFA secret for email change:', decryptErr);
+          }
+        }
+
+        // Try single-use recovery backup codes
+        if (!isCodeValid && mfaSettings?.backup_codes) {
+          const backupResult = await verifyBackupCode(providedCode, mfaSettings.backup_codes);
+          if (backupResult.valid) {
+            isCodeValid = true;
+            updatedBackupCodes = backupResult.updatedCodes;
+          }
+        }
+
+        if (!isCodeValid) {
+          await client.query('ROLLBACK');
+          return res.status(401).json({
+            success: false,
+            message: 'Invalid two-factor authentication code. Please check your authenticator app.'
+          });
+        }
+
+        // If backup recovery code was used, save consumed status
+        if (updatedBackupCodes) {
+          await client.query(
+            'UPDATE dev_mfa_settings SET backup_codes = $1, updated_at = NOW() WHERE developer_id = $2',
+            [JSON.stringify(updatedBackupCodes), developerId]
+          );
+        }
+      }
+
       const emailCheck = await client.query(
         'SELECT id FROM developers WHERE email = $1 AND id != $2',
         [email, developerId]
@@ -132,7 +196,7 @@ const updateProfile = async (req, res) => {
     updates.push(`updated_at = NOW()`);
     values.push(developerId);
 
-    const updateQuery = `UPDATE developers SET ${updates.join(', ')} WHERE id = $${paramCount} RETURNING id, name, username, email, email_verified`;
+    const updateQuery = `UPDATE developers SET ${updates.join(', ')} WHERE id = $${paramCount} RETURNING id, name, username, email, email_verified, mfa_enabled`;
     const updateResult = await client.query(updateQuery, values);
 
     const newDetails = updateResult.rows[0];
@@ -169,6 +233,33 @@ const updateProfile = async (req, res) => {
           subject: 'Verify Your New Email Address',
           html: buildEmailUpdateVerificationEmail({ name: name || oldDetails.name, verifyLink }),
         });
+
+        // Also notify old email about the change for security
+        if (oldDetails.email) {
+          try {
+            await sendMail({
+              to: oldDetails.email,
+              subject: 'Security Alert: Your Developer Account Email Was Changed',
+              html: `
+                <div style="font-family: sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1e293b; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px;">
+                  <h2 style="color: #0f172a; margin-top: 0;">Security Alert: Email Address Changed</h2>
+                  <p>Hello ${oldDetails.name || 'Developer'},</p>
+                  <p>The primary email address associated with your MSPK Auth Server developer account has been updated to:</p>
+                  <p style="font-weight: bold; background: #f8fafc; padding: 12px 16px; border-radius: 8px; font-family: monospace; border: 1px solid #cbd5e1;">${email}</p>
+                  <p>A verification link was dispatched to the new email address.</p>
+                  <div style="background: #fffbeb; border: 1px solid #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 6px; margin: 20px 0;">
+                    <p style="margin: 0; color: #92400e; font-size: 13px;">
+                      <strong>Didn't make this change?</strong> Your account may be compromised. Please contact support immediately at <a href="mailto:${process.env.SUPPORT_EMAIL || 'authservices.mspk@mspkapps.in'}" style="color: #4f46e5; text-decoration: underline;">${process.env.SUPPORT_EMAIL || 'authservices.mspk@mspkapps.in'}</a>.
+                    </p>
+                  </div>
+                  <p style="font-size: 11px; color: #94a3b8; margin-top: 24px; border-top: 1px solid #f1f5f9; padding-top: 12px;">This is an automated security alert from MSPK Developer Portal.</p>
+                </div>
+              `
+            });
+          } catch (oldMailErr) {
+            console.error('Failed to send security alert to old email:', oldMailErr);
+          }
+        }
 
       } catch (emailError) {
         console.error('Failed to send verification email:', emailError);

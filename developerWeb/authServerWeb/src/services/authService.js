@@ -34,6 +34,14 @@ export const authService = {
       };
     }
 
+    if (response?.mfa_setup_required) {
+      return {
+        mfa_setup_required: true,
+        mfa_token: response.mfa_token,
+        message: response.message
+      };
+    }
+
     // Normalize developer/user payload
     const developer =
       response?.data?.user ||
@@ -43,6 +51,24 @@ export const authService = {
       null;
 
     return { developer };
+  },
+
+  // Mandatory MFA Onboarding Setup (public with mfa_token)
+  setupMFAOnboarding: async (mfa_token) => {
+    const response = await api.post('/developer/mfa/setup-onboarding', { mfa_token });
+    return response;
+  },
+
+  // Mandatory MFA Onboarding Confirm (public with mfa_token & code)
+  confirmMFAOnboarding: async ({ mfa_token, code }) => {
+    const response = await api.post('/developer/mfa/confirm-onboarding', { mfa_token, code });
+    const developer =
+      response?.data?.user ||
+      response?.data?.developer ||
+      response?.developer ||
+      response?.user ||
+      null;
+    return { success: true, developer, message: response?.message };
   },
 
   // Verify MFA during login
@@ -153,9 +179,10 @@ export const authService = {
     return response;
   },
 
-  // Request password change (authenticated user)
-  requestPasswordChange: async () => {
-    const response = await api.post('/developer/request-password-change');
+  // Request password change (authenticated user, accepts optional mfa_code)
+  requestPasswordChange: async (payload = {}) => {
+    const body = typeof payload === 'string' ? { mfa_code: payload } : payload;
+    const response = await api.post('/developer/request-password-change', body);
     return response;
   },
 };

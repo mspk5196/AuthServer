@@ -387,6 +387,10 @@ exports.getMFAStatus = async (req, res) => {
  * Requires authenticated developer
  */
 exports.disableMFA = async (req, res) => {
+  return res.status(400).json({
+    success: false,
+    message: 'Two-factor authentication is mandatory for all developer accounts and cannot be disabled. You may re-configure your authenticator app instead.'
+  });
   try {
     const developerId = req.user?.userId || req.user?.developerId || req.user?.id || req.user?.user_id;
     const { password } = req.body;
@@ -481,3 +485,224 @@ exports.regenerateBackupCodes = async (req, res) => {
   }
 };
 
+
+/**
+ * Setup MFA Onboarding (Public - validates mfa_token with purpose 'dev_mfa_setup')
+ * Used during mandatory MFA setup upon registration or initial login
+ */
+exports.setupMFAOnboarding = async (req, res) => {
+  try {
+    const { mfa_token } = req.body;
+    if (!mfa_token) {
+      return res.status(401).json({ success: false, message: 'Setup token is required' });
+    }
+
+    let payload;
+    try {
+      payload = jwt.verify(mfa_token, process.env.JWT_SECRET);
+    } catch (e) {
+      return res.status(401).json({ success: false, message: 'Setup session expired. Please sign in again.' });
+    }
+
+    if (payload.purpose !== 'dev_mfa_setup') {
+      return res.status(401).json({ success: false, message: 'Invalid token purpose' });
+    }
+
+    const developerId = payload.developerId;
+    const devRes = await pool.query('SELECT id, email, name FROM developers WHERE id = $1', [developerId]);
+    if (devRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Developer not found' });
+    }
+    const dev = devRes.rows[0];
+
+    const secretBase32 = generateSecret();
+    const encryptedSecret = passwordEncryptAES(secretBase32);
+    const { plainCodes, hashedRecords } = await generateBackupCodes(8);
+
+    try {
+      await pool.query(
+        `INSERT INTO dev_mfa_settings (developer_id, pending_secret, backup_codes, updated_at)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (developer_id) DO UPDATE SET
+           pending_secret = $2,
+           backup_codes = $3,
+           updated_at = NOW()`,
+        [developerId, encryptedSecret, JSON.stringify(hashedRecords)]
+      );
+    } catch (insertErr) {
+      if (insertErr.code === '42P01') {
+        await ensureMfaTable();
+        await pool.query(
+          `INSERT INTO dev_mfa_settings (developer_id, pending_secret, backup_codes, updated_at)
+           VALUES ($1, $2, $3, NOW())
+           ON CONFLICT (developer_id) DO UPDATE SET
+             pending_secret = $2,
+             backup_codes = $3,
+             updated_at = NOW()`,
+          [developerId, encryptedSecret, JSON.stringify(hashedRecords)]
+        );
+      } else {
+        throw insertErr;
+      }
+    }
+
+    const issuer = 'MSPK Developer Portal';
+    const otpAuthUri = generateOtpAuthUri(issuer, dev.email, secretBase32);
+    const qrCodeDataUrl = await QRCode.toDataURL(otpAuthUri, {
+      errorCorrectionLevel: 'M',
+      margin: 2,
+      width: 256,
+      color: {
+        dark: '#0f172a',
+        light: '#ffffff'
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        secret: secretBase32,
+        otpAuthUri,
+        qrCodeUrl: qrCodeDataUrl,
+        backupCodes: plainCodes
+      }
+    });
+  } catch (error) {
+    console.error('Setup MFA Onboarding error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to initiate MFA setup' });
+  }
+};
+
+/**
+ * Confirm MFA Onboarding (Public - validates mfa_token and TOTP code)
+ * Activates MFA and issues full access & refresh cookies
+ */
+exports.confirmMFAOnboarding = async (req, res) => {
+  try {
+    const { mfa_token, code } = req.body;
+    if (!mfa_token || !code) {
+      return res.status(400).json({ success: false, message: 'Setup token and verification code are required' });
+    }
+
+    let payload;
+    try {
+      payload = jwt.verify(mfa_token, process.env.JWT_SECRET);
+    } catch (e) {
+      return res.status(401).json({ success: false, message: 'Setup session expired. Please sign in again.' });
+    }
+
+    if (payload.purpose !== 'dev_mfa_setup') {
+      return res.status(401).json({ success: false, message: 'Invalid token purpose' });
+    }
+
+    const developerId = payload.developerId;
+    const settingsRes = await pool.query(
+      'SELECT pending_secret, backup_codes FROM dev_mfa_settings WHERE developer_id = $1',
+      [developerId]
+    );
+
+    if (settingsRes.rows.length === 0 || !settingsRes.rows[0].pending_secret) {
+      return res.status(400).json({
+        success: false,
+        message: 'No pending setup found. Please scan the QR code first.'
+      });
+    }
+
+    const { pending_secret } = settingsRes.rows[0];
+    const secretBase32 = passwordDecryptAES(pending_secret);
+    const isValid = verifyTOTP(secretBase32, code.trim());
+
+    if (!isValid) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid 6-digit code. Please enter the current code from your authenticator app.'
+      });
+    }
+
+    // Activate MFA
+    await pool.query(
+      `UPDATE dev_mfa_settings
+       SET mfa_enabled = true,
+           secret_encrypted = pending_secret,
+           pending_secret = NULL,
+           confirmed_at = NOW(),
+           updated_at = NOW()
+       WHERE developer_id = $1`,
+      [developerId]
+    );
+
+    await pool.query(
+      'UPDATE developers SET mfa_enabled = true, updated_at = NOW() WHERE id = $1',
+      [developerId]
+    );
+
+    const devRes = await pool.query(
+      'SELECT id, email, name, username, email_verified, is_blocked FROM developers WHERE id = $1',
+      [developerId]
+    );
+    const developer = devRes.rows[0];
+
+    // Reset failed login attempts & track history
+    await pool.query(
+      'UPDATE developers SET failed_login_attempts = 0, locked_until = NULL, updated_at = NOW() WHERE id = $1',
+      [developer.id]
+    );
+    await pool.query(
+      'INSERT INTO dev_login_history (developer_id, login_at, login_ip) VALUES ($1, NOW(), $2)',
+      [developer.id, req.ip]
+    );
+
+    const tokenPayload = {
+      userId: developer.id,
+      email: developer.email,
+      name: developer.name,
+      username: developer.username,
+      role: 'developer',
+      iat: Math.floor(Date.now() / 1000)
+    };
+
+    const { accessToken, refreshToken } = generateTokens(tokenPayload);
+
+    await pool.query(
+      'INSERT INTO refresh_tokens (user_id, token, expires_at, created_at) VALUES ($1, $2, NOW() + INTERVAL \'7 days\', NOW())',
+      [developer.id, refreshToken]
+    );
+
+    const accessMaxAge = parseExpiryToMs(process.env.JWT_EXPIRE || '15m');
+    const refreshMaxAge = parseExpiryToMs(process.env.JWT_REFRESH_EXPIRE || '7d');
+    const cookieSecure = process.env.COOKIE_SECURE
+      ? process.env.COOKIE_SECURE === 'true'
+      : (process.env.NODE_ENV === 'production');
+
+    const cookieOpts = {
+      httpOnly: true,
+      secure: cookieSecure,
+      sameSite: cookieSecure ? 'none' : 'lax',
+      path: '/',
+    };
+    if (process.env.COOKIE_DOMAIN) {
+      cookieOpts.domain = process.env.COOKIE_DOMAIN;
+    }
+
+    res.cookie('access_token', accessToken, { ...cookieOpts, maxAge: accessMaxAge });
+    res.cookie('refresh_token', refreshToken, { ...cookieOpts, maxAge: refreshMaxAge });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Two-factor authentication successfully enabled. Welcome!',
+      data: {
+        developer: {
+          id: developer.id,
+          name: developer.name,
+          username: developer.username,
+          email: developer.email,
+          email_verified: developer.email_verified,
+          mfa_enabled: true
+        }
+      }
+    });
+  } catch (err) {
+    console.error('Confirm MFA Onboarding error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to confirm MFA setup' });
+  }
+};

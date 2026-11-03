@@ -40,7 +40,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (credentials) => {
     const data = await authService.login(credentials);
-    if (data?.mfa_required) {
+    if (data?.mfa_required || data?.mfa_setup_required) {
       return data;
     }
     try {
@@ -53,6 +53,16 @@ export const AuthProvider = ({ children }) => {
 
   const completeMFALogin = async (mfaPayload) => {
     const data = await authService.verifyMFALogin(mfaPayload);
+    try {
+      await checkAuth();
+    } catch (e) {
+      setDeveloper(data.developer);
+    }
+    return data;
+  };
+
+  const completeMFAOnboarding = async ({ mfa_token, code }) => {
+    const data = await authService.confirmMFAOnboarding({ mfa_token, code });
     try {
       await checkAuth();
     } catch (e) {
@@ -87,6 +97,7 @@ export const AuthProvider = ({ children }) => {
     initialized,
     login,
     completeMFALogin,
+    completeMFAOnboarding,
     register,
     logout,
     checkAuth,

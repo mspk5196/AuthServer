@@ -24,6 +24,9 @@ router.get('/verify-email-update', profileController.verifyEmailUpdate);
 
 // MFA login verification - public (validates mfa_token)
 router.post('/mfa/verify-login', mfaController.verifyMFALogin);
+// Mandatory MFA onboarding setup & confirm (public - validates mfa_token with purpose dev_mfa_setup)
+router.post('/mfa/setup-onboarding', mfaController.setupMFAOnboarding);
+router.post('/mfa/confirm-onboarding', mfaController.confirmMFAOnboarding);
 
 // Public policies route (DB-backed policies for terms/privacy/refund)
 router.get('/policies', policyController.getActivePolicies);

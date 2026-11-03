@@ -16,7 +16,12 @@ import {
   Lock,
   ArrowRight,
   ExternalLink,
-  ShieldCheck
+  ShieldCheck,
+  Key,
+  Copy,
+  Download,
+  Check,
+  ShieldAlert
 } from 'lucide-react';
 
 const Login = () => {
@@ -44,9 +49,19 @@ const Login = () => {
   const [mfaType, setMfaType] = useState('totp'); // 'totp' | 'backup_code'
   const [mfaVerifying, setMfaVerifying] = useState(false);
 
+  // Mandatory MFA Onboarding State
+  const [mfaSetupRequired, setMfaSetupRequired] = useState(false);
+  const [onboardingData, setOnboardingData] = useState(null);
+  const [loadingOnboarding, setLoadingOnboarding] = useState(false);
+  const [onboardingCode, setOnboardingCode] = useState('');
+  const [copiedSecret, setCopiedSecret] = useState(false);
+  const [copiedCodes, setCopiedCodes] = useState(false);
+  const [savedCodesConfirmed, setSavedCodesConfirmed] = useState(false);
+  const [onboardingSubmitting, setOnboardingSubmitting] = useState(false);
+
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, completeMFALogin, checkAuth } = useAuth();
+  const { login, completeMFALogin, completeMFAOnboarding, checkAuth } = useAuth();
 
   // Handle Google OAuth callback
   useEffect(() => {
@@ -57,10 +72,18 @@ const Login = () => {
     const policyToken = params.get('token');
 
     const mfaRequiredParam = params.get('mfa_required');
+    const mfaSetupRequiredParam = params.get('mfa_setup_required');
     const mfaTokenParam = params.get('mfa_token');
 
     if (mfaRequiredParam === 'true' && mfaTokenParam) {
       setMfaRequired(true);
+      setMfaToken(mfaTokenParam);
+      window.history.replaceState({}, '', '/login');
+      return;
+    }
+
+    if (mfaSetupRequiredParam === 'true' && mfaTokenParam) {
+      setMfaSetupRequired(true);
       setMfaToken(mfaTokenParam);
       window.history.replaceState({}, '', '/login');
       return;
@@ -147,6 +170,13 @@ const Login = () => {
         setMessage({ type: '', text: '' });
         return;
       }
+      if (res?.mfa_setup_required) {
+        setMfaSetupRequired(true);
+        setMfaToken(res.mfa_token);
+        setMfaCode('');
+        setMessage({ type: '', text: '' });
+        return;
+      }
       navigate('/dashboard');
     } catch (error) {
       if (error.error === 'EMAIL_NOT_VERIFIED') {
@@ -180,6 +210,77 @@ const Login = () => {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch onboarding setup when mfaSetupRequired is triggered
+  useEffect(() => {
+    if (mfaSetupRequired && mfaToken) {
+      const fetchSetup = async () => {
+        setLoadingOnboarding(true);
+        setMessage({ type: '', text: '' });
+        try {
+          const res = await authService.setupMFAOnboarding(mfaToken);
+          const data = res?.data || res;
+          setOnboardingData(data);
+        } catch (err) {
+          setMessage({
+            type: 'error',
+            text: err?.message || 'Failed to initialize mandatory MFA setup. Please sign in again.'
+          });
+        } finally {
+          setLoadingOnboarding(false);
+        }
+      };
+      fetchSetup();
+    }
+  }, [mfaSetupRequired, mfaToken]);
+
+  const handleConfirmOnboarding = async (e) => {
+    e.preventDefault();
+    if (!onboardingCode.trim() || !mfaToken) return;
+
+    setOnboardingSubmitting(true);
+    setMessage({ type: '', text: '' });
+
+    try {
+      await completeMFAOnboarding({
+        mfa_token: mfaToken,
+        code: onboardingCode.trim()
+      });
+      navigate('/dashboard');
+    } catch (err) {
+      setMessage({
+        type: 'error',
+        text: err?.message || 'Invalid verification code. Please check your authenticator app.'
+      });
+    } finally {
+      setOnboardingSubmitting(false);
+    }
+  };
+
+  const handleCopyCodes = () => {
+    if (onboardingData?.backupCodes?.length) {
+      navigator.clipboard.writeText(onboardingData.backupCodes.join('\n'));
+      setCopiedCodes(true);
+      setTimeout(() => setCopiedCodes(false), 2000);
+    }
+  };
+
+  const handleDownloadCodes = () => {
+    if (onboardingData?.backupCodes?.length) {
+      const element = document.createElement('a');
+      const file = new Blob([
+        'MSPK Developer Portal - 2FA Emergency Backup Recovery Codes\n' +
+        'Generated: ' + new Date().toISOString() + '\n\n' +
+        'Store these 8 codes in a safe place. Each code can be used once if you lose your phone.\n\n' +
+        onboardingData.backupCodes.join('\n')
+      ], { type: 'text/plain' });
+      element.href = URL.createObjectURL(file);
+      element.download = 'mspk-developer-backup-codes.txt';
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
     }
   };
 
@@ -334,8 +435,183 @@ const Login = () => {
       </Modal>
 
       {/* Main Login Card */}
-      <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xl">
-        {mfaRequired ? (
+      <div className={`w-full ${mfaSetupRequired ? 'max-w-xl' : 'max-w-md'} rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xl`}>
+        {mfaSetupRequired ? (
+          <div>
+            <div className="text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-600 shadow-xs">
+                <ShieldCheck className="h-7 w-7" />
+              </div>
+              <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700 border border-amber-200">
+                <ShieldAlert className="h-3.5 w-3.5 text-amber-600" />
+                Mandatory Security Requirement
+              </div>
+              <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-900">
+                Set Up Two-Factor Authentication
+              </h1>
+              <p className="mt-1 text-xs text-slate-500 font-medium leading-relaxed max-w-md mx-auto">
+                Two-Factor Authentication is mandatory for all developer accounts. Please configure your authenticator app below to complete your login.
+              </p>
+            </div>
+
+            {/* Alert Messages */}
+            {message.text && (
+              <div
+                className={`mt-4 flex items-start gap-2.5 rounded-xl border p-3.5 text-xs font-semibold ${
+                  message.type === 'error'
+                    ? 'border-rose-200 bg-rose-50 text-rose-700'
+                    : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                }`}
+              >
+                <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+                <span className="leading-relaxed">{message.text}</span>
+              </div>
+            )}
+
+            {loadingOnboarding || !onboardingData ? (
+              <div className="mt-8 flex flex-col items-center justify-center py-12 gap-3 text-slate-500">
+                <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+                <p className="text-xs font-medium">Generating your secure keys and QR code…</p>
+              </div>
+            ) : (
+              <div className="mt-6 space-y-5 text-xs">
+                {/* Step 1: Scan QR Code */}
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5 space-y-3">
+                  <div className="flex items-center gap-2 font-bold text-slate-900 text-xs sm:text-sm">
+                    <span className="flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded-full bg-indigo-600 text-white text-[10px] sm:text-xs">1</span>
+                    Scan QR code with your Authenticator app
+                  </div>
+                  <p className="text-slate-600 leading-relaxed font-medium">
+                    Open Google Authenticator, Microsoft Authenticator, Authy, or 1Password and scan:
+                  </p>
+                  <div className="flex flex-col sm:flex-row items-center gap-4 pt-1">
+                    <div className="p-2.5 bg-white border border-slate-200 rounded-2xl shadow-sm">
+                      <img
+                        src={onboardingData.qrCodeUrl}
+                        alt="2FA QR Code"
+                        className="w-36 h-36 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-2 max-w-xs text-center sm:text-left">
+                      <p className="text-slate-500 font-medium text-[11px]">Can't scan? Enter this secret manually:</p>
+                      <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl p-2 font-mono text-[11px] font-bold text-slate-800 break-all select-all">
+                        <Key className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+                        <span>{onboardingData.secret}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(onboardingData.secret);
+                          setCopiedSecret(true);
+                          setTimeout(() => setCopiedSecret(false), 2000);
+                        }}
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 cursor-pointer"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        {copiedSecret ? 'Copied Secret Key!' : 'Copy Secret Key'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Step 2: Backup Codes */}
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 sm:p-5 space-y-3">
+                  <div className="flex items-center gap-2 font-bold text-amber-900 text-xs sm:text-sm">
+                    <span className="flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded-full bg-amber-600 text-white text-[10px] sm:text-xs">2</span>
+                    Save your emergency recovery backup codes
+                  </div>
+                  <p className="text-amber-800 leading-relaxed font-medium">
+                    Keep these 8 one-time codes safe. If you ever lose your phone, they are your <strong>only key</strong> to regain access.
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 font-mono text-[11px] font-bold text-slate-900 bg-white border border-amber-200 rounded-xl p-2.5 text-center">
+                    {onboardingData.backupCodes?.map((code, idx) => (
+                      <div key={idx} className="p-1 bg-slate-50 rounded border border-slate-100">
+                        {code}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleCopyCodes}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-900 hover:bg-amber-100 transition-colors cursor-pointer shadow-xs"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      {copiedCodes ? 'Copied All Codes!' : 'Copy All Codes'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDownloadCodes}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-900 hover:bg-amber-100 transition-colors cursor-pointer shadow-xs"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      Download as .TXT
+                    </button>
+                  </div>
+
+                  <label className="flex items-start gap-2 pt-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={savedCodesConfirmed}
+                      onChange={(e) => setSavedCodesConfirmed(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                    />
+                    <span className="text-[11px] font-bold text-amber-900">
+                      I have securely saved and downloaded my emergency recovery backup codes
+                    </span>
+                  </label>
+                </div>
+
+                {/* Step 3: Enter 6-digit Code */}
+                <form onSubmit={handleConfirmOnboarding} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5 space-y-3">
+                  <div className="flex items-center gap-2 font-bold text-slate-900 text-xs sm:text-sm">
+                    <span className="flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded-full bg-indigo-600 text-white text-[10px] sm:text-xs">3</span>
+                    Verify 6-digit code from your app
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      value={onboardingCode}
+                      onChange={(e) => setOnboardingCode(e.target.value.replace(/\D/g, ''))}
+                      placeholder="123456"
+                      className="block w-full text-center tracking-widest font-mono text-2xl font-bold py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 placeholder-slate-300 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      required
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={onboardingSubmitting || onboardingCode.length !== 6 || !savedCodesConfirmed}
+                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 py-3 text-sm font-bold text-white shadow-md shadow-indigo-600/20 hover:from-indigo-500 hover:to-indigo-400 transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 cursor-pointer"
+                  >
+                    {onboardingSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
+                    {onboardingSubmitting ? 'Activating & Logging In…' : 'Verify & Complete Setup'}
+                  </button>
+
+                  <div className="pt-1 text-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMfaSetupRequired(false);
+                        setMfaToken(null);
+                        setOnboardingData(null);
+                        setOnboardingCode('');
+                        setMessage({ type: '', text: '' });
+                      }}
+                      className="text-xs font-medium text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                    >
+                      ← Cancel and return to sign in
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+          </div>
+        ) : mfaRequired ? (
           <div>
             <div className="text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-600 shadow-xs">

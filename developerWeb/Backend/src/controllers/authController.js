@@ -5,6 +5,7 @@ const pool = require('../config/db');
 const { promisify } = require('util');
 const crypto = require('crypto');
 const { OAuth2Client } = require('google-auth-library');
+const { isDeveloperMFAEnabled, verifyDeveloperMFA } = require('../utils/mfaHelper');
 require('dotenv').config();
 const { passwordEncryptAES } = require('../utils/decryptAES')
 const { sendMail } = require("../utils/mailer.js");
@@ -484,16 +485,7 @@ const developerLogin = async (req, res) => {
     }
 
     // Check if MFA is enabled for this developer
-    let isMfaEnabled = false;
-    try {
-      const mfaCheck = await pool.query(
-        'SELECT mfa_enabled FROM dev_mfa_settings WHERE developer_id = $1',
-        [developer.id]
-      );
-      isMfaEnabled = developer.mfa_enabled === true || (mfaCheck.rows.length > 0 && mfaCheck.rows[0].mfa_enabled === true);
-    } catch (mfaErr) {
-      isMfaEnabled = developer.mfa_enabled === true;
-    }
+    const isMfaEnabled = await isDeveloperMFAEnabled(developer.id);
 
     if (isMfaEnabled) {
       // Issue short-lived MFA challenge token (valid for 5 minutes)
@@ -515,6 +507,24 @@ const developerLogin = async (req, res) => {
         message: 'Two-factor authentication code required'
       });
     }
+
+    // MANDATORY MFA: If MFA is not yet enabled, enforce onboarding before establishing session
+    const mfaSetupToken = jwt.sign(
+      {
+        developerId: developer.id,
+        email: developer.email,
+        purpose: 'dev_mfa_setup'
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '15m' }
+    );
+
+    return res.status(200).json({
+      success: true,
+      mfa_setup_required: true,
+      mfa_token: mfaSetupToken,
+      message: 'Two-factor authentication is mandatory. Please configure your authenticator app to continue.'
+    });
 
     // Reset failed login attempts on successful login
     await pool.query(
@@ -696,6 +706,7 @@ const resendVerificationEmail = async (req, res) => {
 const requestPasswordChange = async (req, res) => {
   try {
     const developerId = req.user.userId;
+    const { mfa_code, mfaCode, code } = req.body || {};
 
     // Get developer details
     const developerResult = await pool.query(
@@ -711,6 +722,27 @@ const requestPasswordChange = async (req, res) => {
     }
 
     const developer = developerResult.rows[0];
+
+    // Enforce 2FA check if enabled
+    const isMfaActive = await isDeveloperMFAEnabled(developer.id);
+    if (isMfaActive) {
+      const providedCode = (mfa_code || mfaCode || code || '').toString().trim();
+      if (!providedCode) {
+        return res.status(403).json({
+          success: false,
+          mfa_required: true,
+          message: 'Two-factor authentication code is required to request a password change'
+        });
+      }
+
+      const mfaResult = await verifyDeveloperMFA(developer.id, providedCode);
+      if (!mfaResult.valid) {
+        return res.status(401).json({
+          success: false,
+          message: mfaResult.message || 'Invalid two-factor authentication code'
+        });
+      }
+    }
 
     // Generate token
     const token = jwt.sign(
@@ -905,6 +937,27 @@ const changePasswordWithToken = async (req, res) => {
         });
       }
 
+      // Verify 2FA if enabled
+      const isMfaActive = await isDeveloperMFAEnabled(developer.id);
+      if (isMfaActive) {
+        const { mfa_code, mfaCode, code } = req.body || {};
+        const providedCode = (mfa_code || mfaCode || code || '').toString().trim();
+        if (!providedCode) {
+          return res.status(403).json({
+            success: false,
+            message: 'Two-factor authentication code is required'
+          });
+        }
+
+        const mfaResult = await verifyDeveloperMFA(developer.id, providedCode);
+        if (!mfaResult.valid) {
+          return res.status(401).json({
+            success: false,
+            message: mfaResult.message || 'Invalid two-factor authentication code'
+          });
+        }
+      }
+
       // Verify current password
       const encryptedCurrentPassword = passwordEncryptAES(currentPassword);
       const passwordResult = await pool.query(
@@ -957,6 +1010,7 @@ const changePasswordWithToken = async (req, res) => {
     }
 
     // GET request - render HTML form
+    const isMfaActive = await isDeveloperMFAEnabled(developer.id);
     return res.send(`
       <!DOCTYPE html>
       <html>
@@ -1101,6 +1155,34 @@ const changePasswordWithToken = async (req, res) => {
                 placeholder="Confirm new password"
               >
             </div>
+            ${isMfaActive ? `
+            <div class="form-group">
+              <label for="mfa_code">Two-Factor Authentication Code</label>
+              <input 
+                type="text" 
+                id="mfa_code" 
+                name="mfa_code" 
+                required 
+                placeholder="6-digit code or backup code"
+                autocomplete="one-time-code"
+              >
+              <p class="info-text">Enter code from your authenticator app</p>
+            </div>
+            ` : ''}
+            ${isMfaActive ? `
+            <div class="form-group">
+              <label for="mfa_code">Two-Factor Authentication Code</label>
+              <input 
+                type="text" 
+                id="mfa_code" 
+                name="mfa_code" 
+                required 
+                placeholder="6-digit code or backup code"
+                autocomplete="one-time-code"
+              >
+              <p class="info-text">Enter code from your authenticator app</p>
+            </div>
+            ` : ''}
             
             <button type="submit" class="btn" id="submitBtn">Change Password</button>
           </form>
@@ -1150,7 +1232,8 @@ const changePasswordWithToken = async (req, res) => {
 
             try {
               // console.log              console.log('About to fetch POST to:', window.location.pathname);
-              const body = { token, currentPassword, newPassword };
+              const mfa_code = document.getElementById('mfa_code')?.value || '';
+              const body = { token, currentPassword, newPassword, mfa_code };
               // console.log              console.log('Request body keys:', Object.keys(body));
               
               const response = await fetch(window.location.pathname, {
@@ -1452,6 +1535,26 @@ const resetPasswordWithToken = async (req, res) => {
 
     // Handle POST request to reset password
     if (req.method === 'POST') {
+      const isMfaActive = await isDeveloperMFAEnabled(developer.id);
+      if (isMfaActive) {
+        const { mfa_code, mfaCode, code } = req.body || {};
+        const providedCode = (mfa_code || mfaCode || code || '').toString().trim();
+        if (!providedCode) {
+          return res.status(403).json({
+            success: false,
+            message: 'Two-factor authentication code is required'
+          });
+        }
+
+        const mfaResult = await verifyDeveloperMFA(developer.id, providedCode);
+        if (!mfaResult.valid) {
+          return res.status(401).json({
+            success: false,
+            message: mfaResult.message || 'Invalid two-factor authentication code'
+          });
+        }
+      }
+
       const { newPassword } = req.body || {};
 
       if (!newPassword) {
@@ -1494,6 +1597,7 @@ const resetPasswordWithToken = async (req, res) => {
     }
 
     // GET request - render HTML form
+    const isMfaActive = await isDeveloperMFAEnabled(developer.id);
     return res.send(`
       <!DOCTYPE html>
       <html>
@@ -1659,12 +1763,13 @@ const resetPasswordWithToken = async (req, res) => {
 
             try {
               const token = document.getElementById('token').value;
+              const mfa_code = document.getElementById('mfa_code')?.value || '';
               const response = await fetch(window.location.pathname, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ token, newPassword }),
+                body: JSON.stringify({ token, newPassword, mfa_code }),
               });
 
               const data = await response.json();
@@ -1812,11 +1917,7 @@ const googleCallback = async (req, res) => {
 
     // Check if MFA is enabled for this developer
     try {
-      const mfaCheck = await pool.query(
-        'SELECT mfa_enabled FROM dev_mfa_settings WHERE developer_id = $1',
-        [developer.id]
-      );
-      const isMfaEnabled = developer.mfa_enabled === true || (mfaCheck.rows.length > 0 && mfaCheck.rows[0].mfa_enabled === true);
+      const isMfaEnabled = await isDeveloperMFAEnabled(developer.id);
       if (isMfaEnabled) {
         const mfaToken = jwt.sign(
           { developerId: developer.id, email: developer.email, purpose: 'dev_mfa_challenge' },
@@ -1824,6 +1925,13 @@ const googleCallback = async (req, res) => {
           { expiresIn: '5m' }
         );
         return res.redirect(`${process.env.FRONTEND_URL}/login?mfa_required=true&mfa_token=${encodeURIComponent(mfaToken)}`);
+      } else {
+        const mfaSetupToken = jwt.sign(
+          { developerId: developer.id, email: developer.email, purpose: 'dev_mfa_setup' },
+          process.env.JWT_SECRET,
+          { expiresIn: '15m' }
+        );
+        return res.redirect(`${process.env.FRONTEND_URL}/login?mfa_setup_required=true&mfa_token=${encodeURIComponent(mfaSetupToken)}`);
       }
     } catch (e) {
       console.warn('MFA check in Google OAuth failed:', e.message);

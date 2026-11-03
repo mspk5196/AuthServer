@@ -88,6 +88,12 @@ const Settings = () => {
   const [emailMfaLoading, setEmailMfaLoading] = useState(false);
   const [emailMfaError, setEmailMfaError] = useState('');
 
+  // Password Change 2FA Verification States
+  const [showPasswordMfaModal, setShowPasswordMfaModal] = useState(false);
+  const [passwordMfaCode, setPasswordMfaCode] = useState('');
+  const [passwordMfaSubmitting, setPasswordMfaSubmitting] = useState(false);
+  const [passwordMfaError, setPasswordMfaError] = useState('');
+
   useEffect(() => {
     if (developer) {
       setProfileForm({

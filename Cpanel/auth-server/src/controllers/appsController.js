@@ -616,7 +616,7 @@ const updateApp = async (req, res) => {
       values.push(google_ios_client_id);
     }
     if (google_client_ids !== undefined) {
-      updates.push(`google_client_ids = ${paramCount++}::jsonb`);
+      updates.push("google_client_ids = $" + (paramCount++) + "::jsonb");
       values.push(JSON.stringify(Array.isArray(google_client_ids) ? google_client_ids : []));
     }
 
@@ -624,7 +624,7 @@ const updateApp = async (req, res) => {
       if (!['disabled', 'optional', 'enforced'].includes(mfa_policy)) {
         return res.status(400).json({ success: false, message: 'Invalid mfa_policy. Must be disabled, optional, or enforced' });
       }
-      updates.push(`mfa_policy = ${paramCount++}`);
+      updates.push("mfa_policy = $" + (paramCount++));
       values.push(mfa_policy);
     }
 
@@ -632,7 +632,7 @@ const updateApp = async (req, res) => {
       if (!Array.isArray(mfa_allowed_methods)) {
         return res.status(400).json({ success: false, message: 'mfa_allowed_methods must be an array' });
       }
-      updates.push(`mfa_allowed_methods = ${paramCount++}::jsonb`);
+      updates.push("mfa_allowed_methods = $" + (paramCount++) + "::jsonb");
       values.push(JSON.stringify(mfa_allowed_methods));
     }
 

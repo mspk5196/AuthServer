@@ -534,7 +534,117 @@ export default function AppSettings() {
               </div>
             </div>
           </div>
-        </div>
+        
+          {/* Multi-Factor Authentication (MFA / 2FA) Settings */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-slate-900">Multi-Factor Authentication (MFA / 2FA)</h3>
+                  <p className="text-xs text-slate-500">Configure two-factor authentication policy for this application</p>
+                </div>
+              </div>
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider ${
+                (app.mfa_policy || 'optional') === 'enforced'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : (app.mfa_policy || 'optional') === 'disabled'
+                  ? 'bg-rose-50 text-rose-700 border-rose-200'
+                  : 'bg-blue-50 text-blue-700 border-blue-200'
+              }`}>
+                {app.mfa_policy || 'optional'}
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              {/* Optional Radio */}
+              <label
+                onClick={() => toggle('mfa_policy', 'optional')}
+                className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all ${
+                  (app.mfa_policy || 'optional') === 'optional'
+                    ? 'bg-indigo-50/50 border-indigo-300 ring-2 ring-indigo-500/20'
+                    : 'bg-slate-50 border-slate-200 hover:bg-slate-100/70'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="mfa_policy"
+                  value="optional"
+                  checked={(app.mfa_policy || 'optional') === 'optional'}
+                  onChange={() => {}}
+                  disabled={saving}
+                  className="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-slate-900">Optional (Flexible)</span>
+                    <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded font-medium">Default</span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Users can voluntarily enable two-factor authentication from their account settings. Supports TOTP (Google Authenticator, Authy) and emergency backup codes.
+                  </p>
+                </div>
+              </label>
+
+              {/* Enforced Radio */}
+              <label
+                onClick={() => toggle('mfa_policy', 'enforced')}
+                className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all ${
+                  app.mfa_policy === 'enforced'
+                    ? 'bg-indigo-50/50 border-indigo-300 ring-2 ring-indigo-500/20'
+                    : 'bg-slate-50 border-slate-200 hover:bg-slate-100/70'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="mfa_policy"
+                  value="enforced"
+                  checked={app.mfa_policy === 'enforced'}
+                  onChange={() => {}}
+                  disabled={saving}
+                  className="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-slate-900">Enforced (Mandatory)</span>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-medium">High Security</span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Every user is strictly required to set up two-factor authentication upon login. Access is blocked until TOTP onboarding is completed.
+                  </p>
+                </div>
+              </label>
+
+              {/* Disabled Radio */}
+              <label
+                onClick={() => toggle('mfa_policy', 'disabled')}
+                className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all ${
+                  app.mfa_policy === 'disabled'
+                    ? 'bg-indigo-50/50 border-indigo-300 ring-2 ring-indigo-500/20'
+                    : 'bg-slate-50 border-slate-200 hover:bg-slate-100/70'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="mfa_policy"
+                  value="disabled"
+                  checked={app.mfa_policy === 'disabled'}
+                  onChange={() => {}}
+                  disabled={saving}
+                  className="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                />
+                <div>
+                  <span className="text-sm font-semibold text-slate-900">Disabled</span>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Two-factor authentication prompts and settings are completely disabled for this application.
+                  </p>
+                </div>
+              </label>
+            </div>
+          </div>
+</div>
 
         {/* Right Column: API Usage Stats */}
         <div className="space-y-6">

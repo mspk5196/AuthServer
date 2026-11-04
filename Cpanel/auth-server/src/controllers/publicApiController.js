@@ -870,6 +870,37 @@ const loginUser = async (req, res) => {
       });
     }
 
+    // Check MFA Policy for App
+    const mfaPolicy = app.mfa_policy || 'optional';
+    if (mfaPolicy !== 'disabled') {
+      if (user.mfa_enabled) {
+        const mfaToken = jwt.sign(
+          { userId: user.id, appId: app.id, email: user.email, purpose: 'mfa_challenge' },
+          process.env.JWT_SECRET,
+          { expiresIn: '5m' }
+        );
+        return res.json({
+          success: true,
+          mfa_required: true,
+          mfa_token: mfaToken,
+          methods: ['totp', 'backup_code'],
+          message: 'Two-factor authentication required'
+        });
+      } else if (mfaPolicy === 'enforced') {
+        const mfaToken = jwt.sign(
+          { userId: user.id, appId: app.id, email: user.email, purpose: 'mfa_onboarding' },
+          process.env.JWT_SECRET,
+          { expiresIn: '15m' }
+        );
+        return res.json({
+          success: true,
+          mfa_setup_required: true,
+          mfa_token: mfaToken,
+          message: 'Two-factor authentication setup is required for this application'
+        });
+      }
+    }
+
     // Update last login
     await pool.query(
       'UPDATE users SET last_login = NOW() WHERE id = $1',
@@ -2554,6 +2585,37 @@ const googleAuth = async (req, res) => {
         error: 'Account blocked',
         message: 'Your account has been blocked. Please contact support.'
       });
+    }
+
+    // Check MFA Policy for App
+    const googleMfaPolicy = app.mfa_policy || 'optional';
+    if (googleMfaPolicy !== 'disabled') {
+      if (user.mfa_enabled) {
+        const mfaToken = jwt.sign(
+          { userId: user.id, appId: app.id, email: user.email, purpose: 'mfa_challenge' },
+          process.env.JWT_SECRET,
+          { expiresIn: '5m' }
+        );
+        return res.json({
+          success: true,
+          mfa_required: true,
+          mfa_token: mfaToken,
+          methods: ['totp', 'backup_code'],
+          message: 'Two-factor authentication required'
+        });
+      } else if (googleMfaPolicy === 'enforced') {
+        const mfaToken = jwt.sign(
+          { userId: user.id, appId: app.id, email: user.email, purpose: 'mfa_onboarding' },
+          process.env.JWT_SECRET,
+          { expiresIn: '15m' }
+        );
+        return res.json({
+          success: true,
+          mfa_setup_required: true,
+          mfa_token: mfaToken,
+          message: 'Two-factor authentication setup is required for this application'
+        });
+      }
     }
 
     // Update last login

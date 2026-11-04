@@ -61,7 +61,7 @@ function parsePlanLimit(raw) {
 const createApp = async (req, res) => {
   try {
     const developerId = req.user.developerId;
-    const { app_name, support_email, allow_google_signin = false, allow_email_signin = true, group_id = null } = req.body;
+    const { app_name, support_email, allow_google_signin = false, allow_email_signin = true, group_id = null, mfa_policy = 'optional', mfa_allowed_methods = ['totp', 'backup_code'] } = req.body;
 
     // console.log('Create app request from developer:', developerId);
     // console.log('Form data:', { app_name, support_email, allow_google_signin, allow_email_signin });
@@ -202,12 +202,12 @@ const createApp = async (req, res) => {
       INSERT INTO dev_apps (
         developer_id, app_name, support_email, api_key, api_secret_hash, api_secret_encrypted,
         allow_google_signin, allow_email_signin, support_email_verified,
-        group_id, created_at, updated_at
+        group_id, mfa_policy, mfa_allowed_methods, created_at, updated_at
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, false, $9, NOW(), NOW()
+        $1, $2, $3, $4, $5, $6, $7, $8, false, $9, $10, $11::jsonb, NOW(), NOW()
       )
       RETURNING id, app_name, support_email, api_key, allow_google_signin, allow_email_signin, support_email_verified, group_id, created_at
-    `, [developerId, app_name, support_email, apiKey, hashedSecret, encryptedSecret, allow_google_signin, allow_email_signin, resolvedGroupId]);
+    `, [developerId, app_name, support_email, apiKey, hashedSecret, encryptedSecret, allow_google_signin, allow_email_signin, resolvedGroupId, ['disabled', 'optional', 'enforced'].includes(mfa_policy) ? mfa_policy : 'optional', JSON.stringify(Array.isArray(mfa_allowed_methods) ? mfa_allowed_methods : ['totp', 'backup_code'])]);
 
     const app = result.rows[0];
     // console.log    console.log('App created successfully:', app.id);
@@ -479,7 +479,8 @@ const getAppDetails = async (req, res) => {
         g.name as group_name,
         COUNT(DISTINCT u.id) as total_users,
         COUNT(DISTINCT CASE WHEN u.created_at >= NOW() - INTERVAL '30 days' THEN u.id END) as active_users,
-        COUNT(DISTINCT CASE WHEN u.email_verified = true THEN u.id END) as verified_users
+        COUNT(DISTINCT CASE WHEN u.email_verified = true THEN u.id END) as verified_users,
+        COUNT(DISTINCT CASE WHEN u.mfa_enabled = true THEN u.id END) as mfa_users
       FROM dev_apps a
       LEFT JOIN users u ON u.app_id = a.id
       LEFT JOIN app_groups g ON a.group_id = g.id
@@ -562,7 +563,9 @@ const updateApp = async (req, res) => {
       google_android_client_id,
       google_ios_client_id,
       google_client_ids,
-      extra_fields
+      extra_fields,
+      mfa_policy,
+      mfa_allowed_methods
     } = req.body;
     const { user_edit_permissions } = req.body;
 
@@ -613,8 +616,24 @@ const updateApp = async (req, res) => {
       values.push(google_ios_client_id);
     }
     if (google_client_ids !== undefined) {
-      updates.push(`google_client_ids = $${paramCount++}::jsonb`);
+      updates.push(`google_client_ids = ${paramCount++}::jsonb`);
       values.push(JSON.stringify(Array.isArray(google_client_ids) ? google_client_ids : []));
+    }
+
+    if (mfa_policy !== undefined) {
+      if (!['disabled', 'optional', 'enforced'].includes(mfa_policy)) {
+        return res.status(400).json({ success: false, message: 'Invalid mfa_policy. Must be disabled, optional, or enforced' });
+      }
+      updates.push(`mfa_policy = ${paramCount++}`);
+      values.push(mfa_policy);
+    }
+
+    if (mfa_allowed_methods !== undefined) {
+      if (!Array.isArray(mfa_allowed_methods)) {
+        return res.status(400).json({ success: false, message: 'mfa_allowed_methods must be an array' });
+      }
+      updates.push(`mfa_allowed_methods = ${paramCount++}::jsonb`);
+      values.push(JSON.stringify(mfa_allowed_methods));
     }
 
     // Handle extra custom fields configuration (array of { name, label, type })

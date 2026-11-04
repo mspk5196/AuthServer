@@ -2,6 +2,10 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const pool = require('../config/db');
+const QRCode = require('qrcode');
+const { generateSecret, generateTOTP, verifyTOTP, generateOtpAuthUri, generateBackupCodes, verifyBackupCode } = require('../utils/totp');
+const { isUserMFAEnabled, verifyUserMFA } = require('../utils/mfaHelper');
+
 const { passwordEncryptAES, passwordDecryptAES } = require('../utils/decryptAES');
 const { sendAppUserEmail } = require('../utils/emailServiceClient');
 const {
@@ -660,6 +664,86 @@ const registerUser = async (req, res) => {
 /**
  * Login user with email/password
  */
+
+/**
+ * Helper to issue JWT access & refresh tokens upon successful login / MFA verification
+ */
+
+/**
+ * Helper to extract Bearer or UserToken from Authorization header
+ */
+const extractUserToken = (req) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) return null;
+  if (authHeader.startsWith('Bearer ')) return authHeader.substring(7).trim();
+  if (authHeader.startsWith('UserToken ')) return authHeader.substring(10).trim();
+  return null;
+};
+
+const issueUserLoginSession = async (user, app, req, loginMethod = 'email') => {
+  // Update last login
+  await pool.query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
+
+  // Log login history
+  await pool.query(`
+    INSERT INTO user_login_history (
+      user_id, app_id, login_method, ip_address, user_agent, login_time, created_at
+    ) VALUES (
+      $1, $2, $3, $4, $5, NOW(), NOW()
+    )
+  `, [user.id, app.id, loginMethod, req.ip, req.headers['user-agent']]);
+
+  const ttl = app.access_token_expires_seconds ? parseInt(app.access_token_expires_seconds, 10) : (process.env.ACCESS_TOKEN_EXPIRES_SECONDS ? parseInt(process.env.ACCESS_TOKEN_EXPIRES_SECONDS, 10) : 604800);
+
+  const accessToken = jwt.sign(
+    { userId: user.id, appId: app.id, email: user.email },
+    process.env.JWT_SECRET,
+    { expiresIn: ttl }
+  );
+
+  const refreshTtlSec = 30 * 24 * 60 * 60;
+  const refreshToken = jwt.sign(
+    { userId: user.id, appId: app.id, email: user.email, tokenType: 'refresh', jti: crypto.randomUUID() },
+    process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+    { expiresIn: refreshTtlSec }
+  );
+
+  await pool.query(`
+    INSERT INTO user_refresh_tokens (user_id, app_id, token, expires_at, created_at)
+    VALUES ($1, $2, $3, NOW() + INTERVAL '30 days', NOW())
+  `, [user.id, app.id, refreshToken]).catch(e => console.warn('Failed to insert user_refresh_token:', e.message));
+
+  let userExtra = user.extra;
+  if (typeof userExtra === 'string') {
+    try { userExtra = JSON.parse(userExtra); } catch (_) { userExtra = {}; }
+  } else if (!userExtra || typeof userExtra !== 'object') {
+    userExtra = {};
+  }
+
+  return {
+    access_token: accessToken,
+    accessToken,
+    user_token: accessToken,
+    refresh_token: refreshToken,
+    refreshToken,
+    expires_in: ttl,
+    expiresIn: ttl,
+    token_type: 'Bearer',
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      username: user.username,
+      email_verified: user.email_verified,
+      google_linked: user.google_linked,
+      mfa_enabled: !!user.mfa_enabled,
+      last_login: new Date(),
+      login_method: loginMethod,
+      extra: userExtra
+    }
+  };
+};
+
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -933,7 +1017,7 @@ const getUserProfile = async (req, res) => {
 
     // Get user info
     const result = await pool.query(
-      'SELECT id, email, name, username, email_verified, google_linked, is_blocked, last_login, created_at, extra FROM users WHERE id = $1 AND app_id = $2',
+      'SELECT id, email, name, username, email_verified, google_linked, is_blocked, last_login, created_at, extra, mfa_enabled FROM users WHERE id = $1 AND app_id = $2',
       [decoded.userId, req.devApp.id]
     );
 
@@ -1086,7 +1170,7 @@ const requestChangePasswordLink = async (req, res) => {
 
     // Find user
     const result = await pool.query(
-      'SELECT id, email, name, password_hash FROM users WHERE app_id = $1 AND email = $2',
+      'SELECT id, email, name, password_hash, mfa_enabled FROM users WHERE app_id = $1 AND email = $2',
       [app.id, email.toLowerCase()]
     );
 
@@ -3193,7 +3277,7 @@ const patchUserProfile = async (req, res) => {
     const userId = decoded.userId;
     // console.log("userId", userId);
     // Load user
-    const userRes = await pool.query('SELECT id, email, name, username, extra FROM users WHERE id = $1 AND app_id = $2', [userId, req.devApp.id]);
+    const userRes = await pool.query('SELECT id, email, name, username, extra, mfa_enabled FROM users WHERE id = $1 AND app_id = $2', [userId, req.devApp.id]);
     if (userRes.rows.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
     const user = userRes.rows[0];
 
@@ -4103,7 +4187,476 @@ const refreshUserToken = async (req, res) => {
   }
 };
 
+
+/**
+ * Verify MFA challenge during login
+ * POST /:apiKey/auth/mfa/verify
+ * Body: { mfa_token, code }
+ */
+const verifyMFALogin = async (req, res) => {
+  try {
+    const { mfa_token, code } = req.body;
+    const app = req.devApp;
+
+    if (!mfa_token || !code) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation error',
+        message: 'MFA token and verification code are required'
+      });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(mfa_token, process.env.JWT_SECRET);
+    } catch (e) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid or expired token',
+        message: 'The MFA session has expired. Please log in again.'
+      });
+    }
+
+    if (decoded.purpose !== 'mfa_challenge' || decoded.appId !== app.id) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid token',
+        message: 'Invalid MFA challenge token'
+      });
+    }
+
+    const userRes = await pool.query('SELECT * FROM users WHERE id = $1 AND app_id = $2', [decoded.userId, app.id]);
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const user = userRes.rows[0];
+    if (user.is_blocked) {
+      return res.status(403).json({ success: false, error: 'Account blocked', message: 'Account has been blocked' });
+    }
+
+    const verifyResult = await verifyUserMFA(user.id, code);
+    if (!verifyResult.valid) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid MFA code',
+        message: verifyResult.message || 'Invalid two-factor authentication code'
+      });
+    }
+
+    const sessionData = await issueUserLoginSession(user, app, req, 'mfa_verified');
+
+    res.json({
+      success: true,
+      message: 'MFA verification successful',
+      data: sessionData
+    });
+
+  } catch (error) {
+    console.error('verifyMFALogin error:', error);
+    res.status(500).json({ success: false, error: 'Operation failed', message: 'MFA verification failed' });
+  }
+};
+
+/**
+ * Setup MFA during onboarding
+ * POST /:apiKey/auth/mfa/setup-onboarding
+ * Body: { mfa_token }
+ */
+const setupMFAOnboarding = async (req, res) => {
+  try {
+    const { mfa_token } = req.body;
+    const app = req.devApp;
+
+    if (!mfa_token) {
+      return res.status(400).json({ success: false, message: 'MFA token is required' });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(mfa_token, process.env.JWT_SECRET);
+    } catch (e) {
+      return res.status(401).json({ success: false, message: 'MFA onboarding token expired. Please log in again.' });
+    }
+
+    if (decoded.purpose !== 'mfa_onboarding' || decoded.appId !== app.id) {
+      return res.status(401).json({ success: false, message: 'Invalid onboarding token' });
+    }
+
+    const userRes = await pool.query('SELECT id, email FROM users WHERE id = $1 AND app_id = $2', [decoded.userId, app.id]);
+    if (userRes.rows.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
+    const user = userRes.rows[0];
+
+    const secretBase32 = generateSecret(20);
+    const encryptedSecret = passwordEncryptAES(secretBase32);
+    const otpAuthUri = generateOtpAuthUri(app.app_name || 'MSPK Apps', user.email, secretBase32);
+    const qrCodeDataUrl = await QRCode.toDataURL(otpAuthUri);
+
+    // Store in pending_secret
+    await pool.query(`
+      INSERT INTO user_mfa_settings (user_id, app_id, pending_secret, mfa_enabled, created_at, updated_at)
+      VALUES ($1, $2, $3, false, NOW(), NOW())
+      ON CONFLICT (user_id) DO UPDATE SET 
+        pending_secret = $3,
+        updated_at = NOW()
+    `, [user.id, app.id, encryptedSecret]);
+
+    res.json({
+      success: true,
+      data: {
+        secret: secretBase32,
+        qr_code: qrCodeDataUrl,
+        otpauth_url: otpAuthUri
+      }
+    });
+
+  } catch (error) {
+    console.error('setupMFAOnboarding error:', error);
+    res.status(500).json({ success: false, message: 'Failed to initiate MFA setup' });
+  }
+};
+
+/**
+ * Confirm MFA during onboarding and log user in
+ * POST /:apiKey/auth/mfa/confirm-onboarding
+ * Body: { mfa_token, code }
+ */
+const confirmMFAOnboarding = async (req, res) => {
+  try {
+    const { mfa_token, code } = req.body;
+    const app = req.devApp;
+
+    if (!mfa_token || !code) {
+      return res.status(400).json({ success: false, message: 'MFA token and verification code are required' });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(mfa_token, process.env.JWT_SECRET);
+    } catch (e) {
+      return res.status(401).json({ success: false, message: 'MFA onboarding token expired. Please log in again.' });
+    }
+
+    if (decoded.purpose !== 'mfa_onboarding' || decoded.appId !== app.id) {
+      return res.status(401).json({ success: false, message: 'Invalid onboarding token' });
+    }
+
+    const settingsRes = await pool.query('SELECT pending_secret FROM user_mfa_settings WHERE user_id = $1', [decoded.userId]);
+    if (settingsRes.rows.length === 0 || !settingsRes.rows[0].pending_secret) {
+      return res.status(400).json({ success: false, message: 'No pending MFA setup found. Please call setup first.' });
+    }
+
+    const pendingEncrypted = settingsRes.rows[0].pending_secret;
+    const secretBase32 = passwordDecryptAES(pendingEncrypted);
+
+    const isValid = verifyTOTP(secretBase32, code);
+    if (!isValid) {
+      return res.status(400).json({ success: false, message: 'Invalid 6-digit verification code. Please check your authenticator app.' });
+    }
+
+    // Generate 8 backup recovery codes
+    const { plainCodes, hashedRecords } = await generateBackupCodes(8);
+
+    // Save active MFA settings
+    await pool.query(`
+      UPDATE user_mfa_settings
+      SET mfa_enabled = true,
+          secret_encrypted = pending_secret,
+          pending_secret = NULL,
+          backup_codes = $1,
+          updated_at = NOW()
+      WHERE user_id = $2
+    `, [JSON.stringify(hashedRecords), decoded.userId]);
+
+    // Update users table
+    await pool.query('UPDATE users SET mfa_enabled = true, updated_at = NOW() WHERE id = $1', [decoded.userId]);
+
+    const userRes = await pool.query('SELECT * FROM users WHERE id = $1', [decoded.userId]);
+    const user = userRes.rows[0];
+
+    // Issue login session
+    const sessionData = await issueUserLoginSession(user, app, req, 'mfa_onboarded');
+
+    res.json({
+      success: true,
+      message: 'Two-factor authentication enabled successfully',
+      backup_codes: plainCodes,
+      data: sessionData
+    });
+
+  } catch (error) {
+    console.error('confirmMFAOnboarding error:', error);
+    res.status(500).json({ success: false, message: 'Failed to confirm MFA setup' });
+  }
+};
+
+/**
+ * Get MFA status for authenticated user
+ * GET /:apiKey/user/mfa/status
+ * Headers: Bearer <user_token>
+ */
+const getUserMFAStatus = async (req, res) => {
+  try {
+    const token = extractUserToken(req);
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'Access token is required' });
+    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.appId !== req.devApp.id) {
+      return res.status(403).json({ success: false, message: 'Token app mismatch' });
+    }
+
+    const userRes = await pool.query('SELECT id, mfa_enabled FROM users WHERE id = $1', [decoded.userId]);
+    if (userRes.rows.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
+    const user = userRes.rows[0];
+
+    const settingsRes = await pool.query('SELECT mfa_enabled, backup_codes FROM user_mfa_settings WHERE user_id = $1', [user.id]);
+    const settings = settingsRes.rows[0] || {};
+
+    let unusedBackupCount = 0;
+    if (Array.isArray(settings.backup_codes)) {
+      unusedBackupCount = settings.backup_codes.filter(c => !c.used).length;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        mfa_enabled: !!user.mfa_enabled,
+        app_mfa_policy: req.devApp.mfa_policy || 'optional',
+        backup_codes_remaining: unusedBackupCount,
+        methods: ['totp', 'backup_code']
+      }
+    });
+
+  } catch (error) {
+    console.error('getUserMFAStatus error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch MFA status' });
+  }
+};
+
+/**
+ * Initiate user MFA setup (while logged in)
+ * POST /:apiKey/user/mfa/setup
+ * Headers: Bearer <user_token>
+ */
+const setupUserMFA = async (req, res) => {
+  try {
+    const token = extractUserToken(req);
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'Access token is required' });
+    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.appId !== req.devApp.id) {
+      return res.status(403).json({ success: false, message: 'Token app mismatch' });
+    }
+
+    const userRes = await pool.query('SELECT id, email FROM users WHERE id = $1', [decoded.userId]);
+    if (userRes.rows.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
+    const user = userRes.rows[0];
+
+    const secretBase32 = generateSecret(20);
+    const encryptedSecret = passwordEncryptAES(secretBase32);
+    const otpAuthUri = generateOtpAuthUri(req.devApp.app_name || 'MSPK Apps', user.email, secretBase32);
+    const qrCodeDataUrl = await QRCode.toDataURL(otpAuthUri);
+
+    await pool.query(`
+      INSERT INTO user_mfa_settings (user_id, app_id, pending_secret, mfa_enabled, created_at, updated_at)
+      VALUES ($1, $2, $3, false, NOW(), NOW())
+      ON CONFLICT (user_id) DO UPDATE SET 
+        pending_secret = $3,
+        updated_at = NOW()
+    `, [user.id, req.devApp.id, encryptedSecret]);
+
+    res.json({
+      success: true,
+      data: {
+        secret: secretBase32,
+        qr_code: qrCodeDataUrl,
+        otpauth_url: otpAuthUri
+      }
+    });
+
+  } catch (error) {
+    console.error('setupUserMFA error:', error);
+    res.status(500).json({ success: false, message: 'Failed to initiate MFA setup' });
+  }
+};
+
+/**
+ * Confirm user MFA setup (while logged in)
+ * POST /:apiKey/user/mfa/confirm
+ * Headers: Bearer <user_token>
+ * Body: { code }
+ */
+const confirmUserMFA = async (req, res) => {
+  try {
+    const token = extractUserToken(req);
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'Access token is required' });
+    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.appId !== req.devApp.id) {
+      return res.status(403).json({ success: false, message: 'Token app mismatch' });
+    }
+
+    const { code } = req.body;
+    if (!code) {
+      return res.status(400).json({ success: false, message: 'Verification code is required' });
+    }
+
+    const settingsRes = await pool.query('SELECT pending_secret FROM user_mfa_settings WHERE user_id = $1', [decoded.userId]);
+    if (settingsRes.rows.length === 0 || !settingsRes.rows[0].pending_secret) {
+      return res.status(400).json({ success: false, message: 'No pending MFA setup found. Please call setup first.' });
+    }
+
+    const pendingEncrypted = settingsRes.rows[0].pending_secret;
+    const secretBase32 = passwordDecryptAES(pendingEncrypted);
+
+    const isValid = verifyTOTP(secretBase32, code);
+    if (!isValid) {
+      return res.status(400).json({ success: false, message: 'Invalid 6-digit verification code' });
+    }
+
+    const { plainCodes, hashedRecords } = await generateBackupCodes(8);
+
+    await pool.query(`
+      UPDATE user_mfa_settings
+      SET mfa_enabled = true,
+          secret_encrypted = pending_secret,
+          pending_secret = NULL,
+          backup_codes = $1,
+          updated_at = NOW()
+      WHERE user_id = $2
+    `, [JSON.stringify(hashedRecords), decoded.userId]);
+
+    await pool.query('UPDATE users SET mfa_enabled = true, updated_at = NOW() WHERE id = $1', [decoded.userId]);
+
+    res.json({
+      success: true,
+      message: 'Two-factor authentication enabled successfully',
+      backup_codes: plainCodes
+    });
+
+  } catch (error) {
+    console.error('confirmUserMFA error:', error);
+    res.status(500).json({ success: false, message: 'Failed to confirm MFA setup' });
+  }
+};
+
+/**
+ * Regenerate backup codes
+ * POST /:apiKey/user/mfa/backup-codes/regenerate
+ * Headers: Bearer <user_token>
+ * Body: { code }
+ */
+const regenerateUserBackupCodes = async (req, res) => {
+  try {
+    const token = extractUserToken(req);
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'Access token is required' });
+    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.appId !== req.devApp.id) {
+      return res.status(403).json({ success: false, message: 'Token app mismatch' });
+    }
+
+    const { code } = req.body;
+    if (!code) {
+      return res.status(400).json({ success: false, message: 'Two-factor authentication code is required' });
+    }
+
+    const verifyResult = await verifyUserMFA(decoded.userId, code);
+    if (!verifyResult.valid) {
+      return res.status(401).json({ success: false, message: verifyResult.message || 'Invalid two-factor authentication code' });
+    }
+
+    const { plainCodes, hashedRecords } = await generateBackupCodes(8);
+
+    await pool.query(`
+      UPDATE user_mfa_settings
+      SET backup_codes = $1,
+          updated_at = NOW()
+      WHERE user_id = $2
+    `, [JSON.stringify(hashedRecords), decoded.userId]);
+
+    res.json({
+      success: true,
+      message: 'Backup codes regenerated successfully',
+      backup_codes: plainCodes
+    });
+
+  } catch (error) {
+    console.error('regenerateUserBackupCodes error:', error);
+    res.status(500).json({ success: false, message: 'Failed to regenerate backup codes' });
+  }
+};
+
+/**
+ * Disable MFA
+ * POST /:apiKey/user/mfa/disable
+ * Headers: Bearer <user_token>
+ * Body: { code }
+ */
+const disableUserMFA = async (req, res) => {
+  try {
+    const token = extractUserToken(req);
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'Access token is required' });
+    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.appId !== req.devApp.id) {
+      return res.status(403).json({ success: false, message: 'Token app mismatch' });
+    }
+
+    if (req.devApp.mfa_policy === 'enforced') {
+      return res.status(400).json({
+        success: false,
+        error: 'Policy violation',
+        message: 'Two-factor authentication is enforced by this application and cannot be disabled.'
+      });
+    }
+
+    const { code } = req.body;
+    if (!code) {
+      return res.status(400).json({ success: false, message: 'Two-factor authentication code is required' });
+    }
+
+    const verifyResult = await verifyUserMFA(decoded.userId, code);
+    if (!verifyResult.valid) {
+      return res.status(401).json({ success: false, message: verifyResult.message || 'Invalid two-factor authentication code' });
+    }
+
+    await pool.query(`
+      UPDATE user_mfa_settings
+      SET mfa_enabled = false,
+          secret_encrypted = NULL,
+          backup_codes = '[]'::jsonb,
+          updated_at = NOW()
+      WHERE user_id = $1
+    `, [decoded.userId]);
+
+    await pool.query('UPDATE users SET mfa_enabled = false, updated_at = NOW() WHERE id = $1', [decoded.userId]);
+
+    res.json({
+      success: true,
+      message: 'Two-factor authentication disabled successfully'
+    });
+
+  } catch (error) {
+    console.error('disableUserMFA error:', error);
+    res.status(500).json({ success: false, message: 'Failed to disable MFA' });
+  }
+};
+
 module.exports = {
+  disableUserMFA,
+  regenerateUserBackupCodes,
+  confirmUserMFA,
+  setupUserMFA,
+  getUserMFAStatus,
+  confirmMFAOnboarding,
+  setupMFAOnboarding,
+  verifyMFALogin,
   verifyAppCredentials,
   registerUser,
   verifyDeveloperCredentials,

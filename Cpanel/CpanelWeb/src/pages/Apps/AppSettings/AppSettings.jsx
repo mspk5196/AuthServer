@@ -22,6 +22,7 @@ import {
   Code2,
   Lock,
   UserCheck,
+  ShieldCheck,
   Send
 } from 'lucide-react';
 

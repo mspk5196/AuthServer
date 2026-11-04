@@ -28,6 +28,9 @@ router.use(publicApis.verifyAppCredentials);
 router.post('/:apiKey/auth/register', publicApis.registerUser);
 router.post('/:apiKey/auth/login', publicApis.loginUser);
 router.post('/:apiKey/auth/google', publicApis.googleAuth);
+router.post('/:apiKey/auth/mfa/verify', publicApis.verifyMFALogin);
+router.post('/:apiKey/auth/mfa/setup-onboarding', publicApis.setupMFAOnboarding);
+router.post('/:apiKey/auth/mfa/confirm-onboarding', publicApis.confirmMFAOnboarding);
 router.post('/:apiKey/auth/set-password-google-user', publicApis.setPasswordGoogleUser);
 router.post('/:apiKey/auth/request-password-reset', publicApis.requestPasswordReset);
 router.post('/:apiKey/auth/request-change-password-link', publicApis.requestChangePasswordLink);
@@ -40,6 +43,13 @@ router.post('/:apiKey/auth/delete-account', publicApis.deleteAccount);
 // User profile (requires Bearer token)
 router.get('/:apiKey/user/profile', publicApis.getUserProfile);
 router.patch('/:apiKey/user/profile', publicApis.patchUserProfile);
+
+// User MFA settings (requires Bearer token)
+router.get('/:apiKey/user/mfa/status', publicApis.getUserMFAStatus);
+router.post('/:apiKey/user/mfa/setup', publicApis.setupUserMFA);
+router.post('/:apiKey/user/mfa/confirm', publicApis.confirmUserMFA);
+router.post('/:apiKey/user/mfa/backup-codes/regenerate', publicApis.regenerateUserBackupCodes);
+router.post('/:apiKey/user/mfa/disable', publicApis.disableUserMFA);
 
 // User management
 router.get('/:apiKey/users', publicApis.getAppUsersByApiKey);

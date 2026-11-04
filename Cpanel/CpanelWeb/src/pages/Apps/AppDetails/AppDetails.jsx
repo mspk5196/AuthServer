@@ -491,6 +491,7 @@ export default function AppDetails() {
                   <th className="px-4 py-3.5">Name</th>
                   <th className="px-4 py-3.5">Username</th>
                   <th className="px-4 py-3.5">Verified</th>
+                  <th className="px-4 py-3.5">MFA</th>
                   <th className="px-4 py-3.5">Status</th>
                   <th className="px-4 py-3.5 text-right">Actions</th>
                 </tr>

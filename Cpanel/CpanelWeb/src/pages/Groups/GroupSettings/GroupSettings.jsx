@@ -19,7 +19,8 @@ import {
   CheckCircle2, 
   X, 
   ExternalLink, 
-  ShieldAlert, 
+  ShieldAlert,
+  ShieldCheck, 
   Lock, 
   UserPlus,
   Search,
@@ -50,6 +51,8 @@ export default function GroupSettings() {
 
   // OAuth settings
   const [useCommonOAuth, setUseCommonOAuth] = useState(false);
+  const [groupMfaPolicy, setGroupMfaPolicy] = useState('optional');
+  const [applyMfaToAllApps, setApplyMfaToAllApps] = useState(true);
   const [commonClientId, setCommonClientId] = useState('');
   const [commonClientSecret, setCommonClientSecret] = useState('');
   const [showOAuthPanel, setShowOAuthPanel] = useState(false);
@@ -122,6 +125,7 @@ export default function GroupSettings() {
         setGroup(groupData);
         setApps(appsData || []);
         setUseCommonOAuth(groupData.use_common_google_oauth || false);
+        setGroupMfaPolicy(groupData.mfa_policy || 'optional');
         setCommonClientId(groupData.common_google_client_id || '');
         setCommonClientSecret(groupData.common_google_client_secret || '');
         setUseCommonExtraFields(groupData.use_common_extra_fields || false);
@@ -141,6 +145,51 @@ export default function GroupSettings() {
       setError('Failed to load group settings');
     } finally {
       setLoading(false);
+    }
+  }
+
+
+  async function handleSaveGroupMfa(newPolicy) {
+    setSaving(true);
+    setError('');
+    try {
+      const resp = await api.put(`/group-settings/${groupId}`, {
+        mfa_policy: newPolicy,
+        apply_mfa_to_apps: applyMfaToAllApps
+      }, token);
+      if (resp.success) {
+        setGroupMfaPolicy(newPolicy);
+        setSuccess(`Group MFA policy updated to ${newPolicy} and synchronized across apps!`);
+        await fetchGroupSettings();
+        setTimeout(() => setSuccess(''), 3500);
+      } else {
+        setError(resp.message || 'Failed to update MFA policy');
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Failed to update group MFA policy');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleUpdateAppMfa(appId, newPolicy) {
+    setSaving(true);
+    setError('');
+    try {
+      const resp = await api.put(`/apps/updateApp/${appId}`, { mfa_policy: newPolicy }, token);
+      if (resp.success) {
+        setSuccess('App MFA policy updated successfully');
+        await fetchGroupSettings();
+        setTimeout(() => setSuccess(''), 3000);
+      } else {
+        setError(resp.message || 'Failed to update app MFA policy');
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Failed to update app MFA policy');
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -733,6 +782,7 @@ export default function GroupSettings() {
     { id: 'general', label: 'General', icon: FolderKanban },
     { id: 'oauth', label: 'OAuth', icon: KeyRound },
     { id: 'fields', label: 'Extra Fields', icon: Layers },
+    { id: 'mfa', label: 'MFA Security', icon: ShieldCheck },
     { id: 'data-mgmt', label: 'Data Management', icon: RefreshCw },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'bulk-ops', label: 'Bulk Operations', icon: Zap },
@@ -1371,6 +1421,195 @@ export default function GroupSettings() {
         )}
 
         {/* 5. USERS TAB */}
+        
+        {/* MFA Security Policy Tab */}
+        {activeTab === 'mfa' && (
+          <div className="space-y-6">
+            {/* Group-Wide Policy Card */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold text-slate-900">Group Multi-Factor Authentication (MFA / 2FA)</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Configure two-factor authentication requirements for all applications in this group.
+                    </p>
+                  </div>
+                </div>
+
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider ${
+                  groupMfaPolicy === 'enforced'
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : groupMfaPolicy === 'disabled'
+                    ? 'bg-rose-50 text-rose-700 border-rose-200'
+                    : 'bg-blue-50 text-blue-700 border-blue-200'
+                }`}>
+                  Group Policy: {groupMfaPolicy}
+                </span>
+              </div>
+
+              {/* Policy Options */}
+              <div className="space-y-3">
+                {/* Optional Radio */}
+                <label
+                  onClick={() => handleSaveGroupMfa('optional')}
+                  className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all ${
+                    groupMfaPolicy === 'optional'
+                      ? 'bg-indigo-50/50 border-indigo-300 ring-2 ring-indigo-500/20'
+                      : 'bg-slate-50 border-slate-200 hover:bg-slate-100/70'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="group_mfa_policy"
+                    value="optional"
+                    checked={groupMfaPolicy === 'optional'}
+                    onChange={() => {}}
+                    disabled={saving}
+                    className="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                  />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-slate-900">Optional (Flexible)</span>
+                      <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded font-medium">Default</span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Users across member apps can choose to voluntarily activate 2FA via Authenticator app or backup codes.
+                    </p>
+                  </div>
+                </label>
+
+                {/* Enforced Radio */}
+                <label
+                  onClick={() => handleSaveGroupMfa('enforced')}
+                  className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all ${
+                    groupMfaPolicy === 'enforced'
+                      ? 'bg-indigo-50/50 border-indigo-300 ring-2 ring-indigo-500/20'
+                      : 'bg-slate-50 border-slate-200 hover:bg-slate-100/70'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="group_mfa_policy"
+                    value="enforced"
+                    checked={groupMfaPolicy === 'enforced'}
+                    onChange={() => {}}
+                    disabled={saving}
+                    className="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                  />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-slate-900">Enforced (Mandatory Across Group)</span>
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-medium">High Security</span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      All users logging into member apps in this group must configure 2FA before being granted access.
+                    </p>
+                  </div>
+                </label>
+
+                {/* Disabled Radio */}
+                <label
+                  onClick={() => handleSaveGroupMfa('disabled')}
+                  className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all ${
+                    groupMfaPolicy === 'disabled'
+                      ? 'bg-indigo-50/50 border-indigo-300 ring-2 ring-indigo-500/20'
+                      : 'bg-slate-50 border-slate-200 hover:bg-slate-100/70'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="group_mfa_policy"
+                    value="disabled"
+                    checked={groupMfaPolicy === 'disabled'}
+                    onChange={() => {}}
+                    disabled={saving}
+                    className="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                  />
+                  <div>
+                    <span className="text-sm font-semibold text-slate-900">Disabled</span>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Multi-factor authentication is disabled for all apps in this group.
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              {/* Group Sync Checkbox */}
+              <div className="flex items-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                <input
+                  type="checkbox"
+                  id="apply_mfa_to_all_apps"
+                  checked={applyMfaToAllApps}
+                  onChange={(e) => setApplyMfaToAllApps(e.target.checked)}
+                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                />
+                <label htmlFor="apply_mfa_to_all_apps" className="text-xs font-medium text-slate-700 cursor-pointer">
+                  Automatically sync this policy to all member applications in this group
+                </label>
+              </div>
+            </div>
+
+            {/* Per-App Individual Overrides Table */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-4">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">Member Applications MFA Status</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  View and manage individual app MFA policies within this group.
+                </p>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-slate-700">
+                  <thead className="bg-slate-50 border-b border-slate-200 uppercase tracking-wider font-bold text-slate-500 text-[11px]">
+                    <tr>
+                      <th className="px-4 py-3">Application</th>
+                      <th className="px-4 py-3">Current MFA Policy</th>
+                      <th className="px-4 py-3 text-right">Individual Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium">
+                    {apps.map((a) => (
+                      <tr key={a.id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="px-4 py-3">
+                          <span className="font-bold text-slate-900">{a.app_name}</span>
+                          <span className="block text-[10px] text-slate-400 font-mono">{a.id}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider ${
+                            (a.mfa_policy || 'optional') === 'enforced'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : (a.mfa_policy || 'optional') === 'disabled'
+                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : 'bg-blue-50 text-blue-700 border-blue-200'
+                          }`}>
+                            {a.mfa_policy || 'optional'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <select
+                            value={a.mfa_policy || 'optional'}
+                            onChange={(e) => handleUpdateAppMfa(a.id, e.target.value)}
+                            disabled={saving}
+                            className="text-xs px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-slate-700 font-semibold focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer"
+                          >
+                            <option value="optional">Optional</option>
+                            <option value="enforced">Enforced</option>
+                            <option value="disabled">Disabled</option>
+                          </select>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'users' && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">

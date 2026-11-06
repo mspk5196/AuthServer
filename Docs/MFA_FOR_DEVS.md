@@ -141,28 +141,47 @@ Add an **MFA Security Settings** card:
   - ☐ Email OTP (optional toggle)
 
 ### 6.2 In `@mspkapps/auth-client` SDK:
-Add clean, first-class methods for client apps:
-```typescript
+First-class methods available in `@mspkapps/auth-client` (v0.2.5+):
+
+```javascript
 // 1. In Login Flow
 const res = await authClient.login({ email, password });
+
 if (res.mfa_required) {
-  // Show 2FA input modal
+  // Show 2FA challenge input modal (TOTP or 8-char recovery code)
   const loginResult = await authClient.verifyMFA({
-    mfaToken: res.mfa_token,
-    code: userInputCode,
-    factor: 'totp' // or 'backup_code'
+    mfa_token: res.mfa_token,
+    code: userInputCode
   });
+} else if (res.mfa_setup_required) {
+  // App enforces MFA — mandatory onboarding required
+  const setup = await authClient.setupMFAOnboarding({ mfa_token: res.mfa_token });
+  // Display QR code: setup.data.qr_code
+  // Confirm with user's first 6-digit code:
+  const loginResult = await authClient.confirmMFAOnboarding({
+    mfa_token: res.mfa_token,
+    code: userInputCode
+  });
+  console.log(loginResult.data.backup_codes); // 8 emergency recovery codes
 }
 
 // 2. In User Profile Settings (Setup)
-const setup = await authClient.setupTOTP();
-// Returns: { qrCodeUrl: 'data:image/png;base64,...', secret: 'JBSWY3DPEHPK3PXP', backupCodes: ['...'] }
+const setup = await authClient.setupMFA();
+// Returns: { success: true, data: { qr_code: 'data:image/png;base64,...', secret: 'JBSWY3DPEHPK3PXP', otpauth_url: '...' } }
 
-// 3. Confirm Setup
-await authClient.confirmTOTP({ code: userInputCode });
+// 3. Confirm Setup & Activate
+const confirmResult = await authClient.confirmMFA({ code: userInputCode });
+console.log(confirmResult.data.backup_codes); // 8 single-use recovery codes
 
-// 4. Disable MFA
-await authClient.disableMFA({ password: userPassword });
+// 4. Check Status
+const status = await authClient.getMFAStatus();
+// Returns: { mfa_enabled: true, backup_codes_count: 8, allowed_methods: ['totp', 'backup_code'] }
+
+// 5. Regenerate Backup Codes
+const newCodes = await authClient.regenerateBackupCodes({ code: currentTotpCode });
+
+// 6. Disable MFA
+await authClient.disableMFA({ code: currentTotpCode });
 ```
 
 ---

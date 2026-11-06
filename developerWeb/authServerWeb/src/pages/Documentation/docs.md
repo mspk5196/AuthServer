@@ -11,8 +11,19 @@ A beginner-friendly guide to implementing authentication using the `@mspkapps/au
   - [React Web](#react-web-1)
   - [React Native](#react-native-1)
 - [Available Functions](#available-functions)
+  - [Core Authentication Methods](#core-authentication-methods)
+  - [Multi-Factor Authentication (MFA / 2FA)](#multi-factor-authentication-mfa--2fa)
+  - [Password Management](#password-management)
+  - [Email Verification](#email-verification)
+  - [Account Management](#account-management)
+  - [Advanced Usage](#advanced-usage)
+- [Multi-Factor Authentication (MFA / 2FA) Guide](#multi-factor-authentication-mfa--2fa-guide)
+  - [App MFA Policies](#app-mfa-policies)
+  - [Backend Proxy Implementation](#backend-proxy-implementation)
 - [Implementation Examples](#implementation-examples)
   - [React Web Examples](#react-web-examples)
+    - [Login with 2FA Challenge & Onboarding](#login-with-2fa-challenge--onboarding)
+    - [User Settings 2FA Management](#user-settings-2fa-management)
   - [React Native Examples](#react-native-examples)
 - [Common Patterns](#common-patterns)
 - [Troubleshooting](#troubleshooting)
@@ -26,6 +37,8 @@ This demo project showcases how to integrate the `@mspkapps/auth-client` authent
 - ✅ Email/Password Authentication
 - ✅ Google Sign-In (OAuth)
 - ✅ User Registration
+- ✅ Multi-Factor Authentication (MFA / 2FA with TOTP & Backup Codes)
+- ✅ App & Group MFA Policies (Off, Optional, Enforced)
 - ✅ Password Reset Flow
 - ✅ Email Verification
 - ✅ Account Management (Delete Account)
@@ -655,9 +668,181 @@ console.log(response.data.user);
 
 ---
 
+### Multi-Factor Authentication (MFA / 2FA)
+
+AuthServer provides comprehensive Two-Factor Authentication using **RFC 6238 Time-Based One-Time Passwords (TOTP)** and **single-use emergency backup recovery codes**.
+
+#### 6. **verifyMFA** - Verify 2FA challenge code during login
+
+When `login` or `googleAuth` indicates that 2FA is required (`mfa_required: true`), verify the challenge using the ephemeral `mfa_token` and the 6-digit TOTP code or an 8-character backup recovery code.
+
+```javascript
+const response = await authClient.verifyMFA({
+  mfa_token: 'ephemeral_mfa_token_here',
+  code: '123456' // 6-digit TOTP or 8-character backup recovery code
+});
+
+// Successful verification returns user session
+const { access_token, user } = response.data;
+```
+
+**Parameters:**
+- `mfa_token` (required): Ephemeral challenge token returned from `login` or `googleAuth`
+- `code` (required): 6-digit TOTP code or 8-character single-use recovery code
+
+**Response:**
+Returns `{ success: true, data: { access_token, refresh_token, user } }` and automatically stores the authentication token.
+
+---
+
+#### 7. **setupMFAOnboarding** - Generate QR code for mandatory 2FA onboarding
+
+When an application enforces 2FA (`mfa_policy = 'enforced'`) and a user attempts to log in without 2FA configured, the login response returns `{ mfa_setup_required: true, mfa_token }`. Call `setupMFAOnboarding` to generate the visual QR code and Base32 secret for setup.
+
+```javascript
+const response = await authClient.setupMFAOnboarding({
+  mfa_token: 'ephemeral_mfa_token_here'
+});
+
+console.log(response.data.qr_code);    // Data URL (data:image/png;base64,...)
+console.log(response.data.secret);     // Base32 secret string (e.g. JBSWY3DPEHPK3PXP)
+console.log(response.data.otpauth_url); // Standard otpauth://totp/... URL
+```
+
+**Parameters:**
+- `mfa_token` (required): Ephemeral onboarding token returned from initial login
+
+**Response:**
+Returns `{ success: true, data: { secret, qr_code, otpauth_url } }`.
+
+---
+
+#### 8. **confirmMFAOnboarding** - Confirm onboarding setup and log in
+
+Confirms the authenticator configuration with the user's first 6-digit code, activates 2FA for the account, generates 8 recovery backup codes, and completes user login.
+
+```javascript
+const response = await authClient.confirmMFAOnboarding({
+  mfa_token: 'ephemeral_mfa_token_here',
+  code: '123456'
+});
+
+const { access_token, user, backup_codes } = response.data;
+console.log(backup_codes); // Array of 8 recovery codes: ['a1b2c3d4', ...]
+```
+
+**Parameters:**
+- `mfa_token` (required): Ephemeral onboarding token
+- `code` (required): 6-digit code from authenticator app
+
+**Response:**
+Returns `{ success: true, data: { access_token, refresh_token, user, backup_codes } }` and sets the session token.
+
+---
+
+#### 9. **getMFAStatus** - Get current 2FA status for logged-in user
+
+Checks whether Two-Factor Authentication is currently enabled for the authenticated user and retrieves the remaining backup recovery codes count.
+
+```javascript
+const response = await authClient.getMFAStatus();
+
+console.log(response.data);
+// {
+//   mfa_enabled: true,
+//   has_backup_codes: true,
+//   backup_codes_count: 8,
+//   allowed_methods: ['totp', 'backup_code']
+// }
+```
+
+**Parameters:** None (requires user authentication token)
+
+**Response:**
+Returns `{ success: true, data: { mfa_enabled, has_backup_codes, backup_codes_count, allowed_methods } }`.
+
+---
+
+#### 10. **setupMFA** - Initiate 2FA setup from account settings
+
+Generates an RFC-compliant TOTP secret and QR code for an authenticated user wishing to enable 2FA from their settings.
+
+```javascript
+const response = await authClient.setupMFA();
+
+console.log(response.data.qr_code);    // Data URL for QR display
+console.log(response.data.secret);     // Base32 secret key for manual entry
+console.log(response.data.otpauth_url); // otpauth:// URL
+```
+
+**Parameters:** None (requires user authentication token)
+
+**Response:**
+Returns `{ success: true, data: { secret, qr_code, otpauth_url } }`.
+
+---
+
+#### 11. **confirmMFA** - Confirm and activate 2FA from account settings
+
+Verifies the user's 6-digit code, enables 2FA for the account, and returns 8 one-time backup recovery codes.
+
+```javascript
+const response = await authClient.confirmMFA({
+  code: '123456'
+});
+
+console.log(response.data.backup_codes); // Array of 8 one-time recovery codes
+```
+
+**Parameters:**
+- `code` (required): 6-digit verification code from authenticator app
+
+**Response:**
+Returns `{ success: true, message: 'MFA enabled successfully', data: { backup_codes: [...] } }`.
+
+---
+
+#### 12. **regenerateBackupCodes** - Generate a fresh set of recovery backup codes
+
+Invalidates all existing backup codes and generates 8 new recovery codes. Requires confirmation with a current 6-digit TOTP code.
+
+```javascript
+const response = await authClient.regenerateBackupCodes({
+  code: '123456'
+});
+
+console.log(response.data.backup_codes); // Array of 8 new recovery codes
+```
+
+**Parameters:**
+- `code` (required): Current 6-digit TOTP code from authenticator app
+
+**Response:**
+Returns `{ success: true, message: 'Backup codes regenerated', data: { backup_codes: [...] } }`.
+
+---
+
+#### 13. **disableMFA** - Disable 2FA for authenticated user
+
+Turns off Two-Factor Authentication for the account. Requires verification with a current 6-digit TOTP code or backup code.
+
+```javascript
+const response = await authClient.disableMFA({
+  code: '123456' // 6-digit TOTP or backup code
+});
+```
+
+**Parameters:**
+- `code` (required): Current 6-digit TOTP code or unused backup code
+
+**Response:**
+Returns `{ success: true, message: 'MFA disabled successfully' }`.
+
+---
+
 ### Password Management
 
-#### 6. **requestPasswordReset** - Send password reset email
+#### 14. **requestPasswordReset** - Send password reset email
 
 ```javascript
 await authClient.requestPasswordReset({ 
@@ -674,7 +859,7 @@ await authClient.requestPasswordReset({
 
 ---
 
-#### 7. **requestChangePasswordLink** - Send password change email for logged-in users
+#### 15. **requestChangePasswordLink** - Send password change email for logged-in users
 
 ```javascript
 await authClient.requestChangePasswordLink({ 
@@ -691,7 +876,7 @@ await authClient.requestChangePasswordLink({
 
 ---
 
-#### 8. **sendGoogleUserSetPasswordEmail** - Send password setup email for Google users
+#### 16. **sendGoogleUserSetPasswordEmail** - Send password setup email for Google users
 
 ```javascript
 await authClient.sendGoogleUserSetPasswordEmail({ 
@@ -710,7 +895,7 @@ await authClient.sendGoogleUserSetPasswordEmail({
 
 ### Email Verification
 
-#### 9. **resendVerificationEmail** - Resend email verification
+#### 17. **resendVerificationEmail** - Resend email verification
 
 ```javascript
 await authClient.resendVerificationEmail({ 
@@ -731,7 +916,7 @@ await authClient.resendVerificationEmail({
 
 ### Account Management
 
-#### 10. **deleteAccount** - Permanently delete user account
+#### 18. **deleteAccount** - Permanently delete user account
 
 ```javascript
 await authClient.deleteAccount({ 
@@ -752,7 +937,7 @@ await authClient.deleteAccount({
 
 ### Advanced Usage
 
-#### 11. **authed** - Make custom authenticated API calls
+#### 19. **authed** - Make custom authenticated API calls
 
 ```javascript
 const response = await authClient.authed('custom/endpoint', {
@@ -772,6 +957,165 @@ const response = await authClient.authed('custom/endpoint', {
 **Response:** Response data from custom endpoint.
 
 **Use Case:** For custom endpoints not covered by the built-in methods.
+
+---
+
+## Multi-Factor Authentication (MFA / 2FA) Guide
+
+### App MFA Policies
+
+Developers have complete control over how Two-Factor Authentication is enforced. In the CPanel or Developer Portal, navigate to **Apps** &rarr; **App Settings** (or **App Groups** &rarr; **Group Settings** to apply a policy across multiple apps):
+
+1. **`off` (Disabled)**:
+   - No MFA challenges are issued during login.
+   - Users cannot configure MFA.
+2. **`optional` (User-controlled)**:
+   - Users can choose to enable 2FA from their account settings.
+   - When a user has 2FA enabled, `login()` returns `{ mfa_required: true, mfa_token: '...', methods: ['totp', 'backup_code'] }`.
+   - Users without 2FA log in normally.
+3. **`enforced` (Mandatory for all users)**:
+   - Every user must have 2FA enabled to access the app.
+   - If a user with 2FA signs in, they are challenged for their TOTP or backup code (`mfa_required: true`).
+   - If a user without 2FA signs in, `login()` returns `{ mfa_setup_required: true, mfa_token: '...' }`, triggering the mandatory onboarding flow.
+
+---
+
+### Backend Proxy Implementation
+
+All `@mspkapps/auth-client` operations and API credentials must reside **strictly on your backend**. Frontend applications communicate solely with your backend routes.
+
+#### 1. Handling Login with MFA
+
+In your backend login route (`POST /api/auth/login`):
+
+```javascript
+import authclient from '../auth/authClient.js';
+
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const resp = await authclient.login({ email, password });
+
+    // If 2FA challenge or mandatory setup is required, return immediately to client
+    if (resp?.mfa_required || resp?.mfa_setup_required) {
+      return res.json(resp);
+    }
+
+    // Normal login: return access token and user payload
+    return res.json(resp);
+  } catch (err) {
+    return res.status(400).json({ success: false, message: err.message });
+  }
+});
+```
+
+#### 2. Public MFA Endpoints (No Session Token Required)
+
+```javascript
+// Verify 2FA challenge code (TOTP or backup code)
+router.post('/mfa/verify', async (req, res) => {
+  try {
+    const { mfa_token, code } = req.body;
+    const resp = await authclient.verifyMFA({ mfa_token, code });
+    return res.json(resp);
+  } catch (err) {
+    return res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Start mandatory onboarding setup (returns QR code & secret)
+router.post('/mfa/setup-onboarding', async (req, res) => {
+  try {
+    const { mfa_token } = req.body;
+    const resp = await authclient.setupMFAOnboarding({ mfa_token });
+    return res.json(resp);
+  } catch (err) {
+    return res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Confirm mandatory onboarding setup & complete login (returns session + 8 backup codes)
+router.post('/mfa/confirm-onboarding', async (req, res) => {
+  try {
+    const { mfa_token, code } = req.body;
+    const resp = await authclient.confirmMFAOnboarding({ mfa_token, code });
+    return res.json(resp);
+  } catch (err) {
+    return res.status(400).json({ success: false, message: err.message });
+  }
+});
+```
+
+#### 3. Protected User MFA Endpoints (Requires User JWT Bearer Token)
+
+In a multi-user backend, proxy user-authenticated MFA requests using `authclient.authed()` with the incoming user's Bearer token:
+
+```javascript
+// Helper for user-authenticated proxy requests
+async function proxyUserAuth(path, userBearerToken, options = {}) {
+  return authclient.authed(path, {
+    method: options.method || 'GET',
+    body: options.body,
+    headers: {
+      Authorization: `Bearer ${userBearerToken}`,
+      ...(options.headers || {})
+    }
+  });
+}
+
+// GET /api/user/mfa/status
+router.get('/user/mfa/status', requireAuth, async (req, res) => {
+  try {
+    const resp = await proxyUserAuth('user/mfa/status', req.token);
+    return res.json(resp);
+  } catch (err) {
+    return res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/user/mfa/setup (generates QR code)
+router.post('/user/mfa/setup', requireAuth, async (req, res) => {
+  try {
+    const resp = await proxyUserAuth('user/mfa/setup', req.token, { method: 'POST', body: {} });
+    return res.json(resp);
+  } catch (err) {
+    return res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/user/mfa/confirm (activates 2FA and returns 8 backup codes)
+router.post('/user/mfa/confirm', requireAuth, async (req, res) => {
+  try {
+    const { code } = req.body;
+    const resp = await proxyUserAuth('user/mfa/confirm', req.token, { method: 'POST', body: { code } });
+    return res.json(resp);
+  } catch (err) {
+    return res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/user/mfa/backup-codes/regenerate
+router.post('/user/mfa/backup-codes/regenerate', requireAuth, async (req, res) => {
+  try {
+    const { code } = req.body;
+    const resp = await proxyUserAuth('user/mfa/backup-codes/regenerate', req.token, { method: 'POST', body: { code } });
+    return res.json(resp);
+  } catch (err) {
+    return res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/user/mfa/disable
+router.post('/user/mfa/disable', requireAuth, async (req, res) => {
+  try {
+    const { code } = req.body;
+    const resp = await proxyUserAuth('user/mfa/disable', req.token, { method: 'POST', body: { code } });
+    return res.json(resp);
+  } catch (err) {
+    return res.status(400).json({ success: false, message: err.message });
+  }
+});
+```
 
 ---
 

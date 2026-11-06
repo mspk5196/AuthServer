@@ -18,11 +18,12 @@ It aims to be a self-hostable and customizable alternative to modern auth platfo
 ## ✨ Features
 
 - 🔐 **Authentication & Sessions**
+- 🛡️ **Multi-Factor Authentication (MFA / 2FA)** (TOTP & Backup Codes with Per-App & Group Policy: `off`, `optional`, `enforced`)
 - 🔑 **OAuth (Google Login)**
 - 👥 **User Management + Merge + Groups**
 - 💸 **Payments Integration**
 - 🧾 **Dynamic JSONB User Fields**
-- 🧰 **Developer Portal UI**
+- 🧰 **Developer Portal UI & Documentation**
 - 🐳 **Dockerized Deployment**
 - 📦 **Redis-backed pipelines**
 - 🔁 **CI/CD (Jenkins)**
@@ -79,7 +80,44 @@ AuthServer was built over multiple phases totaling **200+ commits** of iteration
 - Access token verification
 - CORS + backend polish
 
-> Total commits since Dec 25: **218+**
+### **Phase 5 — Multi-Factor Authentication & App Security Policies**
+- RFC 6238-compliant Time-Based One-Time Password (TOTP) verification engine
+- High-entropy single-use backup recovery codes
+- Configurable App & App Group MFA policies (`off`, `optional`, `enforced`)
+- Mandatory onboarding flow with interactive QR codes & Base32 secret fallback
+- Complete backend proxy support in `@mspkapps/auth-client` npm package
+- Developer Portal & CPanel security management UI
+
+> Total commits since Dec 25: **240+**
+
+---
+
+## 🛡️ Multi-Factor Authentication (MFA) Integration
+
+Integrate 2FA into any app via `@mspkapps/auth-client`:
+
+```javascript
+import authclient from '@mspkapps/auth-client';
+
+// 1. Login with MFA awareness
+const resp = await authclient.login({ email, password });
+
+if (resp.mfa_required) {
+  // 2. Prompt user for 6-digit TOTP code or backup code
+  const session = await authclient.verifyMFA({
+    mfa_token: resp.mfa_token,
+    code: userCode
+  });
+} else if (resp.mfa_setup_required) {
+  // 3. App enforces MFA — start mandatory setup
+  const setup = await authclient.setupMFAOnboarding({ mfa_token: resp.mfa_token });
+  // Display setup.data.qr_code, then confirm:
+  const session = await authclient.confirmMFAOnboarding({
+    mfa_token: resp.mfa_token,
+    code: verificationCode
+  });
+}
+```
 
 ---
 

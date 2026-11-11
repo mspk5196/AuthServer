@@ -1755,7 +1755,7 @@ const mergeUsersAcrossApps = async (req, res) => {
           const newName = `${sanitized}_${suffix}`;
           await client.query(`UPDATE users SET username = $1 WHERE id = $2`, [newName, uid]);
           // notify user
-          const userRes = await client.query('SELECT u.id, u.email, a.id as app_id, a.app_name, a.email_smtp_profile_name FROM users u JOIN dev_apps a ON a.id = u.app_id WHERE u.id = $1', [uid]);
+          const userRes = await client.query('SELECT u.id as user_id, u.email, a.id as app_id, a.app_name, a.* FROM users u JOIN dev_apps a ON a.id = u.app_id WHERE u.id = $1', [uid]);
           if (userRes.rows[0] && userRes.rows[0].email) {
             const uInfo = userRes.rows[0];
             sendAppUserEmail({
@@ -1764,12 +1764,12 @@ const mergeUsersAcrossApps = async (req, res) => {
               html: `<p>Your username has been changed to <strong>${newName}</strong> by the application owner.</p>`,
               fromName: uInfo.app_name,
               smtpProfileName: uInfo.email_smtp_profile_name || 'default',
-              metadata: { type: 'username_update', appId: uInfo.app_id, appName: uInfo.app_name, userId: uInfo.id }
+              metadata: { type: 'username_update', appId: uInfo.app_id, appName: uInfo.app_name, userId: uInfo.user_id }
             }).catch(e => console.error('sendAppUserEmail error', e));
           }
         } else {
           await client.query(`UPDATE users SET username = $1 WHERE id = $2`, [sanitized, uid]);
-          const userRes = await client.query('SELECT u.id, u.email, a.id as app_id, a.app_name, a.email_smtp_profile_name FROM users u JOIN dev_apps a ON a.id = u.app_id WHERE u.id = $1', [uid]);
+          const userRes = await client.query('SELECT u.id as user_id, u.email, a.id as app_id, a.app_name, a.* FROM users u JOIN dev_apps a ON a.id = u.app_id WHERE u.id = $1', [uid]);
           if (userRes.rows[0] && userRes.rows[0].email) {
             const uInfo = userRes.rows[0];
             sendAppUserEmail({
@@ -1778,14 +1778,14 @@ const mergeUsersAcrossApps = async (req, res) => {
               html: `<p>Your username has been changed to <strong>${sanitized}</strong> by the application owner.</p>`,
               fromName: uInfo.app_name,
               smtpProfileName: uInfo.email_smtp_profile_name || 'default',
-              metadata: { type: 'username_update', appId: uInfo.app_id, appName: uInfo.app_name, userId: uInfo.id }
+              metadata: { type: 'username_update', appId: uInfo.app_id, appName: uInfo.app_name, userId: uInfo.user_id }
             }).catch(e => console.error('sendAppUserEmail error', e));
           }
         }
       }
 
       // Notify kept user about merge
-      const keptRes = await client.query('SELECT u.id, u.email, a.id as app_id, a.app_name, a.email_smtp_profile_name FROM users u JOIN dev_apps a ON a.id = u.app_id WHERE u.id = $1', [keepUserId]);
+      const keptRes = await client.query('SELECT u.id as user_id, u.email, a.id as app_id, a.app_name, a.* FROM users u JOIN dev_apps a ON a.id = u.app_id WHERE u.id = $1', [keepUserId]);
       if (keptRes.rows[0] && keptRes.rows[0].email) {
         const kInfo = keptRes.rows[0];
         sendAppUserEmail({
@@ -1794,7 +1794,7 @@ const mergeUsersAcrossApps = async (req, res) => {
           html: `<p>Your accounts across multiple applications owned by the same developer have been consolidated. If you have questions, contact support.</p>`,
           fromName: kInfo.app_name,
           smtpProfileName: kInfo.email_smtp_profile_name || 'default',
-          metadata: { type: 'accounts_merged', appId: kInfo.app_id, appName: kInfo.app_name, userId: kInfo.id }
+          metadata: { type: 'accounts_merged', appId: kInfo.app_id, appName: kInfo.app_name, userId: kInfo.user_id }
         }).catch(e => console.error('sendAppUserEmail error', e));
       }
     }

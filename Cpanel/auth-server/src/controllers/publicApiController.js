@@ -1765,7 +1765,7 @@ const completePasswordReset = async (req, res) => {
 
     // Find valid reset token and get current password
     const result = await pool.query(`
-      SELECT pr.id, pr.user_id, u.password_hash, u.email, u.app_id, a.app_name, a.support_email, a.email_smtp_profile_name
+      SELECT pr.id, pr.user_id, u.password_hash, u.email, u.app_id, a.*
       FROM password_resets pr
       JOIN users u ON pr.user_id = u.id
       JOIN dev_apps a ON u.app_id = a.id
@@ -1782,14 +1782,18 @@ const completePasswordReset = async (req, res) => {
 
     const resetRecord = result.rows[0];
 
-    // Log old password to history
-    await pool.query(`
-      INSERT INTO user_password_history (
-        user_id, old_password_hash, changed_at
-      ) VALUES (
-        $1, $2, NOW()
-      )
-    `, [resetRecord.user_id, resetRecord.password_hash]);
+    // Log old password to history (best effort)
+    try {
+      await pool.query(`
+        INSERT INTO user_password_history (
+          user_id, old_password_hash, changed_at
+        ) VALUES (
+          $1, $2, NOW()
+        )
+      `, [resetRecord.user_id, resetRecord.password_hash]);
+    } catch (histErr) {
+      console.warn('Could not record user_password_history:', histErr.message);
+    }
 
     // Hash new password (use trimmed version)
     const salt = await bcrypt.genSalt(10);
@@ -1966,11 +1970,16 @@ const verifyDeleteEmail = async (req, res) => {
 
     const verification = result.rows[0];
 
-    const appData = await pool.query(
-      'SELECT app_name, support_email, email_smtp_profile_name FROM dev_apps WHERE id = $1',
-      [verification.app_id]
-    );
-    const app = appData.rows[0];
+    let app = { app_name: 'your app', support_email: '' };
+    try {
+      const appData = await pool.query('SELECT * FROM dev_apps WHERE id = $1', [verification.app_id]);
+      if (appData.rows.length > 0) app = appData.rows[0];
+    } catch (_) {
+      try {
+        const fallback = await pool.query('SELECT app_name, support_email FROM dev_apps WHERE id = $1', [verification.app_id]);
+        if (fallback.rows.length > 0) app = fallback.rows[0];
+      } catch (__) {}
+    }
 
     const user_result = await pool.query(
       'SELECT id, name, username, email, created_at, password_hash, google_linked FROM users WHERE app_id = $1 AND id = $2',
@@ -2843,7 +2852,7 @@ const verifyEmailSetPasswordGoogleUser = async (req, res) => {
 
       // Get user and app details
       const userRes = await pool.query(
-        'SELECT u.id, u.email, u.password_hash, a.app_name, a.support_email, a.email_smtp_profile_name FROM users u JOIN dev_apps a ON u.app_id = a.id WHERE u.id = $1 AND u.app_id = $2',
+        'SELECT u.id, u.email, u.password_hash, a.* FROM users u JOIN dev_apps a ON u.app_id = a.id WHERE u.id = $1 AND u.app_id = $2',
         [verification.user_id, verification.app_id]
       );
 
@@ -3060,7 +3069,7 @@ const verifyEmailSetPasswordGoogleUser = async (req, res) => {
  */
 const verifyChangePassword = async (req, res) => {
   try {
-    const { token } = req.query;
+    const token = req.query.token || (req.body && req.body.token);
     const method = req.method;
 
     if (!token) {
@@ -3082,10 +3091,12 @@ const verifyChangePassword = async (req, res) => {
       `);
     }
 
+    const cleanToken = typeof token === 'string' ? token.trim() : '';
+
     const result = await pool.query(`
       SELECT * FROM user_email_verifications
-      WHERE token = $1 AND expires_at > NOW() AND used = false AND verify_type = 'Password change'
-    `, [token]);
+      WHERE token = $1 AND expires_at > NOW() AND used = false AND (verify_type::text ILIKE 'Password change' OR verify_type::text ILIKE 'Change Password')
+    `, [cleanToken]);
 
     if (result.rows.length === 0) {
       return res.status(400).send(`
@@ -3108,12 +3119,23 @@ const verifyChangePassword = async (req, res) => {
 
     const verification = result.rows[0];
 
-    const appData = await pool.query('SELECT app_name, support_email, email_smtp_profile_name FROM dev_apps WHERE id = $1', [verification.app_id]);
-    const app = appData.rows[0] || { app_name: 'your app' };
+    let app = { app_name: 'your app', support_email: '' };
+    try {
+      const appData = await pool.query('SELECT * FROM dev_apps WHERE id = $1', [verification.app_id]);
+      if (appData.rows.length > 0) {
+        app = appData.rows[0];
+      }
+    } catch (appErr) {
+      console.warn('verifyChangePassword dev_apps query warning:', appErr.message);
+      try {
+        const fallback = await pool.query('SELECT app_name, support_email FROM dev_apps WHERE id = $1', [verification.app_id]);
+        if (fallback.rows.length > 0) app = fallback.rows[0];
+      } catch (_) {}
+    }
 
     const userRes = await pool.query(
-      'SELECT id, email, name, password_hash FROM users WHERE id = $1 AND app_id = $2',
-      [verification.user_id, verification.app_id]
+      'SELECT id, email, name, password_hash FROM users WHERE id = $1',
+      [verification.user_id]
     );
 
     if (userRes.rows.length === 0) {
@@ -3136,8 +3158,9 @@ const verifyChangePassword = async (req, res) => {
     }
 
     const user = userRes.rows[0];
+    const hasExistingPassword = !!user.password_hash;
 
-    // Handle POST: verify current password, set new password
+    // Handle POST: verify current password (if user already has one), set new password
     if (method === 'POST') {
       let { current_password, new_password, password, confirmPassword } = req.body || {};
       // Support both field names
@@ -3147,11 +3170,19 @@ const verifyChangePassword = async (req, res) => {
       if (typeof new_password === 'string') new_password = new_password.trim().replace(/[\n\r\t]/g, '');
       if (typeof confirmPassword === 'string') confirmPassword = confirmPassword.trim().replace(/[\n\r\t]/g, '');
 
-      if (!current_password || !new_password) {
+      if (!new_password) {
         return res.status(400).json({
           success: false,
           error: 'Validation error',
-          message: 'Current password and new password are required'
+          message: 'New password is required'
+        });
+      }
+
+      if (hasExistingPassword && !current_password) {
+        return res.status(400).json({
+          success: false,
+          error: 'Validation error',
+          message: 'Current password is required'
         });
       }
 
@@ -3171,28 +3202,28 @@ const verifyChangePassword = async (req, res) => {
         });
       }
 
-      if (!user.password_hash) {
-        return res.status(400).json({
-          success: false,
-          error: 'No existing password',
-          message: 'No password is set for this account. Use the set password option.'
-        });
+      if (hasExistingPassword) {
+        const valid = await bcrypt.compare(current_password, user.password_hash);
+        if (!valid) {
+          return res.status(401).json({
+            success: false,
+            error: 'Invalid password',
+            message: 'Current password is incorrect'
+          });
+        }
       }
 
-      const valid = await bcrypt.compare(current_password, user.password_hash);
-      if (!valid) {
-        return res.status(401).json({
-          success: false,
-          error: 'Invalid password',
-          message: 'Current password is incorrect'
-        });
+      // Log old password (best effort)
+      if (user.password_hash) {
+        try {
+          await pool.query(`
+            INSERT INTO user_password_history (user_id, old_password_hash, changed_at)
+            VALUES ($1, $2, NOW())
+          `, [user.id, user.password_hash]);
+        } catch (histErr) {
+          console.warn('Could not insert to user_password_history:', histErr.message);
+        }
       }
-
-      // Log old password
-      await pool.query(`
-        INSERT INTO user_password_history (user_id, old_password_hash, changed_at)
-        VALUES ($1, $2, NOW())
-      `, [user.id, user.password_hash]);
 
       const salt = await bcrypt.genSalt(10);
       const hashed = await bcrypt.hash(new_password, salt);
@@ -3218,7 +3249,7 @@ const verifyChangePassword = async (req, res) => {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Change Password - ${app.app_name}</title>
+        <title>Change Password - ${app.app_name || 'App'}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -3241,20 +3272,22 @@ const verifyChangePassword = async (req, res) => {
       <body>
         <div class="container">
           <h2>Change Your Password</h2>
-          <p class="subtitle">Enter your current and new password</p>
+          <p class="subtitle">${hasExistingPassword ? 'Enter your current and new password' : 'Set a new password for your account'}</p>
           <div id="message" class="message"></div>
           <form id="changeForm" method="POST">
+            <input type="hidden" name="token" value="${cleanToken}">
+            ${hasExistingPassword ? `
             <div class="form-group">
               <label for="current_password">Current Password</label>
               <input type="password" id="current_password" name="current_password" required autocomplete="current-password" placeholder="Enter current password">
-            </div>
+            </div>` : ''}
             <div class="form-group">
               <label for="new_password">New Password</label>
-              <input type="password" id="new_password" name="new_password" required autocomplete="new-password" placeholder="Enter new password">
+              <input type="password" id="new_password" name="new_password" required minlength="6" autocomplete="new-password" placeholder="Enter new password">
             </div>
             <div class="form-group">
               <label for="confirmPassword">Confirm New Password</label>
-              <input type="password" id="confirmPassword" name="confirmPassword" required placeholder="Confirm new password">
+              <input type="password" id="confirmPassword" name="confirmPassword" required minlength="6" placeholder="Confirm new password">
             </div>
             <button type="submit" class="btn" id="submitBtn">Change Password</button>
           </form>
@@ -3269,19 +3302,35 @@ const verifyChangePassword = async (req, res) => {
           function showMessage(text, type) { message.textContent = text; message.className = 'message ' + type; message.style.display = 'block'; }
           form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const current_password = currentEl.value;
+            const current_password = currentEl ? currentEl.value : '';
             const new_password = newEl.value;
             const confirmPassword = confirmEl.value;
-            if (!current_password || !new_password) { showMessage('Current password and new password are required', 'error'); return; }
+            if (${hasExistingPassword} && !current_password) { showMessage('Current password is required', 'error'); return; }
+            if (!new_password) { showMessage('New password is required', 'error'); return; }
             if (new_password.length < 6) { showMessage('New password must be at least 6 characters', 'error'); return; }
             if (new_password !== confirmPassword) { showMessage('Passwords do not match', 'error'); return; }
             submitBtn.disabled = true; submitBtn.textContent = 'Changing...';
             try {
-              const resp = await fetch(window.location.href, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ current_password, new_password, confirmPassword }) });
+              const resp = await fetch(window.location.href, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({ current_password, new_password, confirmPassword, token: "${cleanToken}" })
+              });
               const data = await resp.json();
-              if (data.success) { showMessage(data.message, 'success'); form.reset(); setTimeout(() => window.close(), 3000); }
-              else { showMessage(data.message || 'Failed to change password', 'error'); submitBtn.disabled = false; submitBtn.textContent = 'Change Password'; }
-            } catch (err) { showMessage('Network error. Please try again.', 'error'); submitBtn.disabled = false; submitBtn.textContent = 'Change Password'; }
+              if (data.success) {
+                showMessage(data.message, 'success');
+                form.reset();
+                setTimeout(() => window.close(), 3000);
+              } else {
+                showMessage(data.message || 'Failed to change password', 'error');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Change Password';
+              }
+            } catch (err) {
+              showMessage('Network error. Please try again.', 'error');
+              submitBtn.disabled = false;
+              submitBtn.textContent = 'Change Password';
+            }
           });
         </script>
       </body>
@@ -3289,7 +3338,7 @@ const verifyChangePassword = async (req, res) => {
     `);
 
   } catch (error) {
-    console.error('Verify change password error:', error);
+    console.error('Verify change password error:', error.message, error.stack);
     res.status(500).send(`
       <!DOCTYPE html>
       <html>
